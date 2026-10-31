@@ -32,8 +32,8 @@ export function Composer({ autoFocus, placeholder = 'Pergunte qualquer coisa…'
   const suggestions = useMemo(() => {
     if (!mention) return []
     const q = normalize(mention.query)
-    return app.bots.filter((b) => normalize(b.name).includes(q)).slice(0, 6)
-  }, [mention?.query, app.bots])
+    return app.visibleBots.filter((b) => normalize(b.name).includes(q)).slice(0, 6)
+  }, [mention?.query, app.visibleBots])
   const showSuggestions = !dismissed && suggestions.length > 0
 
   const pick = (name: string) => {
@@ -134,7 +134,7 @@ export function Composer({ autoFocus, placeholder = 'Pergunte qualquer coisa…'
               </select>
               <ChevronDown size={14} className="pointer-events-none absolute right-3 text-muted" />
             </label>
-            {app.bots.length > 0 && <span className="text-[12px] text-muted">Use @ para chamar um bot</span>}
+            {app.visibleBots.length > 0 && <span className="text-[12px] text-muted">Use @ para chamar um bot</span>}
           </div>
 
           {app.busy ? (

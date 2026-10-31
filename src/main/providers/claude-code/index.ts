@@ -4,7 +4,7 @@ import type { ChatProvider } from '../types'
 import { sendToBot, TOOLS_HINT } from './bots'
 import { resolveClaudeEnv, runClaude } from './env'
 import { GBOT_TOOLS, mcpConfigFor, type CallerContext } from './mcp'
-import { closeAllSessions, getSession, workspaceDir } from './sessions'
+import { closeAllSessions, getSession, workContext, type WorkContext } from './sessions'
 
 interface AuthStatus {
   loggedIn: boolean
@@ -12,7 +12,7 @@ interface AuthStatus {
   subscriptionType?: string
 }
 
-function systemPrompt(req: SendMessageRequest): string {
+function systemPrompt(req: SendMessageRequest, work: WorkContext): string {
   const { persona, bot } = req
   const lines = ['Você está conversando com o usuário pelo gBot, um aplicativo de chat para desktop.']
   if (bot) {
@@ -28,7 +28,7 @@ function systemPrompt(req: SendMessageRequest): string {
   }
   lines.push(
     'Responda no idioma do usuário, de forma direta e amigável. Use Markdown quando ajudar a leitura.',
-    `Sua pasta de trabalho é ${workspaceDir()}.`,
+    ...work.promptLines,
     'O gBot ainda não consegue mostrar pedidos de permissão: ações que precisam de aprovação serão negadas. Se precisar de uma, explique ao usuário o que faria.',
     TOOLS_HINT
   )
@@ -125,7 +125,7 @@ export const claudeCodeProvider: ChatProvider = {
 
   async send(req, emit, signal) {
     if (req.targetBotId) {
-      await sendToBot(req.conversationId, req.targetBotId, req.text, emit, signal)
+      await sendToBot(req.conversationId, req.projectId, req.targetBotId, req.text, emit, signal)
       return
     }
     let entry = mainContexts.get(req.conversationId)
@@ -139,10 +139,13 @@ export const claudeCodeProvider: ChatProvider = {
       entry = { ctx, config: (await mcpConfigFor(ctx)).config }
       mainContexts.set(req.conversationId, entry)
     }
+    entry.ctx.projectId = req.projectId
+    const work = workContext(req.projectId)
     const session = await getSession({
       key: req.conversationId,
       sessionId: req.conversationId,
-      systemPrompt: systemPrompt(req),
+      cwd: work.cwd,
+      systemPrompt: systemPrompt(req, work),
       mcpConfig: entry.config,
       allowedTools: GBOT_TOOLS
     })

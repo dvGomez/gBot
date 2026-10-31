@@ -15,6 +15,12 @@ const api: GbotApi = {
       return () => ipcRenderer.removeListener('providers:progress', handler)
     }
   },
+  projects: {
+    list: () => ipcRenderer.invoke('projects:list'),
+    save: (project) => ipcRenderer.invoke('projects:save', project),
+    remove: (id) => ipcRenderer.invoke('projects:remove', id),
+    pickFolder: (current) => ipcRenderer.invoke('projects:pickFolder', current)
+  },
   bots: {
     list: () => ipcRenderer.invoke('bots:list'),
     save: (bot) => ipcRenderer.invoke('bots:save', bot),

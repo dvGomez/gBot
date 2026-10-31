@@ -6,6 +6,7 @@ import { StatusDot } from '@/components/ui'
 import { Markdown } from '@/components/Markdown'
 import { ToolList } from '@/components/ToolList'
 import { MOOD_LABELS } from '@/avatars/sprites'
+import { ProjectIcon } from '@/components/ProjectBadge'
 import { useApp } from '@/state/app'
 
 function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
@@ -52,6 +53,7 @@ export function ChatView() {
   const provider = app.providers.find((p) => p.id === app.providerId)
   const avatar = app.activeAvatar
   const bot = app.activeBot
+  const project = app.activeProject
   const empty = !conv || conv.messages.length === 0
   const bottom = useRef<HTMLDivElement>(null)
   const lastText = conv?.messages.at(-1)?.text
@@ -76,6 +78,36 @@ export function ChatView() {
             {provider && <StatusDot status={provider.status} />}
             {provider?.name} · {MOOD_LABELS[app.mood]}
           </p>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          {conv && !bot?.projectId ? (
+            <label className="relative inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[12px] text-fg-2 hover:bg-hover">
+              {project ? <ProjectIcon project={project} size={14} /> : <span className="text-muted">Projeto:</span>}
+              <select
+                value={conv.projectId ?? ''}
+                onChange={(e) => void app.moveConversation(conv.id, e.target.value || undefined)}
+                disabled={app.busy}
+                className="appearance-none bg-transparent pr-1 outline-none"
+              >
+                <option value="">Nenhum</option>
+                {app.projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            project && (
+              <button
+                onClick={() => app.openProject(project.id)}
+                className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[12px] text-fg-2 hover:bg-hover"
+              >
+                <ProjectIcon project={project} size={14} />
+                {project.name}
+              </button>
+            )
+          )}
         </div>
       </div>
 

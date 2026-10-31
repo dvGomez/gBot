@@ -85,6 +85,21 @@ export interface ChatMessage {
   notices?: string[]
 }
 
+/** Agrupa bots e conversas. Pasta e instruções são opcionais e podem ser definidas depois. */
+export interface Project {
+  id: string
+  name: string
+  description: string
+  /** Instruções que valem para todas as conversas e bots do projeto. */
+  instructions: string
+  /** Pasta de trabalho do Claude nas conversas do projeto (ausente = pasta padrão do gBot). */
+  folder?: string
+  /** Cor do projeto no app. */
+  color: string
+  createdAt: number
+  updatedAt: number
+}
+
 /** Agente especializado: nome, avatar e instruções próprias. */
 export interface Bot {
   id: string
@@ -94,6 +109,8 @@ export interface Bot {
   description: string
   /** Instruções que especializam o bot (vão para o prompt de sistema). */
   instructions: string
+  /** Projeto do bot; ausente = bot solto, disponível em qualquer lugar. */
+  projectId?: string
   createdAt: number
   updatedAt: number
 }
@@ -103,6 +120,8 @@ export interface ConversationMeta {
   title: string
   /** Bot desta conversa; ausente numa conversa normal. */
   botId?: string
+  /** Projeto da conversa; ausente = conversa solta. */
+  projectId?: string
   createdAt: number
   updatedAt: number
   messageCount: number
@@ -129,6 +148,8 @@ export interface SendMessageRequest {
   bot?: Pick<Bot, 'id' | 'name' | 'description' | 'instructions'>
   /** Bot chamado diretamente com @menção: a mensagem vai para ele, não para o assistente da conversa. */
   targetBotId?: string
+  /** Projeto da conversa (pasta de trabalho, instruções e bots visíveis). */
+  projectId?: string
 }
 
 /** Eventos que um provedor emite enquanto responde. */
@@ -149,6 +170,14 @@ export interface GbotApi {
     /** Executa uma ação do provedor; resolve com uma mensagem final ou rejeita com o erro. */
     runAction(providerId: string, actionId: string): Promise<string | undefined>
     onActionProgress(listener: (progress: ProviderActionProgress) => void): () => void
+  }
+  projects: {
+    list(): Promise<Project[]>
+    save(project: Project): Promise<void>
+    /** Remove o projeto; bots e conversas dele continuam existindo, soltos. */
+    remove(id: string): Promise<void>
+    /** Abre o seletor de pastas do sistema; undefined se o usuário cancelar. */
+    pickFolder(current?: string): Promise<string | undefined>
   }
   bots: {
     list(): Promise<Bot[]>

@@ -5,6 +5,8 @@ import { BotView } from '@/views/BotView'
 import { ChatView } from '@/views/ChatView'
 import { HomeView } from '@/views/HomeView'
 import { LoginView, SplashView } from '@/views/LoginView'
+import { ProjectEditorView } from '@/views/ProjectEditorView'
+import { ProjectView } from '@/views/ProjectView'
 import { ProvidersView } from '@/views/ProvidersView'
 import { SettingsView } from '@/views/SettingsView'
 import { useApp } from '@/state/app'
@@ -25,7 +27,9 @@ export function App() {
           {view === 'home' && <HomeView />}
           {view === 'chat' && <ChatView />}
           {view === 'bot' && <BotView />}
-          {view === 'bot-editor' && <BotEditorView key={app.selectedBot?.id ?? 'new'} />}
+          {view === 'bot-editor' && <BotEditorView key={app.selectedBot?.id ?? `new-${app.botDraftProjectId ?? ''}`} />}
+          {view === 'project' && <ProjectView />}
+          {view === 'project-editor' && <ProjectEditorView key={app.selectedProject?.id ?? 'new'} />}
           {view === 'avatars' && <AvatarsView />}
           {view === 'providers' && <ProvidersView />}
           {view === 'settings' && <SettingsView />}

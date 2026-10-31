@@ -50,6 +50,17 @@ A pasta de trabalho é `~/Library/Application Support/gBot/workspace`.
 
 Ações que pedem permissão são negadas por enquanto (modo `manual`); aprovar pelo app é a Etapa 3.
 
+## Projetos
+
+Projetos são opcionais: bots e conversas podem ficar soltos ou dentro de um projeto.
+
+- **Pasta de trabalho** (opcional, pode ser escolhida depois): vira o `cwd` do Claude Code nas conversas e bots do
+  projeto. Sem pasta, vale a pasta padrão do gBot.
+- **Instruções do projeto** (opcionais): entram no prompt de sistema, somadas às instruções de cada bot.
+- **Bots visíveis**: dentro de um projeto, os bots dele + os bots soltos; bots de outros projetos ficam de fora.
+- Excluir um projeto não apaga nada: os bots e conversas dele voltam a ficar soltos.
+- Se a pasta, as instruções ou o projeto da conversa mudam, a sessão do Claude Code é reaberta com `--resume`.
+
 ## Bots conversando entre si
 
 O processo principal sobe um servidor MCP em `127.0.0.1` (porta aleatória) com duas ferramentas,
@@ -75,5 +86,6 @@ A interface lista o provedor automaticamente; `send` emite eventos `mood`, `delt
 2. ✅ Conversa com o Claude Code (streaming, ferramentas, memória, interromper)
 3. ✅ Bots (nome, avatar, instruções), 20 avatares + gerador, conversas salvas em disco
 4. ✅ Bots consultando outros bots (`list_bots` / `ask_bot` via MCP local) e `@menções`
-5. Aprovar permissões no app
-6. Ações no computador, ícone na barra de menu
+5. ✅ Projetos: agrupam bots e conversas, com pasta de trabalho e instruções opcionais
+6. Aprovar permissões no app
+7. Ações no computador, ícone na barra de menu

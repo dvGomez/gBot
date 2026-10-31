@@ -28,6 +28,7 @@ export function BotEditorView() {
   const [suggesting, setSuggesting] = useState(false)
   const [suggestError, setSuggestError] = useState<string>()
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [projectId, setProjectId] = useState(editing ? editing.projectId : app.botDraftProjectId)
 
   const suggest = async () => {
     if (!instructions.trim()) {
@@ -63,6 +64,7 @@ export function BotEditorView() {
       avatar,
       description: description.trim(),
       instructions: instructions.trim(),
+      projectId,
       createdAt: editing?.createdAt ?? now,
       updatedAt: now
     }
@@ -160,6 +162,24 @@ export function BotEditorView() {
               placeholder="Revisa contratos e aponta cláusulas de risco"
               className={inputClass}
             />
+          </Field>
+
+          <Field
+            label="Projeto"
+            hint="Bots soltos podem ser chamados em qualquer conversa; bots de um projeto, só dentro dele."
+          >
+            <select
+              value={projectId ?? ''}
+              onChange={(e) => setProjectId(e.target.value || undefined)}
+              className={inputClass}
+            >
+              <option value="">Nenhum (bot solto)</option>
+              {app.projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
           </Field>
 
           <Field label="Avatar">

@@ -13,6 +13,8 @@ import { ASK_BOT_TOOL, LIST_BOTS_TOOL } from './tools'
 
 export interface CallerContext {
   conversationId: string
+  /** Projeto da conversa: define a pasta, as instruções e quais bots ficam visíveis. */
+  projectId?: string
   /** Quem está perguntando, para o bot consultado saber (ex.: "Brasa", "Panelinha"). */
   callerName: string
   /** Bots já envolvidos nesta cadeia de consultas (evita A → B → A). */

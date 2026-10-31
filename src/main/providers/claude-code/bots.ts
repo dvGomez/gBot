@@ -1,7 +1,7 @@
 import type { Bot, ChatEvent } from '@shared/types'
 import { listBots } from '../../store'
 import { GBOT_TOOLS, mcpConfigFor, setBotHandlers, type CallerContext } from './mcp'
-import { getSession, stableUuid, workspaceDir } from './sessions'
+import { getSession, stableUuid, workContext, type WorkContext } from './sessions'
 
 /** Profundidade máxima de consultas encadeadas (usuário → A → B → C). */
 const MAX_DEPTH = 3
@@ -16,8 +16,13 @@ const normalize = (s: string) =>
     .trim()
     .toLowerCase()
 
-export function findBot(ref: string): Bot | undefined {
-  const bots = listBots()
+/** Bots que uma conversa enxerga: os soltos e os do projeto dela. */
+export function visibleBots(projectId?: string): Bot[] {
+  return listBots().filter((b) => !b.projectId || b.projectId === projectId)
+}
+
+export function findBot(ref: string, projectId?: string): Bot | undefined {
+  const bots = visibleBots(projectId)
   const key = normalize(ref)
   return bots.find((b) => b.id === ref) ?? bots.find((b) => normalize(b.name) === key)
 }
@@ -28,20 +33,20 @@ export const TOOLS_HINT = [
   'Ao usar a resposta de um bot, diga de qual bot ela veio.'
 ].join(' ')
 
-function baseLines(): string[] {
+function baseLines(work: WorkContext): string[] {
   return [
     'Você está no gBot, um aplicativo de chat para desktop.',
     'Responda no idioma do usuário, de forma direta e amigável. Use Markdown quando ajudar a leitura.',
-    `Sua pasta de trabalho é ${workspaceDir()}.`,
+    ...work.promptLines,
     'O gBot ainda não consegue mostrar pedidos de permissão: ações que precisam de aprovação serão negadas. Se precisar de uma, explique o que faria.',
     TOOLS_HINT
   ]
 }
 
 /** Prompt de sistema de um bot consultado ou @mencionado, numa sessão própria dentro de uma conversa. */
-function botSystemPrompt(bot: Bot): string {
+function botSystemPrompt(bot: Bot, work: WorkContext): string {
   return [
-    ...baseLines(),
+    ...baseLines(work),
     `Você é o bot "${bot.name}"${bot.description ? `: ${bot.description}` : ''}.`,
     'Siga estas instruções definidas pelo usuário para você:',
     '<instrucoes_do_bot>',
@@ -66,18 +71,21 @@ function enqueue<T>(key: string, task: () => Promise<T>): Promise<T> {
 const botContexts = new Map<string, { ctx: CallerContext; config: string }>()
 
 /** Uma sessão por bot dentro de cada conversa: ele lembra das consultas e @menções daquela conversa. */
-async function botSession(conversationId: string, bot: Bot) {
+async function botSession(conversationId: string, projectId: string | undefined, bot: Bot) {
   const key = `${conversationId}:${bot.id}`
   let entry = botContexts.get(key)
   if (!entry) {
-    const ctx: CallerContext = { conversationId, callerName: bot.name, chain: [bot.id], depth: 1 }
+    const ctx: CallerContext = { conversationId, projectId, callerName: bot.name, chain: [bot.id], depth: 1 }
     entry = { ctx, config: (await mcpConfigFor(ctx)).config }
     botContexts.set(key, entry)
   }
+  entry.ctx.projectId = projectId
+  const work = workContext(projectId)
   const session = await getSession({
     key,
     sessionId: stableUuid(key),
-    systemPrompt: botSystemPrompt(bot),
+    cwd: work.cwd,
+    systemPrompt: botSystemPrompt(bot, work),
     mcpConfig: entry.config,
     allowedTools: GBOT_TOOLS
   })
@@ -86,9 +94,9 @@ async function botSession(conversationId: string, bot: Bot) {
 
 /** Consulta feita por outro assistente (ferramenta `ask_bot`): devolve o texto da resposta. */
 async function askBot(caller: CallerContext, ref: string, message: string, signal: AbortSignal): Promise<string> {
-  const bot = findBot(ref)
+  const bot = findBot(ref, caller.projectId)
   if (!bot) {
-    const names = listBots().map((b) => b.name)
+    const names = visibleBots(caller.projectId).map((b) => b.name)
     throw new Error(`Não existe bot "${ref}". Bots disponíveis: ${names.length ? names.join(', ') : 'nenhum'}.`)
   }
   if (caller.chain.includes(bot.id)) {
@@ -98,7 +106,7 @@ async function askBot(caller: CallerContext, ref: string, message: string, signa
     throw new Error(`Limite de ${MAX_DEPTH} consultas encadeadas atingido. Responda com o que você já tem.`)
   }
 
-  const { key, session, ctx } = await botSession(caller.conversationId, bot)
+  const { key, session, ctx } = await botSession(caller.conversationId, caller.projectId, bot)
   return enqueue(key, async () => {
     ctx.chain = [...caller.chain, bot.id]
     ctx.depth = caller.depth + 1
@@ -119,17 +127,18 @@ async function askBot(caller: CallerContext, ref: string, message: string, signa
 /** Mensagem enviada pelo usuário direto a um bot com @menção: a resposta vai para o chat. */
 export async function sendToBot(
   conversationId: string,
+  projectId: string | undefined,
   botId: string,
   text: string,
   emit: (ev: ChatEvent) => void,
   signal: AbortSignal
 ) {
-  const bot = findBot(botId)
+  const bot = findBot(botId, projectId)
   if (!bot) {
-    emit({ type: 'error', message: 'Esse bot não existe mais.' })
+    emit({ type: 'error', message: 'Esse bot não existe mais ou não está disponível neste projeto.' })
     return
   }
-  const { key, session, ctx } = await botSession(conversationId, bot)
+  const { key, session, ctx } = await botSession(conversationId, projectId, bot)
   await enqueue(key, () => {
     ctx.chain = [bot.id]
     ctx.depth = 1
@@ -139,8 +148,8 @@ export async function sendToBot(
 
 setBotHandlers({
   list(ctx) {
-    const bots = listBots()
-    if (!bots.length) return 'O usuário ainda não criou nenhum bot.'
+    const bots = visibleBots(ctx.projectId)
+    if (!bots.length) return 'Não há bots disponíveis aqui.'
     return bots
       .map((b) => `- ${b.name}${ctx.chain.includes(b.id) ? ' (você)' : ''}: ${b.description || 'sem descrição'}`)
       .join('\n')

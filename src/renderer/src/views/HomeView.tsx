@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
-import { Bot as BotIcon, MessageSquarePlus, Plus } from 'lucide-react'
+import { Bot as BotIcon, FolderPlus, MessageSquarePlus, Plus } from 'lucide-react'
 import { ConversationList } from '@/components/ConversationList'
 import { PixelAvatar } from '@/components/PixelAvatar'
+import { ProjectTile } from '@/components/ProjectBadge'
 import { ProviderNotice } from '@/components/ProviderNotice'
 import { Card } from '@/components/ui'
 import { getAvatar } from '@/avatars/sprites'
@@ -24,7 +25,7 @@ function BigOption({
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-5 rounded-card border border-line bg-card p-6 text-left transition-colors hover:bg-hover"
+      className="flex items-center gap-4 rounded-card border border-line bg-card p-5 text-left transition-colors hover:bg-hover"
     >
       <div
         className={`flex size-14 shrink-0 items-center justify-center rounded-tile ${primary ? 'bg-primary text-on-primary' : 'bg-tile text-fg'}`}
@@ -58,7 +59,7 @@ export function HomeView() {
         <ProviderNotice />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <BigOption
           primary
           icon={<MessageSquarePlus size={22} strokeWidth={1.8} />}
@@ -69,16 +70,49 @@ export function HomeView() {
         <BigOption
           icon={<BotIcon size={22} strokeWidth={1.6} />}
           title="Novo bot"
-          subtitle="Crie um assistente especializado com instruções próprias"
+          subtitle="Assistente especializado com instruções próprias"
           onClick={() => app.editBot()}
+        />
+        <BigOption
+          icon={<FolderPlus size={22} strokeWidth={1.6} />}
+          title="Novo projeto"
+          subtitle="Agrupe bots e conversas, com pasta e instruções"
+          onClick={() => app.editProject()}
         />
       </div>
 
+      {app.projects.length > 0 && (
+        <>
+          <p className="mt-8 text-[13px] font-medium text-muted">Seus projetos</p>
+          <div className="mt-3 grid grid-cols-3 gap-3 xl:grid-cols-4">
+            {app.projects.map((p) => {
+              const nBots = app.bots.filter((b) => b.projectId === p.id).length
+              const nConvs = app.conversations.filter((c) => c.projectId === p.id).length
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => app.openProject(p.id)}
+                  className="flex flex-col items-start rounded-card border border-line bg-card p-5 text-left transition-colors hover:bg-hover"
+                >
+                  <ProjectTile project={p} size={44} />
+                  <p className="mt-3 w-full truncate text-[15px] font-semibold">{p.name}</p>
+                  <p className="mt-0.5 text-[12px] text-muted">
+                    {nBots} {nBots === 1 ? 'bot' : 'bots'} · {nConvs} {nConvs === 1 ? 'conversa' : 'conversas'}
+                  </p>
+                </button>
+              )
+            })}
+          </div>
+        </>
+      )}
+
       <div className="mt-8 flex items-end justify-between">
-        <p className="text-[13px] font-medium text-muted">Seus bots</p>
+        <p className="text-[13px] font-medium text-muted">Seus bots (fora de projetos)</p>
       </div>
       <div className="mt-3 grid grid-cols-3 gap-3 xl:grid-cols-4">
-        {app.bots.map((b, i) => (
+        {app.bots
+          .filter((b) => !b.projectId)
+          .map((b, i) => (
           <button
             key={b.id}
             onClick={() => app.openBot(b.id)}
@@ -88,7 +122,7 @@ export function HomeView() {
             <p className="mt-3 w-full truncate text-[15px] font-semibold">{b.name}</p>
             <p className="mt-0.5 line-clamp-2 text-[12px] text-muted">{b.description || 'Sem descrição'}</p>
           </button>
-        ))}
+          ))}
         <button
           onClick={() => app.editBot()}
           className="flex min-h-[148px] flex-col items-center justify-center gap-2 rounded-card border border-dashed border-line text-[13px] text-muted transition-colors hover:bg-hover hover:text-fg"

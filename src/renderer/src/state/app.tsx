@@ -1,11 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { AvatarDef, AvatarMood, Bot, ChatMessage, Conversation, ConversationMeta, ProviderInfo } from '@shared/types'
+import type { AvatarDef, AvatarMood, Bot, ChatMessage, Conversation, ConversationMeta, Project, ProviderInfo } from '@shared/types'
 import { DEFAULT_AVATAR_ID, getAvatar } from '@/avatars/sprites'
 import { uid } from '@/lib/format'
 import { findMention } from '@/lib/mentions'
 import { load, save } from './storage'
 
-export type View = 'home' | 'chat' | 'bot' | 'bot-editor' | 'avatars' | 'providers' | 'settings'
+export type View = 'home' | 'chat' | 'bot' | 'bot-editor' | 'project' | 'project-editor' | 'avatars' | 'providers' | 'settings'
 
 interface Pending {
   requestId: string
@@ -31,11 +31,23 @@ interface AppState {
   connected: boolean
   refreshProviders(): Promise<void>
 
+  projects: Project[]
+  /** Projeto aberto na página do projeto ou no editor (ausente no editor = criando um novo). */
+  selectedProject?: Project
+  openProject(id: string): void
+  editProject(id?: string): void
+  saveProject(project: Project): Promise<void>
+  removeProject(id: string): Promise<void>
+  getProject(id?: string): Project | undefined
+
   bots: Bot[]
   /** Bot aberto na página do bot ou no editor (ausente no editor = criando um novo). */
   selectedBot?: Bot
   openBot(id: string): void
-  editBot(id?: string): void
+  /** Abre o editor; sem `id` cria um bot novo, já dentro de `projectId` se informado. */
+  editBot(id?: string, projectId?: string): void
+  /** Projeto sugerido para o bot novo que está sendo criado. */
+  botDraftProjectId?: string
   saveBot(bot: Bot): Promise<void>
   removeBot(id: string): Promise<void>
   getBot(id?: string): Bot | undefined
@@ -44,9 +56,15 @@ interface AppState {
   activeConversation?: Conversation
   /** Bot da conversa ativa (ou do rascunho de nova conversa). */
   activeBot?: Bot
+  /** Projeto da conversa ativa (ou do rascunho). */
+  activeProject?: Project
+  /** Bots que a conversa ativa pode chamar: os soltos e os do projeto dela. */
+  visibleBots: Bot[]
   openConversation(id: string): void
-  /** Abre um chat vazio; com `botId`, a conversa será com aquele bot. */
-  newConversation(botId?: string): void
+  /** Abre um chat vazio; com `botId`, a conversa será com aquele bot; com `projectId`, dentro do projeto. */
+  newConversation(botId?: string, projectId?: string): void
+  /** Move a conversa para um projeto (ou para fora de projetos, com undefined). */
+  moveConversation(id: string, projectId?: string): Promise<void>
   removeConversation(id: string): Promise<void>
 
   /** Avatar que aparece na conversa ativa (do bot ou o padrão). */
@@ -86,14 +104,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [providersLoaded, setProvidersLoaded] = useState(false)
 
+  const [projects, setProjects] = useState<Project[]>([])
+  const [selectedProjectId, setSelectedProjectId] = useState<string>()
   const [bots, setBots] = useState<Bot[]>([])
   const [selectedBotId, setSelectedBotId] = useState<string>()
+  const [botDraftProjectId, setBotDraftProjectId] = useState<string>()
   const [metas, setMetas] = useState<ConversationMeta[]>([])
   /** Conversas carregadas por completo (com mensagens), por id. */
   const [loaded, setLoaded] = useState<Record<string, Conversation>>({})
   const [activeId, setActiveId] = useState<string>()
-  /** Bot do rascunho: chat aberto mas ainda sem mensagens. */
+  /** Bot e projeto do rascunho: chat aberto mas ainda sem mensagens. */
   const [draftBotId, setDraftBotId] = useState<string>()
+  const [draftProjectId, setDraftProjectId] = useState<string>()
 
   const [mood, setMood] = useState<AvatarMood>('idle')
   const [pending, setPending] = useState<Pending>()
@@ -118,6 +140,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void refreshProviders()
+    void window.gbot.projects.list().then(setProjects)
     void window.gbot.bots.list().then(setBots)
     void window.gbot.conversations.list().then(setMetas)
   }, [refreshProviders])
@@ -134,9 +157,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [loaded])
 
   const getBot = useCallback((id?: string) => (id ? bots.find((b) => b.id === id) : undefined), [bots])
+  const getProject = useCallback((id?: string) => (id ? projects.find((p) => p.id === id) : undefined), [projects])
 
   const activeConversation = activeId ? loaded[activeId] : undefined
   const activeBot = getBot(activeConversation ? activeConversation.botId : draftBotId)
+  const activeProject = getProject(activeConversation ? activeConversation.projectId : draftProjectId)
+  const visibleBots = useMemo(
+    () => bots.filter((b) => !b.projectId || b.projectId === activeProject?.id),
+    [bots, activeProject?.id]
+  )
   const activeAvatar = activeBot?.avatar ?? getAvatar(avatarId)
 
   const settleMood = useCallback((m: AvatarMood, ms: number) => {
@@ -219,6 +248,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         id: uid(),
         title: text.slice(0, 48),
         botId: draftBotId,
+        projectId: draftProjectId,
         createdAt: now,
         updatedAt: now,
         messageCount: 0,
@@ -226,7 +256,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       const bot = getBot(conversation.botId)
       // @menção a outro bot: a mensagem vai direto para ele, e a resposta aparece com o avatar dele.
-      const mentioned = findMention(text, bots)
+      const mentioned = findMention(text, visibleBots)
       const target = mentioned && mentioned.id !== conversation.botId ? mentioned : undefined
       const history = conversation.messages.filter((m) => !m.error).map(({ role, text }) => ({ role, text }))
       const userMsg: ChatMessage = { id: uid(), role: 'user', text, createdAt: now }
@@ -244,6 +274,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setLoaded((all) => ({ ...all, [updated.id]: updated }))
       setActiveId(updated.id)
       setDraftBotId(undefined)
+      setDraftProjectId(undefined)
       setView('chat')
 
       const p: Pending = { requestId: uid(), conversationId: updated.id, messageId: botMsg.id }
@@ -261,11 +292,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         text: target ? text : withMentionContext(conversation, text, bots),
         history,
         targetBotId: target?.id,
+        projectId: updated.projectId,
         persona: { name: avatar.name, personality: avatar.personality },
         bot: bot && { id: bot.id, name: bot.name, description: bot.description, instructions: bot.instructions }
       })
     },
-    [activeConversation, draftBotId, getBot, bots, activeProviderId, avatarId]
+    [activeConversation, draftBotId, draftProjectId, getBot, bots, visibleBots, activeProviderId, avatarId]
   )
 
   const cancel = useCallback(() => {
@@ -283,7 +315,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       setActiveId(id)
       setDraftBotId(undefined)
+      setDraftProjectId(undefined)
       setView('chat')
+    },
+    [loaded]
+  )
+
+  const moveConversation = useCallback(
+    async (id: string, projectId?: string) => {
+      const conv = loaded[id] ?? (await window.gbot.conversations.get(id))
+      if (!conv) return
+      toSave.current.add(id)
+      setLoaded((all) => ({ ...all, [id]: { ...conv, projectId, updatedAt: Date.now() } }))
     },
     [loaded]
   )
@@ -308,16 +351,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
       connected,
       refreshProviders,
 
+      projects,
+      selectedProject: getProject(selectedProjectId),
+      openProject: (id) => {
+        setSelectedProjectId(id)
+        setView('project')
+      },
+      editProject: (id) => {
+        setSelectedProjectId(id)
+        setView('project-editor')
+      },
+      saveProject: async (project) => {
+        await window.gbot.projects.save(project)
+        setProjects((ps) =>
+          ps.some((p) => p.id === project.id) ? ps.map((p) => (p.id === project.id ? project : p)) : [...ps, project]
+        )
+      },
+      removeProject: async (id) => {
+        await window.gbot.projects.remove(id)
+        setProjects((ps) => ps.filter((p) => p.id !== id))
+        // O que estava no projeto fica solto (o processo principal já gravou em disco).
+        setBots((bs) => bs.map(({ projectId, ...b }) => (projectId === id ? b : { ...b, projectId })))
+        setMetas((ms) => ms.map(({ projectId, ...m }) => (projectId === id ? m : { ...m, projectId })))
+        setLoaded((all) =>
+          Object.fromEntries(
+            Object.entries(all).map(([k, { projectId, ...c }]) => [k, projectId === id ? c : { ...c, projectId }])
+          )
+        )
+        setSelectedProjectId(undefined)
+        setView('home')
+      },
+      getProject,
+
       bots,
       selectedBot: getBot(selectedBotId),
       openBot: (id) => {
         setSelectedBotId(id)
         setView('bot')
       },
-      editBot: (id) => {
+      editBot: (id, projectId) => {
         setSelectedBotId(id)
+        setBotDraftProjectId(projectId)
         setView('bot-editor')
       },
+      botDraftProjectId,
       saveBot: async (bot) => {
         await window.gbot.bots.save(bot)
         setBots((bs) => (bs.some((b) => b.id === bot.id) ? bs.map((b) => (b.id === bot.id ? bot : b)) : [...bs, bot]))
@@ -334,12 +411,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       conversations: metas,
       activeConversation,
       activeBot,
+      activeProject,
+      visibleBots,
       openConversation: (id) => void openConversation(id),
-      newConversation: (botId) => {
+      newConversation: (botId, projectId) => {
         setActiveId(undefined)
         setDraftBotId(botId)
+        setDraftProjectId(projectId ?? getBot(botId)?.projectId)
         setView('chat')
       },
+      moveConversation,
       removeConversation: async (id) => {
         await window.gbot.conversations.remove(id)
         setMetas((ms) => ms.filter((m) => m.id !== id))
@@ -364,14 +445,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       providersLoaded,
       connected,
       refreshProviders,
+      projects,
+      selectedProjectId,
+      getProject,
       bots,
       selectedBotId,
+      botDraftProjectId,
       getBot,
       metas,
       activeConversation,
       activeBot,
+      activeProject,
+      visibleBots,
       activeId,
       openConversation,
+      moveConversation,
       activeAvatar,
       mood,
       pending,

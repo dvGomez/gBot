@@ -1,7 +1,7 @@
 import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
-import type { Bot, Conversation, ConversationMeta } from '@shared/types'
+import type { Bot, Conversation, ConversationMeta, Project } from '@shared/types'
 
 /**
  * Armazenamento local em JSON (~/Library/Application Support/gBot/data):
@@ -30,6 +30,41 @@ function writeJson(file: string, value: unknown) {
 }
 
 const safeId = (id: string) => id.replace(/[^a-zA-Z0-9-]/g, '')
+
+// ── Projetos ────────────────────────────────────────────────────────
+
+const projectsFile = () => join(dataDir(), 'projects.json')
+
+export function listProjects(): Project[] {
+  return readJson<Project[]>(projectsFile(), []).sort((a, b) => a.createdAt - b.createdAt)
+}
+
+export function getProject(id?: string): Project | undefined {
+  return id ? listProjects().find((p) => p.id === id) : undefined
+}
+
+export function saveProject(project: Project) {
+  writeJson(projectsFile(), [...listProjects().filter((p) => p.id !== project.id), project])
+}
+
+/** Remove o projeto e solta o que estava nele (bots e conversas não são apagados). */
+export function removeProject(id: string) {
+  writeJson(
+    projectsFile(),
+    listProjects().filter((p) => p.id !== id)
+  )
+  writeJson(
+    botsFile(),
+    listBots().map(({ projectId, ...b }) => (projectId === id ? b : { ...b, projectId }))
+  )
+  for (const meta of listConversations()) {
+    if (meta.projectId !== id) continue
+    const conv = getConversation(meta.id)
+    if (!conv) continue
+    const { projectId: _projectId, ...rest } = conv
+    saveConversation(rest)
+  }
+}
 
 // ── Bots ────────────────────────────────────────────────────────────
 

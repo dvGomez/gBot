@@ -10,11 +10,15 @@ export function BotView() {
   const bot = app.selectedBot
   if (!bot) return null
   const conversations = app.conversations.filter((c) => c.botId === bot.id)
+  const project = app.getProject(bot.projectId)
 
   return (
     <div className="mx-auto w-full max-w-[1120px] px-[60px] pt-6 pb-12">
-      <button onClick={() => app.setView('home')} className="mb-4 inline-flex items-center gap-1.5 text-[13px] text-muted hover:text-fg">
-        <ArrowLeft size={14} /> Início
+      <button
+        onClick={() => (project ? app.openProject(project.id) : app.setView('home'))}
+        className="mb-4 inline-flex items-center gap-1.5 text-[13px] text-muted hover:text-fg"
+      >
+        <ArrowLeft size={14} /> {project ? project.name : 'Início'}
       </button>
 
       <div className="flex items-center gap-6">
@@ -22,7 +26,17 @@ export function BotView() {
           <PixelAvatar avatar={bot.avatar} size={84} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-medium tracking-[0.02em] text-muted">Bot</p>
+          <p className="text-[12px] font-medium tracking-[0.02em] text-muted">
+            Bot
+            {project && (
+              <>
+                {' · '}
+                <button onClick={() => app.openProject(project.id)} className="hover:text-fg hover:underline">
+                  {project.name}
+                </button>
+              </>
+            )}
+          </p>
           <h1 className="mt-1 text-[36px] leading-tight font-medium tracking-[-0.03em]">{bot.name}</h1>
           {bot.description && <p className="mt-1 text-[15px] text-muted">{bot.description}</p>}
         </div>

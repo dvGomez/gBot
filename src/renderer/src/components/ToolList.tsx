@@ -7,6 +7,9 @@ import { useApp } from '@/state/app'
 import { Markdown } from './Markdown'
 import { PixelAvatar } from './PixelAvatar'
 
+/** Ferramentas internas do Claude Code (mensagens antigas ainda podem tê-las salvas). */
+const HIDDEN = new Set(['ToolSearch'])
+
 function StatusIcon({ status }: { status: ToolActivity['status'] }) {
   if (status === 'running') return <LoaderCircle size={12} className="shrink-0 animate-spin text-muted" />
   if (status === 'done') return <Check size={12} strokeWidth={2.5} className="shrink-0 text-success" />
@@ -18,11 +21,13 @@ export function ToolList({ tools }: { tools: ToolActivity[] }) {
   const app = useApp()
   const [open, setOpen] = useState<string>()
   const opened = tools.find((t) => t.id === open && t.detail)
+  const visible = tools.filter((t) => !HIDDEN.has(t.name))
+  if (!visible.length) return null
 
   return (
     <div className="mb-3">
       <div className="flex flex-wrap gap-1.5">
-        {tools.map((t) => {
+        {visible.map((t) => {
           const bot = t.botName ? botByName(app.bots, t.botName) : undefined
           const expandable = !!t.detail
           return (

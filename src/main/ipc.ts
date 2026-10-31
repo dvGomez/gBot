@@ -1,5 +1,5 @@
-import { ipcMain, type WebContents } from 'electron'
-import type { Bot, ChatEvent, Conversation, SendMessageRequest } from '@shared/types'
+import { BrowserWindow, dialog, ipcMain, type WebContents } from 'electron'
+import type { Bot, ChatEvent, Conversation, Project, SendMessageRequest } from '@shared/types'
 import { suggestBotIdentity } from './providers/claude-code'
 import { getProvider, listProviders } from './providers/registry'
 import * as store from './store'
@@ -11,6 +11,21 @@ function emitTo(sender: WebContents, requestId: string, event: ChatEvent) {
 }
 
 export function registerIpc() {
+  ipcMain.handle('projects:list', () => store.listProjects())
+  ipcMain.handle('projects:save', (_e, project: Project) => store.saveProject(project))
+  ipcMain.handle('projects:remove', (_e, id: string) => store.removeProject(id))
+  ipcMain.handle('projects:pickFolder', async (e, current?: string) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    const options: Electron.OpenDialogOptions = {
+      title: 'Pasta de trabalho do projeto',
+      buttonLabel: 'Usar esta pasta',
+      defaultPath: current,
+      properties: ['openDirectory', 'createDirectory']
+    }
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+    return result.canceled ? undefined : result.filePaths[0]
+  })
+
   ipcMain.handle('bots:list', () => store.listBots())
   ipcMain.handle('bots:save', (_e, bot: Bot) => store.saveBot(bot))
   ipcMain.handle('bots:remove', (_e, id: string) => store.removeBot(id))

@@ -19,6 +19,7 @@ export function ConversationList({ items, empty }: { items: ConversationMeta[]; 
     <div>
       {items.map((c) => {
         const bot = app.getBot(c.botId)
+        const project = app.getProject(c.projectId)
         return (
           <div key={c.id} className="group flex items-center gap-4 border-b border-line py-3 last:border-0">
             <button onClick={() => app.openConversation(c.id)} className="flex min-w-0 flex-1 items-center gap-4 text-left">
@@ -26,6 +27,7 @@ export function ConversationList({ items, empty }: { items: ConversationMeta[]; 
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[14px] font-medium">{c.title}</p>
                 <p className="text-[12px] text-muted">
+                  {project ? `${project.name} · ` : ''}
                   {bot ? `${bot.name} · ` : ''}
                   {c.messageCount} mensagens · {when(c.updatedAt)}
                 </p>

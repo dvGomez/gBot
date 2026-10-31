@@ -1,8 +1,10 @@
 import type { ComponentType, ReactNode } from 'react'
-import { Bot as BotIcon, House, MessageSquarePlus, MessageSquareText, Plug, Plus, Settings, Smile } from 'lucide-react'
+import { Bot as BotIcon, FolderPlus, House, MessageSquarePlus, Plug, Plus, Settings, Smile } from 'lucide-react'
+import { getAvatar } from '@/avatars/sprites'
 import { cn } from '@/lib/cn'
 import { useApp, type View } from '@/state/app'
 import { PixelAvatar } from './PixelAvatar'
+import { ProjectIcon } from './ProjectBadge'
 import { StatusDot } from './ui'
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -47,7 +49,9 @@ export function Sidebar() {
   const provider = app.providers.find((p) => p.id === app.providerId)
   const go = (v: View) => () => app.setView(v)
   const chatActive = (id: string) => app.view === 'chat' && app.activeConversation?.id === id
-  const plainConversations = app.conversations.filter((c) => !c.botId).slice(0, 6)
+  // No menu ficam só os itens soltos; o que está em projeto aparece na página do projeto.
+  const plainConversations = app.conversations.filter((c) => !c.projectId).slice(0, 8)
+  const looseBots = app.bots.filter((b) => !b.projectId)
 
   return (
     <aside className="flex w-[264px] shrink-0 flex-col border-r border-line bg-sidebar">
@@ -63,7 +67,14 @@ export function Sidebar() {
           {plainConversations.map((c) => (
             <NavItem
               key={c.id}
-              icon={MessageSquareText}
+              leading={
+                <PixelAvatar
+                  avatar={app.getBot(c.botId)?.avatar ?? getAvatar(app.avatarId)}
+                  size={17}
+                  animated={false}
+                  className="shrink-0"
+                />
+              }
               label={c.title}
               active={chatActive(c.id)}
               onClick={() => app.openConversation(c.id)}
@@ -71,8 +82,29 @@ export function Sidebar() {
           ))}
         </Section>
 
+        <Section title="Projetos">
+          {app.projects.map((p) => (
+            <NavItem
+              key={p.id}
+              leading={<ProjectIcon project={p} size={17} />}
+              label={p.name}
+              active={
+                ((app.view === 'project' || app.view === 'project-editor') && app.selectedProject?.id === p.id) ||
+                (app.view === 'chat' && app.activeProject?.id === p.id)
+              }
+              onClick={() => app.openProject(p.id)}
+            />
+          ))}
+          <NavItem
+            icon={FolderPlus}
+            label="Novo projeto"
+            active={app.view === 'project-editor' && !app.selectedProject}
+            onClick={() => app.editProject()}
+          />
+        </Section>
+
         <Section title="Bots">
-          {app.bots.map((b) => (
+          {looseBots.map((b) => (
             <NavItem
               key={b.id}
               leading={<PixelAvatar avatar={b.avatar} size={17} animated={false} className="shrink-0" />}
@@ -85,7 +117,7 @@ export function Sidebar() {
             />
           ))}
           <NavItem
-            icon={app.bots.length ? Plus : BotIcon}
+            icon={looseBots.length ? Plus : BotIcon}
             label="Novo bot"
             active={app.view === 'bot-editor' && !app.selectedBot}
             onClick={() => app.editBot()}
@@ -105,10 +137,10 @@ export function Sidebar() {
       >
         <PixelAvatar avatar={app.activeAvatar} mood={app.mood} size={26} />
         <div className="min-w-0">
-          <p className="truncate text-[13px] font-medium">{provider?.name ?? 'Carregando…'}</p>
+          <p className="truncate text-[13px] font-medium">{app.activeBot?.name ?? app.activeAvatar.name}</p>
           <p className="flex items-center gap-1.5 text-[12px] text-muted">
             {provider && <StatusDot status={provider.status} />}
-            Provedor ativo
+            {provider?.name ?? 'Carregando…'}
           </p>
         </div>
       </button>

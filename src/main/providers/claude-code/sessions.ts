@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
+import { getProject } from '../../store'
 import { profileDir, resolveClaudeEnv } from './env'
 import { ClaudeSession } from './session'
 
@@ -11,20 +12,20 @@ import { ClaudeSession } from './session'
  *   `<conversa>:<bot>`     um bot consultado (ou @mencionado) dentro daquela conversa
  * Processos parados há muito tempo são encerrados; a sessão continua salva em disco e é retomada.
  */
-const sessions = new Map<string, ClaudeSession>()
+const sessions = new Map<string, { session: ClaudeSession; signature: string }>()
 const IDLE_MS = 15 * 60_000
 
 setInterval(() => {
-  for (const [key, s] of sessions) {
-    if (!s.busy && Date.now() - s.lastUsed > IDLE_MS) {
-      s.kill()
+  for (const [key, { session }] of sessions) {
+    if (!session.busy && Date.now() - session.lastUsed > IDLE_MS) {
+      session.kill()
       sessions.delete(key)
     }
   }
 }, 60_000).unref()
 
 export function closeAllSessions() {
-  sessions.forEach((s) => s.kill())
+  sessions.forEach(({ session }) => session.kill())
   sessions.clear()
 }
 
@@ -35,6 +36,36 @@ export function workspaceDir(): string {
   const dir = join(app.getPath('userData'), 'workspace')
   mkdirSync(dir, { recursive: true })
   return dir
+}
+
+export interface WorkContext {
+  cwd: string
+  /** Linhas do prompt de sistema sobre o projeto e a pasta de trabalho. */
+  promptLines: string[]
+}
+
+/** Pasta de trabalho e instruções do projeto da conversa (ou a pasta padrão, fora de projetos). */
+export function workContext(projectId?: string): WorkContext {
+  const project = getProject(projectId)
+  const folderOk = !!project?.folder && existsSync(project.folder)
+  const cwd = folderOk ? project!.folder! : workspaceDir()
+  const lines: string[] = []
+  if (project) {
+    lines.push(`Esta conversa faz parte do projeto "${project.name}"${project.description ? ` (${project.description})` : ''}.`)
+    if (project.instructions.trim()) {
+      lines.push(
+        'Instruções do projeto (valem para tudo neste projeto):',
+        '<instrucoes_do_projeto>',
+        project.instructions.trim(),
+        '</instrucoes_do_projeto>'
+      )
+    }
+    if (project.folder && !folderOk) {
+      lines.push(`A pasta do projeto (${project.folder}) não foi encontrada; por isso você está na pasta padrão do gBot.`)
+    }
+  }
+  lines.push(`Sua pasta de trabalho é ${cwd}.`)
+  return { cwd, promptLines: lines }
 }
 
 /** UUID estável derivado de um texto (o Claude Code exige UUID em `--session-id`). */
@@ -53,24 +84,33 @@ function hasSavedSession(sessionId: string): boolean {
 export interface SessionSpec {
   key: string
   sessionId: string
+  cwd: string
   systemPrompt: string
   mcpConfig: string
   allowedTools: string[]
 }
 
+/**
+ * Sessão aberta para a chave, criando se preciso. Se a pasta, o prompt ou as ferramentas mudaram (ex.: a conversa
+ * mudou de projeto ou as instruções foram editadas), o processo é reaberto com `--resume`: a memória continua.
+ */
 export async function getSession(spec: SessionSpec): Promise<ClaudeSession> {
+  const signature = JSON.stringify([spec.cwd, spec.systemPrompt, spec.mcpConfig, spec.allowedTools])
   const existing = sessions.get(spec.key)
-  if (existing && !existing.exited) return existing
+  if (existing && !existing.session.exited) {
+    if (existing.signature === signature || existing.session.busy) return existing.session
+    existing.session.kill()
+  }
   const env = await resolveClaudeEnv()
   const session = new ClaudeSession({
     ...env,
-    cwd: workspaceDir(),
+    cwd: spec.cwd,
     sessionId: spec.sessionId,
     resume: hasSavedSession(spec.sessionId),
     appendSystemPrompt: spec.systemPrompt,
     mcpConfig: spec.mcpConfig,
     allowedTools: spec.allowedTools
   })
-  sessions.set(spec.key, session)
+  sessions.set(spec.key, { session, signature })
   return session
 }
