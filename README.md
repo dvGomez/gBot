@@ -50,6 +50,22 @@ A pasta de trabalho é `~/Library/Application Support/gBot/workspace`.
 
 Ações que pedem permissão são negadas por enquanto (modo `manual`); aprovar pelo app é a Etapa 3.
 
+## Conversas normais e bots
+
+Conversa normal não tem personagem: sem nome, avatar ou persona no prompt. Bots aparecem só em conversas
+com um bot ou quando mencionados com `@`. Conversas e bots podem ser excluídos pelo "⋯" (menu lateral, cabeçalho
+do chat e página do bot), sempre com confirmação.
+
+## Modelos
+
+Cada provedor declara os modelos que oferece (`ProviderInfo.models`). No Claude Code são os aliases
+`default`, `opus`, `sonnet`, `haiku` e `fable` (este exige créditos de uso extras na conta).
+
+- **Bot:** tem um modelo próprio, usado nas conversas com ele e quando outros bots o consultam.
+- **Conversa:** tem o próprio modelo (seletor no campo de mensagem); começa com o do bot, se houver.
+- Trocar o modelo reabre a sessão com `--model` + `--resume`: a conversa continua de onde parou.
+- Cada resposta guarda o modelo usado (`ChatMessage.model`).
+
 ## Projetos
 
 Projetos são opcionais: bots e conversas podem ficar soltos ou dentro de um projeto.

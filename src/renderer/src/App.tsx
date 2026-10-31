@@ -1,5 +1,4 @@
 import { Sidebar } from '@/components/Sidebar'
-import { AvatarsView } from '@/views/AvatarsView'
 import { BotEditorView } from '@/views/BotEditorView'
 import { BotView } from '@/views/BotView'
 import { ChatView } from '@/views/ChatView'
@@ -30,7 +29,6 @@ export function App() {
           {view === 'bot-editor' && <BotEditorView key={app.selectedBot?.id ?? `new-${app.botDraftProjectId ?? ''}`} />}
           {view === 'project' && <ProjectView />}
           {view === 'project-editor' && <ProjectEditorView key={app.selectedProject?.id ?? 'new'} />}
-          {view === 'avatars' && <AvatarsView />}
           {view === 'providers' && <ProvidersView />}
           {view === 'settings' && <SettingsView />}
         </div>

@@ -5,7 +5,6 @@ import { PixelAvatar } from '@/components/PixelAvatar'
 import { ProjectTile } from '@/components/ProjectBadge'
 import { ProviderNotice } from '@/components/ProviderNotice'
 import { Card } from '@/components/ui'
-import { getAvatar } from '@/avatars/sprites'
 import { greeting, longDate } from '@/lib/format'
 import { useApp } from '@/state/app'
 
@@ -42,7 +41,6 @@ function BigOption({
 
 export function HomeView() {
   const app = useApp()
-  const avatar = getAvatar(app.avatarId)
 
   return (
     <div className="mx-auto w-full max-w-[1120px] px-[60px] pt-6 pb-12">
@@ -52,7 +50,6 @@ export function HomeView() {
           <h1 className="mt-2 text-[36px] leading-tight font-medium tracking-[-0.03em]">{greeting()}</h1>
           <p className="mt-2 text-[15px] text-muted">O que vamos fazer hoje?</p>
         </div>
-        <PixelAvatar avatar={avatar} mood={app.mood} size={84} />
       </div>
 
       <div className="mt-8">
@@ -64,7 +61,7 @@ export function HomeView() {
           primary
           icon={<MessageSquarePlus size={22} strokeWidth={1.8} />}
           title="Nova conversa"
-          subtitle={`Converse livremente com ${avatar.name}`}
+          subtitle="Converse livremente; chame bots com @"
           onClick={() => app.newConversation()}
         />
         <BigOption

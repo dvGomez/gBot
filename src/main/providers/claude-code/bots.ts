@@ -87,7 +87,8 @@ async function botSession(conversationId: string, projectId: string | undefined,
     cwd: work.cwd,
     systemPrompt: botSystemPrompt(bot, work),
     mcpConfig: entry.config,
-    allowedTools: GBOT_TOOLS
+    allowedTools: GBOT_TOOLS,
+    model: bot.model
   })
   return { key, session, ctx: entry.ctx }
 }

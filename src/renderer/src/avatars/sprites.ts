@@ -101,7 +101,6 @@ export const AVATARS: AvatarDef[] = [
 
 AVATARS.push(...BUILT_IN_COMPOSED)
 
-export const DEFAULT_AVATAR_ID = AVATARS[0].id
 
 export function getAvatar(id: string): AvatarDef {
   return AVATARS.find((a) => a.id === id) ?? AVATARS[0]

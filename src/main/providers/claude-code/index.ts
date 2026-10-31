@@ -13,7 +13,7 @@ interface AuthStatus {
 }
 
 function systemPrompt(req: SendMessageRequest, work: WorkContext): string {
-  const { persona, bot } = req
+  const { bot } = req
   const lines = ['Você está conversando com o usuário pelo gBot, um aplicativo de chat para desktop.']
   if (bot) {
     lines.push(
@@ -23,8 +23,6 @@ function systemPrompt(req: SendMessageRequest, work: WorkContext): string {
       bot.instructions.trim(),
       '</instrucoes_do_bot>'
     )
-  } else if (persona) {
-    lines.push(`Nesta conversa você se apresenta como ${persona.name} — ${persona.personality.toLowerCase()}.`)
   }
   lines.push(
     'Responda no idioma do usuário, de forma direta e amigável. Use Markdown quando ajudar a leitura.',
@@ -61,7 +59,15 @@ export const claudeCodeProvider: ChatProvider = {
     id: 'claude-code',
     name: 'Claude Code',
     kind: 'local-cli',
-    description: 'Usa o Claude Code instalado neste computador, com os limites da sua assinatura.'
+    description: 'Usa o Claude Code instalado neste computador, com os limites da sua assinatura.',
+    // Aliases do Claude Code: sempre apontam para a versão mais recente de cada modelo.
+    models: [
+      { id: 'default', label: 'Padrão', description: 'O modelo padrão da sua conta' },
+      { id: 'opus', label: 'Opus', description: 'O mais capaz; mais lento e gasta mais limite' },
+      { id: 'sonnet', label: 'Sonnet', description: 'Equilíbrio entre qualidade e velocidade' },
+      { id: 'haiku', label: 'Haiku', description: 'Rápido e econômico' },
+      { id: 'fable', label: 'Fable', description: 'Exige créditos de uso extras na conta' }
+    ]
   },
 
   async checkStatus() {
@@ -132,7 +138,7 @@ export const claudeCodeProvider: ChatProvider = {
     if (!entry) {
       const ctx: CallerContext = {
         conversationId: req.conversationId,
-        callerName: req.bot?.name ?? req.persona?.name ?? 'Assistente',
+        callerName: req.bot?.name ?? 'Claude',
         chain: req.bot ? [req.bot.id] : [],
         depth: 0
       }
@@ -147,7 +153,8 @@ export const claudeCodeProvider: ChatProvider = {
       cwd: work.cwd,
       systemPrompt: systemPrompt(req, work),
       mcpConfig: entry.config,
-      allowedTools: GBOT_TOOLS
+      allowedTools: GBOT_TOOLS,
+      model: req.model
     })
     await session.send(req.text, emit, signal)
   }

@@ -3,6 +3,7 @@ import { ArrowUp, ChevronDown, Square } from 'lucide-react'
 import { useApp } from '@/state/app'
 import { cn } from '@/lib/cn'
 import { mentionQuery, normalize } from '@/lib/mentions'
+import { ModelSelect } from './ModelSelect'
 import { PixelAvatar } from './PixelAvatar'
 import { ProviderNotice } from './ProviderNotice'
 
@@ -134,6 +135,9 @@ export function Composer({ autoFocus, placeholder = 'Pergunte qualquer coisa…'
               </select>
               <ChevronDown size={14} className="pointer-events-none absolute right-3 text-muted" />
             </label>
+            {app.models.length > 0 && (
+              <ModelSelect models={app.models} value={app.activeModel} onChange={app.setActiveModel} disabled={app.busy} />
+            )}
             {app.visibleBots.length > 0 && <span className="text-[12px] text-muted">Use @ para chamar um bot</span>}
           </div>
 

@@ -1,11 +1,20 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { AvatarDef, AvatarMood, Bot, ChatMessage, Conversation, ConversationMeta, Project, ProviderInfo } from '@shared/types'
-import { DEFAULT_AVATAR_ID, getAvatar } from '@/avatars/sprites'
+import type {
+  AvatarDef,
+  AvatarMood,
+  Bot,
+  ChatMessage,
+  Conversation,
+  ConversationMeta,
+  Project,
+  ProviderInfo,
+  ProviderModel
+} from '@shared/types'
 import { uid } from '@/lib/format'
 import { findMention } from '@/lib/mentions'
 import { load, save } from './storage'
 
-export type View = 'home' | 'chat' | 'bot' | 'bot-editor' | 'project' | 'project-editor' | 'avatars' | 'providers' | 'settings'
+export type View = 'home' | 'chat' | 'bot' | 'bot-editor' | 'project' | 'project-editor' | 'providers' | 'settings'
 
 interface Pending {
   requestId: string
@@ -16,9 +25,6 @@ interface Pending {
 interface AppState {
   view: View
   setView(v: View): void
-  /** Avatar das conversas normais (sem bot). */
-  avatarId: string
-  setAvatarId(id: string): void
   /** Provedor em uso (o escolhido, ou o primeiro pronto se o escolhido não estiver). */
   providerId: string
   /** Provedor que o usuário escolheu, mesmo que ainda não esteja pronto. */
@@ -60,6 +66,11 @@ interface AppState {
   activeProject?: Project
   /** Bots que a conversa ativa pode chamar: os soltos e os do projeto dela. */
   visibleBots: Bot[]
+  /** Modelos do provedor em uso (vazio se o provedor não oferece escolha). */
+  models: ProviderModel[]
+  /** Modelo da conversa ativa (ou do rascunho); undefined = padrão. */
+  activeModel?: string
+  setActiveModel(model?: string): void
   openConversation(id: string): void
   /** Abre um chat vazio; com `botId`, a conversa será com aquele bot; com `projectId`, dentro do projeto. */
   newConversation(botId?: string, projectId?: string): void
@@ -67,8 +78,8 @@ interface AppState {
   moveConversation(id: string, projectId?: string): Promise<void>
   removeConversation(id: string): Promise<void>
 
-  /** Avatar que aparece na conversa ativa (do bot ou o padrão). */
-  activeAvatar: AvatarDef
+  /** Avatar do bot da conversa ativa; ausente numa conversa normal (sem personagem). */
+  activeAvatar?: AvatarDef
   mood: AvatarMood
   busy: boolean
   send(text: string): void
@@ -99,7 +110,6 @@ function withMentionContext(conversation: Conversation, text: string, bots: Bot[
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [view, setView] = useState<View>('home')
-  const [avatarId, setAvatarIdState] = useState(() => load('avatarId', DEFAULT_AVATAR_ID))
   const [providerId, setProviderIdState] = useState(() => load('providerId', 'claude-code'))
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [providersLoaded, setProvidersLoaded] = useState(false)
@@ -116,6 +126,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /** Bot e projeto do rascunho: chat aberto mas ainda sem mensagens. */
   const [draftBotId, setDraftBotId] = useState<string>()
   const [draftProjectId, setDraftProjectId] = useState<string>()
+  const [draftModel, setDraftModel] = useState<string>()
 
   const [mood, setMood] = useState<AvatarMood>('idle')
   const [pending, setPending] = useState<Pending>()
@@ -162,11 +173,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const activeConversation = activeId ? loaded[activeId] : undefined
   const activeBot = getBot(activeConversation ? activeConversation.botId : draftBotId)
   const activeProject = getProject(activeConversation ? activeConversation.projectId : draftProjectId)
+  const activeModel = activeConversation ? activeConversation.model : draftModel
+  const models = providers.find((p) => p.id === activeProviderId)?.models ?? []
   const visibleBots = useMemo(
     () => bots.filter((b) => !b.projectId || b.projectId === activeProject?.id),
     [bots, activeProject?.id]
   )
-  const activeAvatar = activeBot?.avatar ?? getAvatar(avatarId)
+  const activeAvatar = activeBot?.avatar
 
   const settleMood = useCallback((m: AvatarMood, ms: number) => {
     clearTimeout(moodTimer.current)
@@ -249,6 +262,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         title: text.slice(0, 48),
         botId: draftBotId,
         projectId: draftProjectId,
+        model: draftModel,
         createdAt: now,
         updatedAt: now,
         messageCount: 0,
@@ -266,6 +280,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         text: '',
         createdAt: now,
         providerId: activeProviderId,
+        model: target ? target.model : conversation.model,
         botId: target?.id
       }
       const updated: Conversation = { ...conversation, updatedAt: now, messages: [...conversation.messages, userMsg, botMsg] }
@@ -275,6 +290,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActiveId(updated.id)
       setDraftBotId(undefined)
       setDraftProjectId(undefined)
+      setDraftModel(undefined)
       setView('chat')
 
       const p: Pending = { requestId: uid(), conversationId: updated.id, messageId: botMsg.id }
@@ -284,7 +300,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       cancelled.current = false
       clearTimeout(moodTimer.current)
       setMood('thinking')
-      const avatar = bot?.avatar ?? getAvatar(avatarId)
       void window.gbot.chat.send({
         requestId: p.requestId,
         providerId: activeProviderId,
@@ -293,11 +308,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         history,
         targetBotId: target?.id,
         projectId: updated.projectId,
-        persona: { name: avatar.name, personality: avatar.personality },
+        model: updated.model,
         bot: bot && { id: bot.id, name: bot.name, description: bot.description, instructions: bot.instructions }
       })
     },
-    [activeConversation, draftBotId, draftProjectId, getBot, bots, visibleBots, activeProviderId, avatarId]
+    [activeConversation, draftBotId, draftProjectId, draftModel, getBot, bots, visibleBots, activeProviderId]
   )
 
   const cancel = useCallback(() => {
@@ -316,9 +331,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActiveId(id)
       setDraftBotId(undefined)
       setDraftProjectId(undefined)
+      setDraftModel(undefined)
       setView('chat')
     },
     [loaded]
+  )
+
+  const setActiveModel = useCallback(
+    (model?: string) => {
+      const value = model === 'default' ? undefined : model
+      if (!activeConversation) {
+        setDraftModel(value)
+        return
+      }
+      toSave.current.add(activeConversation.id)
+      setLoaded((all) => ({ ...all, [activeConversation.id]: { ...activeConversation, model: value, updatedAt: Date.now() } }))
+    },
+    [activeConversation]
   )
 
   const moveConversation = useCallback(
@@ -335,11 +364,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => ({
       view,
       setView,
-      avatarId,
-      setAvatarId: (id) => {
-        setAvatarIdState(id)
-        save('avatarId', id)
-      },
       providerId: activeProviderId,
       preferredProviderId: providerId,
       setProviderId: (id) => {
@@ -403,8 +427,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await window.gbot.bots.remove(id)
         setBots((bs) => bs.filter((b) => b.id !== id))
         setMetas((ms) => ms.filter((m) => m.botId !== id))
-        setSelectedBotId(undefined)
-        setView('home')
+        // Só sai da tela atual se ela mostrava o bot excluído (ou uma conversa dele).
+        const showingBot = (view === 'bot' || view === 'bot-editor') && selectedBotId === id
+        if (showingBot || (view === 'chat' && activeBot?.id === id)) {
+          setSelectedBotId(undefined)
+          setActiveId(undefined)
+          setView('home')
+        }
       },
       getBot,
 
@@ -413,10 +442,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       activeBot,
       activeProject,
       visibleBots,
+      models,
+      activeModel,
+      setActiveModel,
       openConversation: (id) => void openConversation(id),
       newConversation: (botId, projectId) => {
         setActiveId(undefined)
         setDraftBotId(botId)
+        setDraftModel(getBot(botId)?.model)
         setDraftProjectId(projectId ?? getBot(botId)?.projectId)
         setView('chat')
       },
@@ -438,7 +471,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }),
     [
       view,
-      avatarId,
       activeProviderId,
       providerId,
       providers,
@@ -457,6 +489,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       activeBot,
       activeProject,
       visibleBots,
+      models,
+      activeModel,
+      setActiveModel,
       activeId,
       openConversation,
       moveConversation,

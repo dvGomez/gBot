@@ -33,11 +33,23 @@ export type ProviderKind = 'local-cli' | 'api' | 'dev'
 
 export type ProviderStatus = 'ready' | 'not-configured' | 'unavailable' | 'coming-soon'
 
+/** Modelo oferecido por um provedor. `id` é o que vai para o provedor (ex.: alias `opus` do Claude Code). */
+export interface ProviderModel {
+  id: string
+  label: string
+  description?: string
+}
+
+/** Valor de modelo que significa "o padrão do provedor/conta". */
+export const DEFAULT_MODEL = 'default'
+
 export interface ProviderInfo {
   id: string
   name: string
   kind: ProviderKind
   description: string
+  /** Modelos que dá para escolher por conversa ou bot (o primeiro é o padrão). */
+  models?: ProviderModel[]
   status: ProviderStatus
   /** Texto curto explicando o status (versão encontrada, plano, motivo do erro...). */
   statusDetail?: string
@@ -77,6 +89,8 @@ export interface ChatMessage {
   text: string
   createdAt: number
   providerId?: string
+  /** Modelo usado nesta resposta. */
+  model?: string
   /** Bot que respondeu, quando não é o da conversa (ex.: chamado com @menção). */
   botId?: string
   error?: boolean
@@ -109,6 +123,8 @@ export interface Bot {
   description: string
   /** Instruções que especializam o bot (vão para o prompt de sistema). */
   instructions: string
+  /** Modelo do bot (conversas com ele e consultas de outros bots). Ausente = padrão. */
+  model?: string
   /** Projeto do bot; ausente = bot solto, disponível em qualquer lugar. */
   projectId?: string
   createdAt: number
@@ -122,6 +138,8 @@ export interface ConversationMeta {
   botId?: string
   /** Projeto da conversa; ausente = conversa solta. */
   projectId?: string
+  /** Modelo escolhido para a conversa. Ausente = padrão. */
+  model?: string
   createdAt: number
   updatedAt: number
   messageCount: number
@@ -131,25 +149,20 @@ export interface Conversation extends ConversationMeta {
   messages: ChatMessage[]
 }
 
-/** Como o assistente se apresenta na conversa (vem do avatar escolhido). */
-export interface Persona {
-  name: string
-  personality: string
-}
-
 export interface SendMessageRequest {
   requestId: string
   providerId: string
   conversationId: string
   text: string
   history: Pick<ChatMessage, 'role' | 'text'>[]
-  persona?: Persona
   /** Quando a conversa é com um bot: as instruções dele. */
   bot?: Pick<Bot, 'id' | 'name' | 'description' | 'instructions'>
   /** Bot chamado diretamente com @menção: a mensagem vai para ele, não para o assistente da conversa. */
   targetBotId?: string
   /** Projeto da conversa (pasta de trabalho, instruções e bots visíveis). */
   projectId?: string
+  /** Modelo da conversa (ignorado em @menções: o bot mencionado usa o modelo dele). */
+  model?: string
 }
 
 /** Eventos que um provedor emite enquanto responde. */

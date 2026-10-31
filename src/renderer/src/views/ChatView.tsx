@@ -1,12 +1,14 @@
 import { useEffect, useRef } from 'react'
+import { Trash2 } from 'lucide-react'
 import type { ChatMessage } from '@shared/types'
 import { PixelAvatar } from '@/components/PixelAvatar'
 import { Composer } from '@/components/Composer'
-import { StatusDot } from '@/components/ui'
 import { Markdown } from '@/components/Markdown'
 import { ToolList } from '@/components/ToolList'
 import { MOOD_LABELS } from '@/avatars/sprites'
+import { modelLabel } from '@/components/ModelSelect'
 import { ProjectIcon } from '@/components/ProjectBadge'
+import { ItemMenu } from '@/components/ItemMenu'
 import { useApp } from '@/state/app'
 
 function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
@@ -20,13 +22,16 @@ function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
       </div>
     )
   }
-  // Resposta de um bot chamado por @menção: avatar e nome dele.
+  // Resposta de um bot (o da conversa ou um chamado por @menção) leva o avatar dele; numa conversa normal, nada.
   const author = msg.botId ? app.getBot(msg.botId) : undefined
+  const avatar = author?.avatar ?? app.activeAvatar
   return (
     <div className="flex gap-3">
-      <div className="pt-0.5">
-        <PixelAvatar avatar={author?.avatar ?? app.activeAvatar} mood={live ? app.mood : 'idle'} size={28} animated={live} />
-      </div>
+      {avatar && (
+        <div className="pt-0.5">
+          <PixelAvatar avatar={avatar} mood={live ? app.mood : 'idle'} size={28} animated={live} />
+        </div>
+      )}
       <div className="selectable min-w-0 flex-1 pt-1 text-[15px] leading-relaxed">
         {author && <p className="mb-1 text-[12px] font-semibold text-fg-2">{author.name}</p>}
         {msg.tools && msg.tools.length > 0 && <ToolList tools={msg.tools} />}
@@ -50,7 +55,6 @@ function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
 export function ChatView() {
   const app = useApp()
   const conv = app.activeConversation
-  const provider = app.providers.find((p) => p.id === app.providerId)
   const avatar = app.activeAvatar
   const bot = app.activeBot
   const project = app.activeProject
@@ -65,19 +69,21 @@ export function ChatView() {
   return (
     <div className="flex h-full flex-col">
       <div className="mx-auto flex w-full max-w-[860px] items-center gap-3 px-8 pb-4">
-        <PixelAvatar avatar={avatar} mood={app.mood} size={40} />
-        <div>
+        {avatar && <PixelAvatar avatar={avatar} mood={app.mood} size={40} />}
+        <div className="min-w-0">
           {bot ? (
             <button onClick={() => app.openBot(bot.id)} className="text-[15px] font-semibold hover:underline">
               {bot.name}
             </button>
           ) : (
-            <p className="text-[15px] font-semibold">{avatar.name}</p>
+            <p className="truncate text-[15px] font-semibold">{conv?.title ?? 'Nova conversa'}</p>
           )}
-          <p className="flex items-center gap-1.5 text-[12px] text-muted">
-            {provider && <StatusDot status={provider.status} />}
-            {provider?.name} · {MOOD_LABELS[app.mood]}
-          </p>
+          {bot && (
+            <p className="text-[12px] text-muted">
+              {app.models.length > 0 && `${modelLabel(app.models, app.activeModel)} · `}
+              {MOOD_LABELS[app.mood]}
+            </p>
+          )}
         </div>
         <div className="ml-auto flex items-center gap-2">
           {conv && !bot?.projectId ? (
@@ -108,6 +114,19 @@ export function ChatView() {
               </button>
             )
           )}
+          {conv && (
+            <ItemMenu
+              actions={[
+                {
+                  label: 'Excluir conversa',
+                  icon: Trash2,
+                  danger: true,
+                  confirm: 'Excluir esta conversa? Não dá para desfazer.',
+                  onSelect: () => void app.removeConversation(conv.id)
+                }
+              ]}
+            />
+          )}
         </div>
       </div>
 
@@ -115,12 +134,16 @@ export function ChatView() {
         <div className="mx-auto flex max-w-[860px] flex-col gap-6 px-8 py-8">
           {empty && (
             <div className="flex flex-col items-center pt-16 text-center">
-              <PixelAvatar avatar={avatar} mood={app.mood} size={96} />
-              <p className="mt-5 text-[22px] font-medium tracking-[-0.02em]">
-                {bot ? `Converse com ${bot.name}` : `Oi! Eu sou ${avatar.name}.`}
+              {avatar && <PixelAvatar avatar={avatar} mood={app.mood} size={96} />}
+              <p className={`${avatar ? 'mt-5' : ''} text-[22px] font-medium tracking-[-0.02em]`}>
+                {bot ? `Converse com ${bot.name}` : 'Nova conversa'}
               </p>
               <p className="mt-1 max-w-[460px] text-[14px] text-muted">
-                {bot ? bot.description || 'Este bot segue as instruções que você definiu.' : 'Pergunte o que quiser.'}
+                {bot
+                  ? bot.description || 'Este bot segue as instruções que você definiu.'
+                  : app.visibleBots.length
+                    ? 'Pergunte o que quiser. Para falar com um bot, mencione com @.'
+                    : 'Pergunte o que quiser.'}
               </p>
             </div>
           )}
@@ -132,7 +155,7 @@ export function ChatView() {
       </div>
 
       <div className="mx-auto w-full max-w-[860px] px-8 pt-2 pb-6">
-        <Composer autoFocus placeholder={empty ? `Mensagem para ${bot?.name ?? avatar.name}…` : 'Responder…'} />
+        <Composer autoFocus placeholder={empty ? (bot ? `Mensagem para ${bot.name}…` : 'Mensagem…') : 'Responder…'} />
       </div>
     </div>
   )

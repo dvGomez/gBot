@@ -1,7 +1,9 @@
-import { ArrowLeft, MessageSquarePlus, Pencil } from 'lucide-react'
+import { ArrowLeft, MessageSquarePlus, Pencil, Trash2 } from 'lucide-react'
+import { ItemMenu } from '@/components/ItemMenu'
 import { ConversationList } from '@/components/ConversationList'
 import { PixelAvatar } from '@/components/PixelAvatar'
 import { Button, Card } from '@/components/ui'
+import { modelLabel } from '@/components/ModelSelect'
 import { useApp } from '@/state/app'
 
 /** Página de um bot: identidade, instruções e as conversas com ele. */
@@ -39,6 +41,9 @@ export function BotView() {
           </p>
           <h1 className="mt-1 text-[36px] leading-tight font-medium tracking-[-0.03em]">{bot.name}</h1>
           {bot.description && <p className="mt-1 text-[15px] text-muted">{bot.description}</p>}
+          {app.models.length > 0 && (
+            <p className="mt-2 text-[12px] text-muted">Modelo: {modelLabel(app.models, bot.model)}</p>
+          )}
         </div>
         <div className="flex gap-2">
           <Button onClick={() => app.editBot(bot.id)}>
@@ -47,6 +52,18 @@ export function BotView() {
           <Button variant="primary" onClick={() => app.newConversation(bot.id)}>
             <MessageSquarePlus size={14} /> Nova conversa
           </Button>
+          <ItemMenu
+            className="self-center"
+            actions={[
+              {
+                label: 'Excluir bot',
+                icon: Trash2,
+                danger: true,
+                confirm: `Excluir ${bot.name} e as conversas dele? Não dá para desfazer.`,
+                onSelect: () => void app.removeBot(bot.id)
+              }
+            ]}
+          />
         </div>
       </div>
 

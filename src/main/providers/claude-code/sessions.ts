@@ -88,6 +88,8 @@ export interface SessionSpec {
   systemPrompt: string
   mcpConfig: string
   allowedTools: string[]
+  /** Alias ou nome do modelo; ausente/`default` = padrão da conta. */
+  model?: string
 }
 
 /**
@@ -95,7 +97,8 @@ export interface SessionSpec {
  * mudou de projeto ou as instruções foram editadas), o processo é reaberto com `--resume`: a memória continua.
  */
 export async function getSession(spec: SessionSpec): Promise<ClaudeSession> {
-  const signature = JSON.stringify([spec.cwd, spec.systemPrompt, spec.mcpConfig, spec.allowedTools])
+  const model = spec.model && spec.model !== 'default' ? spec.model : undefined
+  const signature = JSON.stringify([spec.cwd, spec.systemPrompt, spec.mcpConfig, spec.allowedTools, model])
   const existing = sessions.get(spec.key)
   if (existing && !existing.session.exited) {
     if (existing.signature === signature || existing.session.busy) return existing.session
@@ -109,7 +112,8 @@ export async function getSession(spec: SessionSpec): Promise<ClaudeSession> {
     resume: hasSavedSession(spec.sessionId),
     appendSystemPrompt: spec.systemPrompt,
     mcpConfig: spec.mcpConfig,
-    allowedTools: spec.allowedTools
+    allowedTools: spec.allowedTools,
+    model
   })
   sessions.set(spec.key, { session, signature })
   return session

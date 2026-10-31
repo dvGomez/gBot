@@ -1,8 +1,7 @@
 import { ChevronRight, Trash2 } from 'lucide-react'
 import type { ConversationMeta } from '@shared/types'
-import { getAvatar } from '@/avatars/sprites'
 import { useApp } from '@/state/app'
-import { PixelAvatar } from './PixelAvatar'
+import { AgentAvatar } from './AgentAvatar'
 
 function when(ts: number): string {
   const d = new Date(ts)
@@ -10,7 +9,7 @@ function when(ts: number): string {
   return new Intl.DateTimeFormat('pt-BR', today ? { hour: '2-digit', minute: '2-digit' } : { day: '2-digit', month: 'short' }).format(d)
 }
 
-/** Lista de conversas com avatar (do bot ou o padrão), título, data e excluir. */
+/** Lista de conversas com avatar (do bot, ou ícone de conversa), título, data e excluir. */
 export function ConversationList({ items, empty }: { items: ConversationMeta[]; empty?: string }) {
   const app = useApp()
   if (items.length === 0) return empty ? <p className="py-3 text-[13px] text-muted">{empty}</p> : null
@@ -23,7 +22,7 @@ export function ConversationList({ items, empty }: { items: ConversationMeta[]; 
         return (
           <div key={c.id} className="group flex items-center gap-4 border-b border-line py-3 last:border-0">
             <button onClick={() => app.openConversation(c.id)} className="flex min-w-0 flex-1 items-center gap-4 text-left">
-              <PixelAvatar avatar={bot?.avatar ?? getAvatar(app.avatarId)} size={30} animated={false} />
+              <AgentAvatar avatar={bot?.avatar} size={30} animated={false} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[14px] font-medium">{c.title}</p>
                 <p className="text-[12px] text-muted">

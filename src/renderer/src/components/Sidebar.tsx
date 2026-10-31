@@ -1,11 +1,11 @@
 import type { ComponentType, ReactNode } from 'react'
-import { Bot as BotIcon, FolderPlus, House, MessageSquarePlus, Plug, Plus, Settings, Smile } from 'lucide-react'
-import { getAvatar } from '@/avatars/sprites'
+import { Bot as BotIcon, FolderPlus, House, MessageSquarePlus, Pencil, Plug, Plus, Settings, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { useApp, type View } from '@/state/app'
+import { AgentAvatar } from './AgentAvatar'
+import { ItemMenu, type MenuAction } from './ItemMenu'
 import { PixelAvatar } from './PixelAvatar'
 import { ProjectIcon } from './ProjectBadge'
-import { StatusDot } from './ui'
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -21,42 +21,78 @@ function NavItem({
   leading,
   label,
   active,
-  onClick
+  onClick,
+  menu
 }: {
   icon?: ComponentType<{ size?: number; strokeWidth?: number; className?: string }>
   leading?: ReactNode
   label: string
   active?: boolean
   onClick(): void
+  /** Ações do "⋯", que aparece ao passar o mouse. */
+  menu?: MenuAction[]
 }) {
   return (
-    <button
-      onClick={onClick}
+    <div
       className={cn(
-        'flex h-9 w-full items-center gap-3 rounded-nav px-3 text-left text-[14px] transition-colors',
-        active ? 'bg-nav-active font-medium text-fg' : 'text-fg-2 hover:bg-hover'
+        'group relative flex h-9 items-center rounded-nav transition-colors',
+        active ? 'bg-nav-active' : 'hover:bg-hover'
       )}
     >
-      {leading ?? (Icon && <Icon size={17} strokeWidth={1.6} className="shrink-0" />)}
-      <span className="truncate">{label}</span>
-    </button>
+      <button
+        onClick={onClick}
+        className={cn(
+          'flex h-full min-w-0 flex-1 items-center gap-3 px-3 text-left text-[14px]',
+          active ? 'font-medium text-fg' : 'text-fg-2',
+          menu && 'group-hover:pr-9'
+        )}
+      >
+        {leading ?? (Icon && <Icon size={17} strokeWidth={1.6} className="shrink-0" />)}
+        <span className="truncate">{label}</span>
+      </button>
+      {menu && (
+        <ItemMenu
+          actions={menu}
+          className="absolute right-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100"
+        />
+      )}
+    </div>
   )
 }
 
 export function Sidebar() {
   const app = useApp()
   const isMac = window.gbot.platform === 'darwin'
-  const provider = app.providers.find((p) => p.id === app.providerId)
   const go = (v: View) => () => app.setView(v)
   const chatActive = (id: string) => app.view === 'chat' && app.activeConversation?.id === id
   // No menu ficam só os itens soltos; o que está em projeto aparece na página do projeto.
   const plainConversations = app.conversations.filter((c) => !c.projectId).slice(0, 8)
   const looseBots = app.bots.filter((b) => !b.projectId)
 
+  const conversationMenu = (id: string): MenuAction[] => [
+    {
+      label: 'Excluir conversa',
+      icon: Trash2,
+      danger: true,
+      confirm: 'Excluir esta conversa? Não dá para desfazer.',
+      onSelect: () => void app.removeConversation(id)
+    }
+  ]
+  const botMenu = (id: string): MenuAction[] => [
+    { label: 'Editar bot', icon: Pencil, onSelect: () => app.editBot(id) },
+    {
+      label: 'Excluir bot',
+      icon: Trash2,
+      danger: true,
+      confirm: 'Excluir este bot e as conversas dele? Não dá para desfazer.',
+      onSelect: () => void app.removeBot(id)
+    }
+  ]
+
   return (
     <aside className="flex w-[264px] shrink-0 flex-col border-r border-line bg-sidebar">
       <div className={cn('drag flex h-14 items-center gap-2.5', isMac ? 'pl-[88px]' : 'pl-5')}>
-        <PixelAvatar avatarId={app.avatarId} size={20} animated={false} />
+        <PixelAvatar avatarId="brasa" size={20} animated={false} />
         <span className="text-[15px] font-medium tracking-[-0.015em]">gBot</span>
       </div>
 
@@ -68,16 +104,12 @@ export function Sidebar() {
             <NavItem
               key={c.id}
               leading={
-                <PixelAvatar
-                  avatar={app.getBot(c.botId)?.avatar ?? getAvatar(app.avatarId)}
-                  size={17}
-                  animated={false}
-                  className="shrink-0"
-                />
+                <AgentAvatar avatar={app.getBot(c.botId)?.avatar} size={17} animated={false} className="shrink-0" />
               }
               label={c.title}
               active={chatActive(c.id)}
               onClick={() => app.openConversation(c.id)}
+              menu={conversationMenu(c.id)}
             />
           ))}
         </Section>
@@ -114,6 +146,7 @@ export function Sidebar() {
                 (app.view === 'chat' && app.activeBot?.id === b.id)
               }
               onClick={() => app.openBot(b.id)}
+              menu={botMenu(b.id)}
             />
           ))}
           <NavItem
@@ -125,25 +158,11 @@ export function Sidebar() {
         </Section>
 
         <Section title="Sistema">
-          <NavItem icon={Smile} label="Avatares" active={app.view === 'avatars'} onClick={go('avatars')} />
           <NavItem icon={Plug} label="Provedores" active={app.view === 'providers'} onClick={go('providers')} />
           <NavItem icon={Settings} label="Configurações" active={app.view === 'settings'} onClick={go('settings')} />
         </Section>
       </nav>
 
-      <button
-        onClick={go('providers')}
-        className="mx-3 mb-3 flex items-center gap-3 rounded-tile border border-line bg-card px-3 py-2.5 text-left hover:bg-hover"
-      >
-        <PixelAvatar avatar={app.activeAvatar} mood={app.mood} size={26} />
-        <div className="min-w-0">
-          <p className="truncate text-[13px] font-medium">{app.activeBot?.name ?? app.activeAvatar.name}</p>
-          <p className="flex items-center gap-1.5 text-[12px] text-muted">
-            {provider && <StatusDot status={provider.status} />}
-            {provider?.name ?? 'Carregando…'}
-          </p>
-        </div>
-      </button>
     </aside>
   )
 }
