@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { AvatarDef, AvatarMood, Bot, ChatMessage, Conversation, ConversationMeta, ProviderInfo } from '@shared/types'
 import { DEFAULT_AVATAR_ID, getAvatar } from '@/avatars/sprites'
 import { uid } from '@/lib/format'
+import { findMention } from '@/lib/mentions'
 import { load, save } from './storage'
 
 export type View = 'home' | 'chat' | 'bot' | 'bot-editor' | 'avatars' | 'providers' | 'settings'
@@ -59,6 +60,24 @@ interface AppState {
 const Ctx = createContext<AppState | null>(null)
 
 const toMeta = ({ messages, ...meta }: Conversation): ConversationMeta => ({ ...meta, messageCount: messages.length })
+
+/**
+ * O assistente da conversa não vê as trocas com bots chamados por @menção. Antes da próxima mensagem
+ * normal, essas trocas (desde a última resposta dele) vão junto como contexto.
+ */
+function withMentionContext(conversation: Conversation, text: string, bots: Bot[]): string {
+  const lines: string[] = []
+  const msgs = conversation.messages
+  for (let i = msgs.length - 1; i > 0; i--) {
+    const m = msgs[i]
+    if (m.role !== 'assistant') continue
+    if (!m.botId || m.botId === conversation.botId) break
+    const name = bots.find((b) => b.id === m.botId)?.name ?? 'um bot'
+    lines.unshift(`Usuário para @${name}: ${msgs[i - 1].text}`, `${name} respondeu: ${m.error ? '(erro)' : m.text}`)
+  }
+  if (!lines.length) return text
+  return `[Contexto do gBot — o usuário conversou com outros bots desde a sua última resposta:\n${lines.join('\n')}]\n\n${text}`
+}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [view, setView] = useState<View>('home')
@@ -206,9 +225,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         messages: []
       }
       const bot = getBot(conversation.botId)
+      // @menção a outro bot: a mensagem vai direto para ele, e a resposta aparece com o avatar dele.
+      const mentioned = findMention(text, bots)
+      const target = mentioned && mentioned.id !== conversation.botId ? mentioned : undefined
       const history = conversation.messages.filter((m) => !m.error).map(({ role, text }) => ({ role, text }))
       const userMsg: ChatMessage = { id: uid(), role: 'user', text, createdAt: now }
-      const botMsg: ChatMessage = { id: uid(), role: 'assistant', text: '', createdAt: now, providerId: activeProviderId }
+      const botMsg: ChatMessage = {
+        id: uid(),
+        role: 'assistant',
+        text: '',
+        createdAt: now,
+        providerId: activeProviderId,
+        botId: target?.id
+      }
       const updated: Conversation = { ...conversation, updatedAt: now, messages: [...conversation.messages, userMsg, botMsg] }
 
       toSave.current.add(updated.id)
@@ -229,13 +258,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         requestId: p.requestId,
         providerId: activeProviderId,
         conversationId: updated.id,
-        text,
+        text: target ? text : withMentionContext(conversation, text, bots),
         history,
+        targetBotId: target?.id,
         persona: { name: avatar.name, personality: avatar.personality },
         bot: bot && { id: bot.id, name: bot.name, description: bot.description, instructions: bot.instructions }
       })
     },
-    [activeConversation, draftBotId, getBot, activeProviderId, avatarId]
+    [activeConversation, draftBotId, getBot, bots, activeProviderId, avatarId]
   )
 
   const cancel = useCallback(() => {

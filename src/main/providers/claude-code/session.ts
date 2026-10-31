@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import type { ChatEvent } from '@shared/types'
-import { describeTool } from './tools'
+import { ASK_BOT_TOOL, describeTool, HIDDEN_TOOLS } from './tools'
 
 export interface SessionOptions {
   bin: string
@@ -12,6 +12,10 @@ export interface SessionOptions {
   resume: boolean
   appendSystemPrompt?: string
   model?: string
+  /** JSON do `--mcp-config` (servidor de ferramentas do gBot). */
+  mcpConfig?: string
+  /** Ferramentas liberadas sem pedir permissão (as do gBot). */
+  allowedTools?: string[]
 }
 
 interface Turn {
@@ -19,11 +23,22 @@ interface Turn {
   done(): void
   interrupted: boolean
   hasText: boolean
-  tools: Map<string, { name: string; summary: string }>
+  tools: Map<string, { name: string; summary: string; botName?: string }>
 }
 
 // Linhas do stream-json do Claude Code (só os campos que usamos).
-type Block = { type: string; id?: string; name?: string; input?: Record<string, unknown>; tool_use_id?: string; is_error?: boolean }
+type Block = {
+  type: string
+  id?: string
+  name?: string
+  input?: Record<string, unknown>
+  tool_use_id?: string
+  is_error?: boolean
+  content?: string | { type: string; text?: string }[]
+}
+
+const blockText = (content: Block['content']) =>
+  typeof content === 'string' ? content : (content ?? []).map((c) => c.text ?? '').join('\n')
 type Line = {
   type: string
   subtype?: string
@@ -60,9 +75,13 @@ export class ClaudeSession {
       '--permission-mode', 'manual',
       ...(opts.resume ? ['--resume', opts.sessionId] : ['--session-id', opts.sessionId]),
       ...(opts.appendSystemPrompt ? ['--append-system-prompt', opts.appendSystemPrompt] : []),
-      ...(opts.model ? ['--model', opts.model] : [])
+      ...(opts.model ? ['--model', opts.model] : []),
+      ...(opts.mcpConfig ? ['--mcp-config', opts.mcpConfig] : []),
+      ...(opts.allowedTools?.length ? ['--allowedTools', opts.allowedTools.join(',')] : [])
     ]
-    this.proc = spawn(opts.bin, args, { cwd: opts.cwd, env: opts.env })
+    // Consultar outro bot pode levar minutos: o limite de tempo de ferramentas MCP precisa acompanhar.
+    const env = { ...opts.env, MCP_TOOL_TIMEOUT: String(15 * 60_000) }
+    this.proc = spawn(opts.bin, args, { cwd: opts.cwd, env })
     this.proc.stdout.setEncoding('utf8')
     this.proc.stdout.on('data', (chunk: string) => this.onData(chunk))
     this.proc.stderr.on('data', (chunk: Buffer) => (this.stderrTail = (this.stderrTail + chunk.toString()).slice(-2000)))
@@ -150,7 +169,7 @@ export class ClaudeSession {
             emit({ type: 'mood', mood: 'talking' })
             if (turn.hasText) emit({ type: 'delta', text: '\n\n' })
           }
-          if (block?.type === 'tool_use' && block.id && block.name) {
+          if (block?.type === 'tool_use' && block.id && block.name && !HIDDEN_TOOLS.has(block.name)) {
             emit({ type: 'mood', mood: 'thinking' })
             const summary = describeTool(block.name)
             turn.tools.set(block.id, { name: block.name, summary })
@@ -167,10 +186,11 @@ export class ClaudeSession {
         // Mensagem completa: agora temos o input das ferramentas para descrevê-las melhor.
         const blocks = Array.isArray(line.message?.content) ? line.message.content : []
         for (const b of blocks) {
-          if (b.type !== 'tool_use' || !b.id || !b.name) continue
+          if (b.type !== 'tool_use' || !b.id || !b.name || HIDDEN_TOOLS.has(b.name)) continue
           const summary = describeTool(b.name, b.input)
-          turn.tools.set(b.id, { name: b.name, summary })
-          emit({ type: 'tool', tool: { id: b.id, name: b.name, summary, status: 'running' } })
+          const botName = b.name === ASK_BOT_TOOL ? String(b.input?.bot ?? '') : undefined
+          turn.tools.set(b.id, { name: b.name, summary, botName })
+          emit({ type: 'tool', tool: { id: b.id, name: b.name, summary, botName, status: 'running' } })
         }
         break
       }
@@ -182,7 +202,12 @@ export class ClaudeSession {
           const t = turn.tools.get(b.tool_use_id)
           if (!t) continue
           const summary = b.is_error ? `Não concluiu: ${t.summary.charAt(0).toLowerCase()}${t.summary.slice(1)}` : t.summary
-          emit({ type: 'tool', tool: { id: b.tool_use_id, name: t.name, summary, status: b.is_error ? 'error' : 'done' } })
+          // Para consultas a bots, guarda a resposta para mostrar no chat.
+          const detail = t.botName ? blockText(b.content).slice(0, 20_000) : undefined
+          emit({
+            type: 'tool',
+            tool: { id: b.tool_use_id, name: t.name, summary, botName: t.botName, detail, status: b.is_error ? 'error' : 'done' }
+          })
         }
         emit({ type: 'mood', mood: 'thinking' })
         break

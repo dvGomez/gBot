@@ -66,6 +66,9 @@ export interface ToolActivity {
   name: string
   summary: string
   status: 'running' | 'done' | 'error'
+  /** Quando a ferramenta é uma consulta a outro bot: o nome pedido e a resposta recebida. */
+  botName?: string
+  detail?: string
 }
 
 export interface ChatMessage {
@@ -74,6 +77,8 @@ export interface ChatMessage {
   text: string
   createdAt: number
   providerId?: string
+  /** Bot que respondeu, quando não é o da conversa (ex.: chamado com @menção). */
+  botId?: string
   error?: boolean
   tools?: ToolActivity[]
   /** Avisos curtos sobre a resposta (permissão negada, nova tentativa...). */
@@ -122,6 +127,8 @@ export interface SendMessageRequest {
   persona?: Persona
   /** Quando a conversa é com um bot: as instruções dele. */
   bot?: Pick<Bot, 'id' | 'name' | 'description' | 'instructions'>
+  /** Bot chamado diretamente com @menção: a mensagem vai para ele, não para o assistente da conversa. */
+  targetBotId?: string
 }
 
 /** Eventos que um provedor emite enquanto responde. */

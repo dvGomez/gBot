@@ -50,6 +50,18 @@ A pasta de trabalho é `~/Library/Application Support/gBot/workspace`.
 
 Ações que pedem permissão são negadas por enquanto (modo `manual`); aprovar pelo app é a Etapa 3.
 
+## Bots conversando entre si
+
+O processo principal sobe um servidor MCP em `127.0.0.1` (porta aleatória) com duas ferramentas,
+`list_bots` e `ask_bot`. Toda sessão do Claude Code aberta pelo gBot recebe esse servidor via
+`--mcp-config`, com um token próprio que identifica quem está chamando (conversa, bot, profundidade).
+
+- `ask_bot` abre (ou reaproveita) a sessão daquele bot **dentro da conversa** (`<conversa>:<bot>`), então
+  o bot lembra das consultas e @menções anteriores daquela conversa.
+- Proteções: no máximo 3 consultas encadeadas, sem ciclos (A → B → A) e 10 min por consulta.
+- `@Nome` no chat envia a mensagem direto ao bot; a resposta aparece com o avatar dele, e o assistente
+  da conversa recebe essa troca como contexto na mensagem seguinte.
+
 ## Adicionar um provedor
 
 1. Crie `src/main/providers/<nome>.ts` implementando `ChatProvider` (`checkStatus` + `send`).
@@ -62,6 +74,6 @@ A interface lista o provedor automaticamente; `send` emite eventos `mood`, `delt
 1. ✅ Esqueleto, design MagmaFit, avatares, chat de teste, instalador
 2. ✅ Conversa com o Claude Code (streaming, ferramentas, memória, interromper)
 3. ✅ Bots (nome, avatar, instruções), 20 avatares + gerador, conversas salvas em disco
-4. Bots consultando outros bots (`listar_bots` / `perguntar_ao_bot`) e `@menções`
+4. ✅ Bots consultando outros bots (`list_bots` / `ask_bot` via MCP local) e `@menções`
 5. Aprovar permissões no app
 6. Ações no computador, ícone na barra de menu

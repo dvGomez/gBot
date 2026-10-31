@@ -19,12 +19,15 @@ function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
       </div>
     )
   }
+  // Resposta de um bot chamado por @menção: avatar e nome dele.
+  const author = msg.botId ? app.getBot(msg.botId) : undefined
   return (
     <div className="flex gap-3">
       <div className="pt-0.5">
-        <PixelAvatar avatar={app.activeAvatar} mood={live ? app.mood : 'idle'} size={28} animated={live} />
+        <PixelAvatar avatar={author?.avatar ?? app.activeAvatar} mood={live ? app.mood : 'idle'} size={28} animated={live} />
       </div>
       <div className="selectable min-w-0 flex-1 pt-1 text-[15px] leading-relaxed">
+        {author && <p className="mb-1 text-[12px] font-semibold text-fg-2">{author.name}</p>}
         {msg.tools && msg.tools.length > 0 && <ToolList tools={msg.tools} />}
         {msg.error ? (
           <p className="text-danger">{msg.text}</p>

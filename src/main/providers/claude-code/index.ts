@@ -1,11 +1,10 @@
 import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
-import { app } from 'electron'
 import type { SendMessageRequest } from '@shared/types'
 import type { ChatProvider } from '../types'
-import { profileDir, resolveClaudeEnv, runClaude } from './env'
-import { ClaudeSession } from './session'
+import { sendToBot, TOOLS_HINT } from './bots'
+import { resolveClaudeEnv, runClaude } from './env'
+import { GBOT_TOOLS, mcpConfigFor, type CallerContext } from './mcp'
+import { closeAllSessions, getSession, workspaceDir } from './sessions'
 
 interface AuthStatus {
   loggedIn: boolean
@@ -13,40 +12,7 @@ interface AuthStatus {
   subscriptionType?: string
 }
 
-/** Sessões abertas, uma por conversa. Processos parados há muito tempo são encerrados. */
-const sessions = new Map<string, ClaudeSession>()
-/** A conversa já tem sessão salva pelo Claude Code neste perfil? (então usa `--resume`) */
-function hasSavedSession(sessionId: string): boolean {
-  const projects = join(profileDir(), 'projects')
-  if (!existsSync(projects)) return false
-  return readdirSync(projects).some((dir) => existsSync(join(projects, dir, `${sessionId}.jsonl`)))
-}
-const IDLE_MS = 15 * 60_000
-
-setInterval(() => {
-  for (const [id, s] of sessions) {
-    if (!s.busy && Date.now() - s.lastUsed > IDLE_MS) {
-      s.kill()
-      sessions.delete(id)
-    }
-  }
-}, 60_000).unref()
-
-function closeAllSessions() {
-  sessions.forEach((s) => s.kill())
-  sessions.clear()
-}
-
-app.on('before-quit', closeAllSessions)
-
-/** Pasta onde o Claude Code trabalha. Configurável numa etapa futura. */
-export function workspaceDir(): string {
-  const dir = join(app.getPath('userData'), 'workspace')
-  mkdirSync(dir, { recursive: true })
-  return dir
-}
-
-function systemPrompt(req: SendMessageRequest, cwd: string): string {
+function systemPrompt(req: SendMessageRequest): string {
   const { persona, bot } = req
   const lines = ['Você está conversando com o usuário pelo gBot, um aplicativo de chat para desktop.']
   if (bot) {
@@ -62,8 +28,9 @@ function systemPrompt(req: SendMessageRequest, cwd: string): string {
   }
   lines.push(
     'Responda no idioma do usuário, de forma direta e amigável. Use Markdown quando ajudar a leitura.',
-    `Sua pasta de trabalho é ${cwd}.`,
-    'O gBot ainda não consegue mostrar pedidos de permissão: ações que precisam de aprovação serão negadas. Se precisar de uma, explique ao usuário o que faria.'
+    `Sua pasta de trabalho é ${workspaceDir()}.`,
+    'O gBot ainda não consegue mostrar pedidos de permissão: ações que precisam de aprovação serão negadas. Se precisar de uma, explique ao usuário o que faria.',
+    TOOLS_HINT
   )
   return lines.join('\n')
 }
@@ -157,19 +124,31 @@ export const claudeCodeProvider: ChatProvider = {
   },
 
   async send(req, emit, signal) {
-    const env = await resolveClaudeEnv()
-    let session = sessions.get(req.conversationId)
-    if (!session || session.exited) {
-      const cwd = workspaceDir()
-      session = new ClaudeSession({
-        ...env,
-        cwd,
-        sessionId: req.conversationId,
-        resume: hasSavedSession(req.conversationId),
-        appendSystemPrompt: systemPrompt(req, cwd)
-      })
-      sessions.set(req.conversationId, session)
+    if (req.targetBotId) {
+      await sendToBot(req.conversationId, req.targetBotId, req.text, emit, signal)
+      return
     }
+    let entry = mainContexts.get(req.conversationId)
+    if (!entry) {
+      const ctx: CallerContext = {
+        conversationId: req.conversationId,
+        callerName: req.bot?.name ?? req.persona?.name ?? 'Assistente',
+        chain: req.bot ? [req.bot.id] : [],
+        depth: 0
+      }
+      entry = { ctx, config: (await mcpConfigFor(ctx)).config }
+      mainContexts.set(req.conversationId, entry)
+    }
+    const session = await getSession({
+      key: req.conversationId,
+      sessionId: req.conversationId,
+      systemPrompt: systemPrompt(req),
+      mcpConfig: entry.config,
+      allowedTools: GBOT_TOOLS
+    })
     await session.send(req.text, emit, signal)
   }
 }
+
+/** Contexto MCP do assistente principal de cada conversa. */
+const mainContexts = new Map<string, { ctx: CallerContext; config: string }>()
