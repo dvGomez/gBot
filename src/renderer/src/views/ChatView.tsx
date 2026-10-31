@@ -5,7 +5,7 @@ import { Composer } from '@/components/Composer'
 import { StatusDot } from '@/components/ui'
 import { Markdown } from '@/components/Markdown'
 import { ToolList } from '@/components/ToolList'
-import { getAvatar, MOOD_LABELS } from '@/avatars/sprites'
+import { MOOD_LABELS } from '@/avatars/sprites'
 import { useApp } from '@/state/app'
 
 function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
@@ -22,7 +22,7 @@ function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
   return (
     <div className="flex gap-3">
       <div className="pt-0.5">
-        <PixelAvatar avatarId={app.avatarId} mood={live ? app.mood : 'idle'} size={28} animated={live} />
+        <PixelAvatar avatar={app.activeAvatar} mood={live ? app.mood : 'idle'} size={28} animated={live} />
       </div>
       <div className="selectable min-w-0 flex-1 pt-1 text-[15px] leading-relaxed">
         {msg.tools && msg.tools.length > 0 && <ToolList tools={msg.tools} />}
@@ -47,7 +47,9 @@ export function ChatView() {
   const app = useApp()
   const conv = app.activeConversation
   const provider = app.providers.find((p) => p.id === app.providerId)
-  const avatar = getAvatar(app.avatarId)
+  const avatar = app.activeAvatar
+  const bot = app.activeBot
+  const empty = !conv || conv.messages.length === 0
   const bottom = useRef<HTMLDivElement>(null)
   const lastText = conv?.messages.at(-1)?.text
 
@@ -58,9 +60,15 @@ export function ChatView() {
   return (
     <div className="flex h-full flex-col">
       <div className="mx-auto flex w-full max-w-[860px] items-center gap-3 px-8 pb-4">
-        <PixelAvatar avatarId={app.avatarId} mood={app.mood} size={40} />
+        <PixelAvatar avatar={avatar} mood={app.mood} size={40} />
         <div>
-          <p className="text-[15px] font-semibold">{avatar.name}</p>
+          {bot ? (
+            <button onClick={() => app.openBot(bot.id)} className="text-[15px] font-semibold hover:underline">
+              {bot.name}
+            </button>
+          ) : (
+            <p className="text-[15px] font-semibold">{avatar.name}</p>
+          )}
           <p className="flex items-center gap-1.5 text-[12px] text-muted">
             {provider && <StatusDot status={provider.status} />}
             {provider?.name} · {MOOD_LABELS[app.mood]}
@@ -70,6 +78,17 @@ export function ChatView() {
 
       <div className="flex-1 overflow-y-auto border-t border-line">
         <div className="mx-auto flex max-w-[860px] flex-col gap-6 px-8 py-8">
+          {empty && (
+            <div className="flex flex-col items-center pt-16 text-center">
+              <PixelAvatar avatar={avatar} mood={app.mood} size={96} />
+              <p className="mt-5 text-[22px] font-medium tracking-[-0.02em]">
+                {bot ? `Converse com ${bot.name}` : `Oi! Eu sou ${avatar.name}.`}
+              </p>
+              <p className="mt-1 max-w-[460px] text-[14px] text-muted">
+                {bot ? bot.description || 'Este bot segue as instruções que você definiu.' : 'Pergunte o que quiser.'}
+              </p>
+            </div>
+          )}
           {conv?.messages.map((m, i) => (
             <Message key={m.id} msg={m} live={app.busy && i === conv.messages.length - 1} />
           ))}
@@ -78,7 +97,7 @@ export function ChatView() {
       </div>
 
       <div className="mx-auto w-full max-w-[860px] px-8 pt-2 pb-6">
-        <Composer autoFocus placeholder="Responder…" />
+        <Composer autoFocus placeholder={empty ? `Mensagem para ${bot?.name ?? avatar.name}…` : 'Responder…'} />
       </div>
     </div>
   )

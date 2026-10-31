@@ -1,9 +1,12 @@
-import type { AvatarMood } from '@shared/types'
+import type { AvatarDef, AvatarMood } from '@shared/types'
 import { getAvatar, renderAvatar } from '@/avatars/sprites'
 import { useTick } from '@/lib/ticker'
 
 interface Props {
-  avatarId: string
+  /** Avatar pronto, pelo id… */
+  avatarId?: string
+  /** …ou a definição completa (avatares gerados, salvos junto com o bot). */
+  avatar?: AvatarDef
   mood?: AvatarMood
   size?: number
   /** Desencontra a animação quando vários avatares aparecem juntos. */
@@ -12,9 +15,9 @@ interface Props {
   className?: string
 }
 
-export function PixelAvatar({ avatarId, mood = 'idle', size = 48, seed = 0, animated = true, className }: Props) {
+export function PixelAvatar({ avatarId, avatar: def, mood = 'idle', size = 48, seed = 0, animated = true, className }: Props) {
   const tick = useTick(animated)
-  const avatar = getAvatar(avatarId)
+  const avatar = def ?? getAvatar(avatarId ?? '')
   const pixels = renderAvatar(avatar, mood, tick, seed)
 
   return (

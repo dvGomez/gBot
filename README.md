@@ -17,15 +17,16 @@ npm run icon       # regenera build/icon.png a partir do avatar em pixel art
 src/
 ├─ main/                 processo principal (Node)
 │  ├─ index.ts           janela
+│  ├─ store.ts           bots e conversas em JSON (~/Library/Application Support/gBot/data)
 │  ├─ ipc.ts             ponte main ⇄ interface
 │  └─ providers/         um provedor por arquivo/pasta + registry.ts
 │     └─ claude-code/    sessões `claude -p` em stream-json (uma por conversa)
 ├─ preload/              expõe `window.gbot` para a interface
 ├─ shared/types.ts       tipos usados dos dois lados
 └─ renderer/src/         interface React
-   ├─ avatars/           sprites em pixel art e animação
+   ├─ avatars/           sprites em pixel art, partes e gerador de avatares
    ├─ components/        PixelAvatar, Sidebar, Composer, ui
-   ├─ views/             Início, Chat, Avatares, Provedores, Configurações
+   ├─ views/             Início, Chat, Bot, Editor de bot, Login, Avatares, Provedores, Configurações
    └─ state/app.tsx      estado do app (tema, avatar, provedor, conversas)
 ```
 
@@ -60,5 +61,7 @@ A interface lista o provedor automaticamente; `send` emite eventos `mood`, `delt
 
 1. ✅ Esqueleto, design MagmaFit, avatares, chat de teste, instalador
 2. ✅ Conversa com o Claude Code (streaming, ferramentas, memória, interromper)
-3. Histórico em SQLite, várias sessões, permissões no app
-4. Ações no computador, ícone na barra de menu
+3. ✅ Bots (nome, avatar, instruções), 20 avatares + gerador, conversas salvas em disco
+4. Bots consultando outros bots (`listar_bots` / `perguntar_ao_bot`) e `@menções`
+5. Aprovar permissões no app
+6. Ações no computador, ícone na barra de menu

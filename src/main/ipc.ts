@@ -1,6 +1,8 @@
 import { ipcMain, type WebContents } from 'electron'
-import type { ChatEvent, SendMessageRequest } from '@shared/types'
+import type { Bot, ChatEvent, Conversation, SendMessageRequest } from '@shared/types'
+import { suggestBotIdentity } from './providers/claude-code'
 import { getProvider, listProviders } from './providers/registry'
+import * as store from './store'
 
 const running = new Map<string, AbortController>()
 
@@ -9,6 +11,16 @@ function emitTo(sender: WebContents, requestId: string, event: ChatEvent) {
 }
 
 export function registerIpc() {
+  ipcMain.handle('bots:list', () => store.listBots())
+  ipcMain.handle('bots:save', (_e, bot: Bot) => store.saveBot(bot))
+  ipcMain.handle('bots:remove', (_e, id: string) => store.removeBot(id))
+  ipcMain.handle('bots:suggest', (_e, instructions: string) => suggestBotIdentity(instructions))
+
+  ipcMain.handle('conversations:list', () => store.listConversations())
+  ipcMain.handle('conversations:get', (_e, id: string) => store.getConversation(id))
+  ipcMain.handle('conversations:save', (_e, c: Conversation) => store.saveConversation(c))
+  ipcMain.handle('conversations:remove', (_e, id: string) => store.removeConversation(id))
+
   ipcMain.handle('providers:list', () => listProviders())
 
   ipcMain.handle('providers:action', async (e, providerId: string, actionId: string) => {

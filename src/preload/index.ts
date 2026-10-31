@@ -15,6 +15,18 @@ const api: GbotApi = {
       return () => ipcRenderer.removeListener('providers:progress', handler)
     }
   },
+  bots: {
+    list: () => ipcRenderer.invoke('bots:list'),
+    save: (bot) => ipcRenderer.invoke('bots:save', bot),
+    remove: (id) => ipcRenderer.invoke('bots:remove', id),
+    suggest: (instructions) => ipcRenderer.invoke('bots:suggest', instructions)
+  },
+  conversations: {
+    list: () => ipcRenderer.invoke('conversations:list'),
+    get: (id) => ipcRenderer.invoke('conversations:get', id),
+    save: (c) => ipcRenderer.invoke('conversations:save', c),
+    remove: (id) => ipcRenderer.invoke('conversations:remove', id)
+  },
   chat: {
     send: (req) => ipcRenderer.invoke('chat:send', req),
     cancel: (requestId) => ipcRenderer.invoke('chat:cancel', requestId),

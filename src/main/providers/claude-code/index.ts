@@ -1,10 +1,10 @@
 import { spawn } from 'node:child_process'
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
-import type { Persona } from '@shared/types'
+import type { SendMessageRequest } from '@shared/types'
 import type { ChatProvider } from '../types'
-import { resolveClaudeEnv, runClaude } from './env'
+import { profileDir, resolveClaudeEnv, runClaude } from './env'
 import { ClaudeSession } from './session'
 
 interface AuthStatus {
@@ -15,8 +15,12 @@ interface AuthStatus {
 
 /** Sessões abertas, uma por conversa. Processos parados há muito tempo são encerrados. */
 const sessions = new Map<string, ClaudeSession>()
-/** Conversas que já têm sessão salva em disco pelo Claude Code (para usar `--resume`). */
-const started = new Set<string>()
+/** A conversa já tem sessão salva pelo Claude Code neste perfil? (então usa `--resume`) */
+function hasSavedSession(sessionId: string): boolean {
+  const projects = join(profileDir(), 'projects')
+  if (!existsSync(projects)) return false
+  return readdirSync(projects).some((dir) => existsSync(join(projects, dir, `${sessionId}.jsonl`)))
+}
 const IDLE_MS = 15 * 60_000
 
 setInterval(() => {
@@ -42,16 +46,46 @@ export function workspaceDir(): string {
   return dir
 }
 
-function systemPrompt(persona: Persona | undefined, cwd: string): string {
-  return [
-    'Você está conversando com o usuário pelo gBot, um aplicativo de chat para desktop.',
-    persona && `Nesta conversa você se apresenta como ${persona.name} — ${persona.personality.toLowerCase()}.`,
+function systemPrompt(req: SendMessageRequest, cwd: string): string {
+  const { persona, bot } = req
+  const lines = ['Você está conversando com o usuário pelo gBot, um aplicativo de chat para desktop.']
+  if (bot) {
+    lines.push(
+      `Nesta conversa você é o bot "${bot.name}"${bot.description ? `: ${bot.description}` : ''}.`,
+      'Siga estas instruções definidas pelo usuário para este bot:',
+      '<instrucoes_do_bot>',
+      bot.instructions.trim(),
+      '</instrucoes_do_bot>'
+    )
+  } else if (persona) {
+    lines.push(`Nesta conversa você se apresenta como ${persona.name} — ${persona.personality.toLowerCase()}.`)
+  }
+  lines.push(
     'Responda no idioma do usuário, de forma direta e amigável. Use Markdown quando ajudar a leitura.',
     `Sua pasta de trabalho é ${cwd}.`,
     'O gBot ainda não consegue mostrar pedidos de permissão: ações que precisam de aprovação serão negadas. Se precisar de uma, explique ao usuário o que faria.'
-  ]
-    .filter(Boolean)
-    .join(' ')
+  )
+  return lines.join('\n')
+}
+
+/**
+ * Sugere nome e descrição para um bot a partir das instruções, com uma chamada curta ao Claude Code
+ * (modelo rápido, sem ferramentas e sem salvar sessão).
+ */
+export async function suggestBotIdentity(instructions: string): Promise<{ name: string; description: string }> {
+  const prompt = [
+    'Sugira um nome curto e simpático (1 ou 2 palavras, em português) e uma descrição de uma frase',
+    '(até 90 caracteres, começando com verbo, ex.: "Revisa contratos e aponta riscos") para um bot de chat com estas instruções:',
+    '<instrucoes>',
+    instructions.trim(),
+    '</instrucoes>',
+    'Responda apenas com JSON no formato {"name": "...", "description": "..."}.'
+  ].join('\n')
+  const out = await runClaude(['-p', prompt, '--model', 'haiku', '--tools', '', '--no-session-persistence'], 60_000)
+  const json = out.match(/\{[\s\S]*\}/)?.[0]
+  if (!json) throw new Error('Não consegui sugerir agora.')
+  const parsed = JSON.parse(json) as { name?: string; description?: string }
+  return { name: String(parsed.name ?? '').slice(0, 40), description: String(parsed.description ?? '').slice(0, 140) }
 }
 
 /** Claude Code instalado na máquina, logado na assinatura do usuário (binário oficial, sem modificações). */
@@ -131,11 +165,10 @@ export const claudeCodeProvider: ChatProvider = {
         ...env,
         cwd,
         sessionId: req.conversationId,
-        resume: started.has(req.conversationId),
-        appendSystemPrompt: systemPrompt(req.persona, cwd)
+        resume: hasSavedSession(req.conversationId),
+        appendSystemPrompt: systemPrompt(req, cwd)
       })
       sessions.set(req.conversationId, session)
-      started.add(req.conversationId)
     }
     await session.send(req.text, emit, signal)
   }

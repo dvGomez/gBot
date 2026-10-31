@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from 'react'
-import { House, MessageSquarePlus, MessageSquareText, Plug, Settings, Smile } from 'lucide-react'
+import { Bot as BotIcon, House, MessageSquarePlus, MessageSquareText, Plug, Plus, Settings, Smile } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { useApp, type View } from '@/state/app'
 import { PixelAvatar } from './PixelAvatar'
@@ -16,11 +16,13 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 function NavItem({
   icon: Icon,
+  leading,
   label,
   active,
   onClick
 }: {
-  icon: ComponentType<{ size?: number; strokeWidth?: number; className?: string }>
+  icon?: ComponentType<{ size?: number; strokeWidth?: number; className?: string }>
+  leading?: ReactNode
   label: string
   active?: boolean
   onClick(): void
@@ -33,7 +35,7 @@ function NavItem({
         active ? 'bg-nav-active font-medium text-fg' : 'text-fg-2 hover:bg-hover'
       )}
     >
-      <Icon size={17} strokeWidth={1.6} className="shrink-0" />
+      {leading ?? (Icon && <Icon size={17} strokeWidth={1.6} className="shrink-0" />)}
       <span className="truncate">{label}</span>
     </button>
   )
@@ -44,6 +46,8 @@ export function Sidebar() {
   const isMac = window.gbot.platform === 'darwin'
   const provider = app.providers.find((p) => p.id === app.providerId)
   const go = (v: View) => () => app.setView(v)
+  const chatActive = (id: string) => app.view === 'chat' && app.activeConversation?.id === id
+  const plainConversations = app.conversations.filter((c) => !c.botId).slice(0, 6)
 
   return (
     <aside className="flex w-[264px] shrink-0 flex-col border-r border-line bg-sidebar">
@@ -55,24 +59,42 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto px-3 pb-4">
         <Section title="Conversas">
           <NavItem icon={House} label="Início" active={app.view === 'home'} onClick={go('home')} />
-          <NavItem icon={MessageSquarePlus} label="Nova conversa" onClick={app.newConversation} />
-          {app.conversations.slice(0, 8).map((c) => (
+          <NavItem icon={MessageSquarePlus} label="Nova conversa" onClick={() => app.newConversation()} />
+          {plainConversations.map((c) => (
             <NavItem
               key={c.id}
               icon={MessageSquareText}
               label={c.title}
-              active={app.view === 'chat' && app.activeConversation?.id === c.id}
+              active={chatActive(c.id)}
               onClick={() => app.openConversation(c.id)}
             />
           ))}
         </Section>
 
-        <Section title="Assistente">
-          <NavItem icon={Smile} label="Avatares" active={app.view === 'avatars'} onClick={go('avatars')} />
-          <NavItem icon={Plug} label="Provedores" active={app.view === 'providers'} onClick={go('providers')} />
+        <Section title="Bots">
+          {app.bots.map((b) => (
+            <NavItem
+              key={b.id}
+              leading={<PixelAvatar avatar={b.avatar} size={17} animated={false} className="shrink-0" />}
+              label={b.name}
+              active={
+                ((app.view === 'bot' || app.view === 'bot-editor') && app.selectedBot?.id === b.id) ||
+                (app.view === 'chat' && app.activeBot?.id === b.id)
+              }
+              onClick={() => app.openBot(b.id)}
+            />
+          ))}
+          <NavItem
+            icon={app.bots.length ? Plus : BotIcon}
+            label="Novo bot"
+            active={app.view === 'bot-editor' && !app.selectedBot}
+            onClick={() => app.editBot()}
+          />
         </Section>
 
         <Section title="Sistema">
+          <NavItem icon={Smile} label="Avatares" active={app.view === 'avatars'} onClick={go('avatars')} />
+          <NavItem icon={Plug} label="Provedores" active={app.view === 'providers'} onClick={go('providers')} />
           <NavItem icon={Settings} label="Configurações" active={app.view === 'settings'} onClick={go('settings')} />
         </Section>
       </nav>
@@ -81,7 +103,7 @@ export function Sidebar() {
         onClick={go('providers')}
         className="mx-3 mb-3 flex items-center gap-3 rounded-tile border border-line bg-card px-3 py-2.5 text-left hover:bg-hover"
       >
-        <PixelAvatar avatarId={app.avatarId} mood={app.mood} size={26} />
+        <PixelAvatar avatar={app.activeAvatar} mood={app.mood} size={26} />
         <div className="min-w-0">
           <p className="truncate text-[13px] font-medium">{provider?.name ?? 'Carregando…'}</p>
           <p className="flex items-center gap-1.5 text-[12px] text-muted">

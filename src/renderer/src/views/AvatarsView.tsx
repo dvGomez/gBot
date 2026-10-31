@@ -16,7 +16,7 @@ export function AvatarsView() {
 
   return (
     <div className="mx-auto w-full max-w-[1120px] px-[60px] pt-6 pb-12">
-      <PageHeader eyebrow="Assistente" title="Avatares" subtitle="Escolha quem conversa com você. O avatar reage ao que o assistente está fazendo." />
+      <PageHeader eyebrow="Assistente" title="Avatares" subtitle="O avatar das conversas normais. Bots têm o próprio avatar, escolhido na criação." />
 
       <Card className="mt-8 flex items-center gap-10 p-8">
         <div className="flex size-[168px] shrink-0 items-center justify-center rounded-card bg-sidebar">
@@ -35,7 +35,7 @@ export function AvatarsView() {
         </div>
       </Card>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="mt-4 grid grid-cols-4 gap-3 xl:grid-cols-5">
         {AVATARS.map((a, i) => {
           const selected = a.id === app.avatarId
           return (
@@ -43,7 +43,7 @@ export function AvatarsView() {
               key={a.id}
               onClick={() => app.setAvatarId(a.id)}
               className={cn(
-                'relative flex flex-col items-center rounded-card border bg-card px-4 pt-6 pb-5 transition-colors hover:bg-hover',
+                'relative flex flex-col items-center rounded-card border bg-card px-3 pt-5 pb-4 transition-colors hover:bg-hover',
                 selected ? 'border-primary' : 'border-line'
               )}
             >
@@ -52,7 +52,7 @@ export function AvatarsView() {
                   <Check size={12} strokeWidth={3} />
                 </span>
               )}
-              <PixelAvatar avatarId={a.id} size={64} seed={i} />
+              <PixelAvatar avatarId={a.id} size={52} seed={i} />
               <p className="mt-3 text-[15px] font-semibold">{a.name}</p>
               <p className="text-[12px] text-muted">{a.personality}</p>
             </button>

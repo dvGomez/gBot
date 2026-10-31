@@ -1,13 +1,14 @@
 import type { ReactNode } from 'react'
-import { ChevronRight, Monitor, Plug, Plus, Smile } from 'lucide-react'
+import { Bot as BotIcon, MessageSquarePlus, Plus } from 'lucide-react'
+import { ConversationList } from '@/components/ConversationList'
 import { PixelAvatar } from '@/components/PixelAvatar'
-import { Composer } from '@/components/Composer'
-import { Card, IconTile } from '@/components/ui'
+import { ProviderNotice } from '@/components/ProviderNotice'
+import { Card } from '@/components/ui'
 import { getAvatar } from '@/avatars/sprites'
-import { greeting, longDate, shortTime } from '@/lib/format'
+import { greeting, longDate } from '@/lib/format'
 import { useApp } from '@/state/app'
 
-function QuickCard({
+function BigOption({
   icon,
   title,
   subtitle,
@@ -18,18 +19,21 @@ function QuickCard({
   title: string
   subtitle: string
   primary?: boolean
-  onClick?: () => void
+  onClick(): void
 }) {
   return (
     <button
       onClick={onClick}
-      disabled={!onClick}
-      className="flex items-center gap-4 rounded-card border border-line bg-card p-4 text-left transition-colors hover:bg-hover disabled:cursor-default disabled:hover:bg-card"
+      className="flex items-center gap-5 rounded-card border border-line bg-card p-6 text-left transition-colors hover:bg-hover"
     >
-      <IconTile primary={primary}>{icon}</IconTile>
-      <div className="min-w-0">
-        <p className="text-[15px] font-semibold tracking-[-0.005em]">{title}</p>
-        <p className="truncate text-[12px] text-muted">{subtitle}</p>
+      <div
+        className={`flex size-14 shrink-0 items-center justify-center rounded-tile ${primary ? 'bg-primary text-on-primary' : 'bg-tile text-fg'}`}
+      >
+        {icon}
+      </div>
+      <div>
+        <p className="text-[18px] font-semibold tracking-[-0.01em]">{title}</p>
+        <p className="mt-0.5 text-[13px] text-muted">{subtitle}</p>
       </div>
     </button>
   )
@@ -45,43 +49,59 @@ export function HomeView() {
         <div>
           <p className="text-[12px] font-medium tracking-[0.02em] text-muted">{longDate()}</p>
           <h1 className="mt-2 text-[36px] leading-tight font-medium tracking-[-0.03em]">{greeting()}</h1>
-          <p className="mt-2 text-[15px] text-muted">Sou o {avatar.name}. Como posso ajudar hoje?</p>
+          <p className="mt-2 text-[15px] text-muted">O que vamos fazer hoje?</p>
         </div>
-        <button onClick={() => app.setView('avatars')} title="Trocar avatar" className="rounded-tile p-1 hover:bg-hover">
-          <PixelAvatar avatarId={app.avatarId} mood={app.mood} size={84} />
-        </button>
+        <PixelAvatar avatar={avatar} mood={app.mood} size={84} />
       </div>
 
       <div className="mt-8">
-        <Composer autoFocus />
+        <ProviderNotice />
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <QuickCard primary icon={<Plus size={18} />} title="Nova conversa" subtitle="Comece do zero" onClick={app.newConversation} />
-        <QuickCard icon={<Smile size={18} strokeWidth={1.6} />} title="Avatares" subtitle="Escolha seu assistente" onClick={() => app.setView('avatars')} />
-        <QuickCard icon={<Plug size={18} strokeWidth={1.6} />} title="Provedores" subtitle="Claude Code e outros" onClick={() => app.setView('providers')} />
-        <QuickCard icon={<Monitor size={18} strokeWidth={1.6} />} title="Ações no computador" subtitle="Em breve" />
+      <div className="grid grid-cols-2 gap-3">
+        <BigOption
+          primary
+          icon={<MessageSquarePlus size={22} strokeWidth={1.8} />}
+          title="Nova conversa"
+          subtitle={`Converse livremente com ${avatar.name}`}
+          onClick={() => app.newConversation()}
+        />
+        <BigOption
+          icon={<BotIcon size={22} strokeWidth={1.6} />}
+          title="Novo bot"
+          subtitle="Crie um assistente especializado com instruções próprias"
+          onClick={() => app.editBot()}
+        />
+      </div>
+
+      <div className="mt-8 flex items-end justify-between">
+        <p className="text-[13px] font-medium text-muted">Seus bots</p>
+      </div>
+      <div className="mt-3 grid grid-cols-3 gap-3 xl:grid-cols-4">
+        {app.bots.map((b, i) => (
+          <button
+            key={b.id}
+            onClick={() => app.openBot(b.id)}
+            className="flex flex-col items-start rounded-card border border-line bg-card p-5 text-left transition-colors hover:bg-hover"
+          >
+            <PixelAvatar avatar={b.avatar} size={44} seed={i} />
+            <p className="mt-3 w-full truncate text-[15px] font-semibold">{b.name}</p>
+            <p className="mt-0.5 line-clamp-2 text-[12px] text-muted">{b.description || 'Sem descrição'}</p>
+          </button>
+        ))}
+        <button
+          onClick={() => app.editBot()}
+          className="flex min-h-[148px] flex-col items-center justify-center gap-2 rounded-card border border-dashed border-line text-[13px] text-muted transition-colors hover:bg-hover hover:text-fg"
+        >
+          <Plus size={18} />
+          Criar bot
+        </button>
       </div>
 
       {app.conversations.length > 0 && (
-        <Card className="mt-6 p-5">
+        <Card className="mt-8 p-5">
           <p className="pb-2 text-[13px] font-medium text-muted">Conversas recentes</p>
-          {app.conversations.slice(0, 6).map((c) => (
-            <button
-              key={c.id}
-              onClick={() => app.openConversation(c.id)}
-              className="flex w-full items-center gap-4 border-b border-line py-3 text-left last:border-0 hover:opacity-80"
-            >
-              <div className="flex w-12 shrink-0 flex-col items-center rounded-nav border border-line py-1">
-                <span className="text-[13px] font-semibold">{shortTime(c.createdAt)}</span>
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[14px] font-medium">{c.title}</p>
-                <p className="text-[12px] text-muted">{c.messages.length} mensagens</p>
-              </div>
-              <ChevronRight size={16} className="text-muted" />
-            </button>
-          ))}
+          <ConversationList items={app.conversations.slice(0, 8)} />
         </Card>
       )}
     </div>

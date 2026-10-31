@@ -80,3 +80,35 @@ export function PageHeader({ eyebrow, title, subtitle }: { eyebrow?: string; tit
     </div>
   )
 }
+
+export function Field({
+  label,
+  hint,
+  error,
+  action,
+  children
+}: {
+  label: string
+  hint?: string
+  error?: string
+  action?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <div>
+      <span className="flex items-end justify-between gap-3">
+        <span className="text-[13px] font-medium text-fg">{label}</span>
+        {action}
+      </span>
+      <div className="mt-2">{children}</div>
+      {error ? (
+        <span className="mt-1.5 block text-[12px] text-danger">{error}</span>
+      ) : (
+        hint && <span className="mt-1.5 block text-[12px] text-muted">{hint}</span>
+      )}
+    </div>
+  )
+}
+
+export const inputClass =
+  'selectable w-full rounded-tile border border-line bg-card px-3.5 py-2.5 text-[14px] text-fg outline-none transition-colors placeholder:text-muted focus:border-muted/60'

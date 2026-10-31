@@ -1,22 +1,9 @@
-import type { AvatarMood } from '@shared/types'
+import type { AvatarDef, AvatarMood } from '@shared/types'
+import { BUILT_IN_COMPOSED } from './parts'
 
-/**
- * Avatares em pixel art, desenhados como texto numa grade 12×12:
- *   `.` vazio · `b` corpo · `d` sombra
- * Olhos e boca são desenhados por cima, de acordo com o humor (ver `renderAvatar`).
- */
-export interface AvatarDef {
-  id: string
-  name: string
-  personality: string
-  color: string
-  shade: string
-  /** Linha dos olhos e da boca dentro da grade. */
-  eyeRow: number
-  mouthRow: number
-  sprite: string[]
-}
+export type { AvatarDef }
 
+/** Os quatro primeiros foram desenhados à mão; os demais são montados a partir de partes (ver `parts.ts`). */
 export const AVATARS: AvatarDef[] = [
   {
     id: 'brasa',
@@ -112,6 +99,8 @@ export const AVATARS: AvatarDef[] = [
   }
 ]
 
+AVATARS.push(...BUILT_IN_COMPOSED)
+
 export const DEFAULT_AVATAR_ID = AVATARS[0].id
 
 export function getAvatar(id: string): AvatarDef {
@@ -201,7 +190,8 @@ export function renderAvatar(avatar: AvatarDef, mood: AvatarMood, tick: number, 
   avatar.sprite.forEach((row, r) => {
     ;[...row].forEach((ch, c) => {
       if (ch === '.') return
-      const color = face.get(`${r},${c}`) ?? (ch === 'd' ? avatar.shade : avatar.color)
+      const color =
+        face.get(`${r},${c}`) ?? (ch === 'd' ? avatar.shade : ch === 'x' ? (avatar.accent ?? avatar.shade) : avatar.color)
       pixels.push({ x: c, y: r + 1 - bob, color })
     })
   })
