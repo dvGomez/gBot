@@ -1,0 +1,18 @@
+appId: com.gbot.desktop
+productName: gBot
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out/**/*
+  - package.json
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch: [arm64]
+  identity: null
+dmg:
+  artifactName: gBot-${version}-${arch}.dmg
+win:
+  target: nsis

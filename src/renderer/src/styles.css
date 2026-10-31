@@ -1,0 +1,101 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Tokens copiados do painel MagmaFit (tema claro / escuro). */
+:root {
+  --page: #ffffff;
+  --sidebar: #f5f4f1;
+  --card: #ffffff;
+  --line: #e8e6e1;
+  --fg: #0a0a0a;
+  --fg-2: #3a3d42;
+  --muted: #7d8187;
+  --nav-active: #ffffff;
+  --hover: rgb(10 10 10 / 0.045);
+  --primary: #0a0a0a;
+  --on-primary: #ffffff;
+  --tile: #f5f4f1;
+  --danger: #d9443c;
+  --success: #2fae6b;
+  --warning: #e3a02b;
+}
+
+.dark {
+  --page: #141414;
+  --sidebar: #1c1c1c;
+  --card: #141414;
+  --line: #2a2a2a;
+  --fg: #f2f2f2;
+  --fg-2: #c9cacc;
+  --muted: #8e9196;
+  --nav-active: #141414;
+  --hover: rgb(242 242 242 / 0.05);
+  --primary: #f2f2f2;
+  --on-primary: #141414;
+  --tile: #242424;
+}
+
+@theme inline {
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
+
+  --color-page: var(--page);
+  --color-sidebar: var(--sidebar);
+  --color-card: var(--card);
+  --color-line: var(--line);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-muted: var(--muted);
+  --color-nav-active: var(--nav-active);
+  --color-hover: var(--hover);
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+  --color-tile: var(--tile);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+
+  --radius-card: 20px;
+  --radius-tile: 14px;
+  --radius-nav: 10px;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  letter-spacing: -0.005em;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+.selectable {
+  user-select: text;
+}
+
+/* Área para arrastar a janela (barra de título escondida no macOS). */
+.drag {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+  border: 3px solid var(--page);
+}
