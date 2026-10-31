@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { AvatarMood, ChatMessage, ProviderInfo, ThemePreference } from '@shared/types'
-import { DEFAULT_AVATAR_ID } from '@/avatars/sprites'
+import { DEFAULT_AVATAR_ID, getAvatar } from '@/avatars/sprites'
 import { uid } from '@/lib/format'
 import { load, save } from './storage'
 
@@ -50,7 +50,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<ThemePreference>(() => load('theme', 'system'))
   const [systemDark, setSystemDark] = useState(prefersDark)
   const [avatarId, setAvatarIdState] = useState(() => load('avatarId', DEFAULT_AVATAR_ID))
-  const [providerId, setProviderIdState] = useState(() => load('providerId', 'echo'))
+  const [providerId, setProviderIdState] = useState(() => load('providerId', 'claude-code'))
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeId, setActiveId] = useState<string>()
@@ -58,8 +58,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [pending, setPending] = useState<Pending>()
   const pendingRef = useRef<Pending>(undefined)
   const moodTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const noticed = useRef(false)
+  const cancelled = useRef(false)
 
   const isDark = theme === 'dark' || (theme === 'system' && systemDark)
+
+  // Se o provedor escolhido não estiver pronto, usa o primeiro que estiver.
+  const chosen = providers.find((p) => p.id === providerId)
+  const activeProviderId =
+    chosen?.status === 'ready' ? providerId : (providers.find((p) => p.status === 'ready')?.id ?? providerId)
 
   // Tema: classe no <html> + avisa o processo principal (cor da janela, menus nativos)
   useEffect(() => {
@@ -109,10 +116,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
         case 'delta':
           patchMessage(p.conversationId, p.messageId, (m) => ({ ...m, text: m.text + event.text }))
           break
+        case 'tool':
+          patchMessage(p.conversationId, p.messageId, (m) => {
+            const tools = m.tools ?? []
+            const i = tools.findIndex((t) => t.id === event.tool.id)
+            return { ...m, tools: i < 0 ? [...tools, event.tool] : tools.map((t, j) => (j === i ? event.tool : t)) }
+          })
+          break
+        case 'notice':
+          noticed.current = true
+          patchMessage(p.conversationId, p.messageId, (m) => ({ ...m, notices: [...(m.notices ?? []), event.text] }))
+          break
         case 'done':
           pendingRef.current = undefined
           setPending(undefined)
-          settleMood('happy', 1600)
+          if (cancelled.current) {
+            patchMessage(p.conversationId, p.messageId, (m) => ({
+              ...m,
+              notices: [...(m.notices ?? []), 'Você interrompeu a resposta.']
+            }))
+            settleMood('idle', 0)
+          } else if (noticed.current) settleMood('attention', 2400)
+          else settleMood('happy', 1600)
           break
         case 'error':
           patchMessage(p.conversationId, p.messageId, (m) => ({ ...m, text: event.message, error: true }))
@@ -135,7 +160,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       const history = conversation.messages.filter((m) => !m.error).map(({ role, text }) => ({ role, text }))
       const userMsg: ChatMessage = { id: uid(), role: 'user', text, createdAt: Date.now() }
-      const botMsg: ChatMessage = { id: uid(), role: 'assistant', text: '', createdAt: Date.now(), providerId }
+      const botMsg: ChatMessage = { id: uid(), role: 'assistant', text: '', createdAt: Date.now(), providerId: activeProviderId }
       const updated = { ...conversation, messages: [...conversation.messages, userMsg, botMsg] }
 
       setConversations((cs) => [updated, ...cs.filter((c) => c.id !== updated.id)])
@@ -145,15 +170,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const p: Pending = { requestId: uid(), conversationId: updated.id, messageId: botMsg.id }
       pendingRef.current = p
       setPending(p)
+      noticed.current = false
+      cancelled.current = false
       clearTimeout(moodTimer.current)
       setMood('thinking')
-      void window.gbot.chat.send({ requestId: p.requestId, providerId, conversationId: updated.id, text, history })
+      const { name, personality } = getAvatar(avatarId)
+      void window.gbot.chat.send({
+        requestId: p.requestId,
+        providerId: activeProviderId,
+        conversationId: updated.id,
+        text,
+        history,
+        persona: { name, personality }
+      })
     },
-    [activeId, conversations, providerId]
+    [activeId, conversations, activeProviderId, avatarId]
   )
 
   const cancel = useCallback(() => {
-    if (pendingRef.current) void window.gbot.chat.cancel(pendingRef.current.requestId)
+    if (!pendingRef.current) return
+    cancelled.current = true
+    void window.gbot.chat.cancel(pendingRef.current.requestId)
   }, [])
 
   const value = useMemo<AppState>(
@@ -171,7 +208,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setAvatarIdState(id)
         save('avatarId', id)
       },
-      providerId,
+      providerId: activeProviderId,
       setProviderId: (id) => {
         setProviderIdState(id)
         save('providerId', id)
@@ -193,7 +230,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       send,
       cancel
     }),
-    [view, theme, isDark, avatarId, providerId, providers, refreshProviders, conversations, activeId, mood, pending, send, cancel]
+    [view, theme, isDark, avatarId, activeProviderId, providers, refreshProviders, conversations, activeId, mood, pending, send, cancel]
   )
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

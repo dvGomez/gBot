@@ -2,6 +2,9 @@ import { join } from 'node:path'
 import { app, BrowserWindow, nativeTheme, shell } from 'electron'
 import { registerIpc } from './ipc'
 
+// Garante a mesma pasta de dados (~/Library/Application Support/gBot) em dev e no app instalado.
+app.setName('gBot')
+
 const BG_LIGHT = '#FFFFFF'
 const BG_DARK = '#141414'
 

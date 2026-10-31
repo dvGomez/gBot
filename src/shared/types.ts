@@ -25,6 +25,14 @@ export interface ProviderInfo {
   statusDetail?: string
 }
 
+/** Uma ferramenta que o assistente usou durante a resposta (ler arquivo, rodar comando...). */
+export interface ToolActivity {
+  id: string
+  name: string
+  summary: string
+  status: 'running' | 'done' | 'error'
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
@@ -32,6 +40,15 @@ export interface ChatMessage {
   createdAt: number
   providerId?: string
   error?: boolean
+  tools?: ToolActivity[]
+  /** Avisos curtos sobre a resposta (permissão negada, nova tentativa...). */
+  notices?: string[]
+}
+
+/** Como o assistente se apresenta na conversa (vem do avatar escolhido). */
+export interface Persona {
+  name: string
+  personality: string
 }
 
 export interface SendMessageRequest {
@@ -40,12 +57,15 @@ export interface SendMessageRequest {
   conversationId: string
   text: string
   history: Pick<ChatMessage, 'role' | 'text'>[]
+  persona?: Persona
 }
 
 /** Eventos que um provedor emite enquanto responde. */
 export type ChatEvent =
   | { type: 'mood'; mood: AvatarMood }
   | { type: 'delta'; text: string }
+  | { type: 'tool'; tool: ToolActivity }
+  | { type: 'notice'; text: string }
   | { type: 'done' }
   | { type: 'error'; message: string }
 

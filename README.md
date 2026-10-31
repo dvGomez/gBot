@@ -18,7 +18,8 @@ src/
 ├─ main/                 processo principal (Node)
 │  ├─ index.ts           janela
 │  ├─ ipc.ts             ponte main ⇄ interface
-│  └─ providers/         um arquivo por provedor + registry.ts
+│  └─ providers/         um provedor por arquivo/pasta + registry.ts
+│     └─ claude-code/    sessões `claude -p` em stream-json (uma por conversa)
 ├─ preload/              expõe `window.gbot` para a interface
 ├─ shared/types.ts       tipos usados dos dois lados
 └─ renderer/src/         interface React
@@ -27,6 +28,15 @@ src/
    ├─ views/             Início, Chat, Avatares, Provedores, Configurações
    └─ state/app.tsx      estado do app (tema, avatar, provedor, conversas)
 ```
+
+## Como o Claude Code é usado
+
+O gBot abre o executável oficial `claude` (sem modificações), logado na sua própria conta, em modo
+`-p --input-format stream-json --output-format stream-json`. Cada conversa é uma sessão do Claude Code
+(`--session-id` = id da conversa), que fica aberta enquanto é usada e é retomada com `--resume`.
+O app nunca lê nem guarda credenciais. A pasta de trabalho é `~/Library/Application Support/gBot/workspace`.
+
+Ações que pedem permissão são negadas por enquanto (modo `manual`); aprovar pelo app é a Etapa 3.
 
 ## Adicionar um provedor
 
@@ -38,6 +48,6 @@ A interface lista o provedor automaticamente; `send` emite eventos `mood`, `delt
 ## Etapas
 
 1. ✅ Esqueleto, design MagmaFit, avatares, chat de teste, instalador
-2. Conectar o Claude Code via channel (`claude --channels`)
+2. ✅ Conversa com o Claude Code (streaming, ferramentas, memória, interromper)
 3. Histórico em SQLite, várias sessões, permissões no app
 4. Ações no computador, ícone na barra de menu

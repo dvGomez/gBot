@@ -1,7 +1,7 @@
 {
   "name": "gbot",
   "productName": "gBot",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "gBot — chat desktop com o Claude Code",
   "main": "./out/main/index.js",
   "author": "Lucas Carvalho",
@@ -19,7 +19,9 @@
     "@fontsource-variable/geist-mono": "^5.3.0",
     "lucide-react": "^1.65.0",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

@@ -3,8 +3,9 @@ import type { ChatMessage } from '@shared/types'
 import { PixelAvatar } from '@/components/PixelAvatar'
 import { Composer } from '@/components/Composer'
 import { StatusDot } from '@/components/ui'
+import { Markdown } from '@/components/Markdown'
+import { ToolList } from '@/components/ToolList'
 import { getAvatar, MOOD_LABELS } from '@/avatars/sprites'
-import { cn } from '@/lib/cn'
 import { useApp } from '@/state/app'
 
 function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
@@ -23,13 +24,20 @@ function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
       <div className="pt-0.5">
         <PixelAvatar avatarId={app.avatarId} mood={live ? app.mood : 'idle'} size={28} animated={live} />
       </div>
-      <div
-        className={cn(
-          'selectable min-w-0 flex-1 pt-1 text-[15px] leading-relaxed whitespace-pre-wrap',
-          msg.error && 'text-danger'
+      <div className="selectable min-w-0 flex-1 pt-1 text-[15px] leading-relaxed">
+        {msg.tools && msg.tools.length > 0 && <ToolList tools={msg.tools} />}
+        {msg.error ? (
+          <p className="text-danger">{msg.text}</p>
+        ) : msg.text ? (
+          <Markdown text={msg.text} />
+        ) : (
+          live && !msg.tools?.length && <span className="text-muted">Pensando…</span>
         )}
-      >
-        {msg.text || <span className="text-muted">Pensando…</span>}
+        {msg.notices?.map((n, i) => (
+          <p key={i} className="mt-2 text-[13px] text-muted">
+            {n}
+          </p>
+        ))}
       </div>
     </div>
   )

@@ -20,7 +20,7 @@ function NavItem({
   active,
   onClick
 }: {
-  icon: ComponentType<{ size?: number; strokeWidth?: number }>
+  icon: ComponentType<{ size?: number; strokeWidth?: number; className?: string }>
   label: string
   active?: boolean
   onClick(): void
@@ -33,7 +33,7 @@ function NavItem({
         active ? 'bg-nav-active font-medium text-fg' : 'text-fg-2 hover:bg-hover'
       )}
     >
-      <Icon size={17} strokeWidth={1.6} />
+      <Icon size={17} strokeWidth={1.6} className="shrink-0" />
       <span className="truncate">{label}</span>
     </button>
   )
