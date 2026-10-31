@@ -31,10 +31,21 @@ src/
 
 ## Como o Claude Code é usado
 
-O gBot abre o executável oficial `claude` (sem modificações), logado na sua própria conta, em modo
+O gBot abre o executável oficial `claude` (sem modificações) em modo
 `-p --input-format stream-json --output-format stream-json`. Cada conversa é uma sessão do Claude Code
 (`--session-id` = id da conversa), que fica aberta enquanto é usada e é retomada com `--resume`.
-O app nunca lê nem guarda credenciais. A pasta de trabalho é `~/Library/Application Support/gBot/workspace`.
+O app nunca lê nem guarda credenciais.
+
+**Perfil separado:** o Claude Code roda com `CLAUDE_CONFIG_DIR=~/Library/Application Support/gBot/claude-profile`
+e sem as variáveis `ANTHROPIC_*`/`CLAUDE*` herdadas. Assim o gBot não usa o `~/.claude` do terminal (que pode
+apontar para outra conta ou um gateway corporativo). O login é feito em Provedores → "Entrar com conta Claude",
+que roda o `claude auth login` oficial (abre o navegador). Equivalente no terminal:
+
+```bash
+CLAUDE_CONFIG_DIR="$HOME/Library/Application Support/gBot/claude-profile" claude auth login
+```
+
+A pasta de trabalho é `~/Library/Application Support/gBot/workspace`.
 
 Ações que pedem permissão são negadas por enquanto (modo `manual`); aprovar pelo app é a Etapa 3.
 

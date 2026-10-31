@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { AvatarMood, ChatMessage, ProviderInfo, ThemePreference } from '@shared/types'
+import type { AvatarMood, ChatMessage, ProviderInfo } from '@shared/types'
 import { DEFAULT_AVATAR_ID, getAvatar } from '@/avatars/sprites'
 import { uid } from '@/lib/format'
 import { load, save } from './storage'
@@ -22,14 +22,18 @@ interface Pending {
 interface AppState {
   view: View
   setView(v: View): void
-  theme: ThemePreference
-  setTheme(t: ThemePreference): void
-  isDark: boolean
   avatarId: string
   setAvatarId(id: string): void
+  /** Provedor em uso (o escolhido, ou o primeiro pronto se o escolhido não estiver). */
   providerId: string
+  /** Provedor que o usuário escolheu, mesmo que ainda não esteja pronto. */
+  preferredProviderId: string
   setProviderId(id: string): void
   providers: ProviderInfo[]
+  /** true depois da primeira verificação de provedores. */
+  providersLoaded: boolean
+  /** Há pelo menos um provedor real (não de teste) pronto para uso. */
+  connected: boolean
   refreshProviders(): Promise<void>
   conversations: Conversation[]
   activeConversation?: Conversation
@@ -43,15 +47,12 @@ interface AppState {
 
 const Ctx = createContext<AppState | null>(null)
 
-const prefersDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches
-
 export function AppProvider({ children }: { children: ReactNode }) {
   const [view, setView] = useState<View>('home')
-  const [theme, setThemeState] = useState<ThemePreference>(() => load('theme', 'system'))
-  const [systemDark, setSystemDark] = useState(prefersDark)
   const [avatarId, setAvatarIdState] = useState(() => load('avatarId', DEFAULT_AVATAR_ID))
   const [providerId, setProviderIdState] = useState(() => load('providerId', 'claude-code'))
   const [providers, setProviders] = useState<ProviderInfo[]>([])
+  const [providersLoaded, setProvidersLoaded] = useState(false)
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeId, setActiveId] = useState<string>()
   const [mood, setMood] = useState<AvatarMood>('idle')
@@ -61,28 +62,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const noticed = useRef(false)
   const cancelled = useRef(false)
 
-  const isDark = theme === 'dark' || (theme === 'system' && systemDark)
-
   // Se o provedor escolhido não estiver pronto, usa o primeiro que estiver.
   const chosen = providers.find((p) => p.id === providerId)
   const activeProviderId =
     chosen?.status === 'ready' ? providerId : (providers.find((p) => p.status === 'ready')?.id ?? providerId)
 
-  // Tema: classe no <html> + avisa o processo principal (cor da janela, menus nativos)
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', isDark)
-    void window.gbot.theme.set(theme)
-  }, [isDark, theme])
-
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const onChange = () => setSystemDark(mq.matches)
-    mq.addEventListener('change', onChange)
-    return () => mq.removeEventListener('change', onChange)
-  }, [])
+  const connected = providers.some((p) => p.kind !== 'dev' && p.status === 'ready')
 
   const refreshProviders = useCallback(async () => {
     setProviders(await window.gbot.providers.list())
+    setProvidersLoaded(true)
   }, [])
 
   useEffect(() => {
@@ -197,23 +186,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => ({
       view,
       setView,
-      theme,
-      setTheme: (t) => {
-        setThemeState(t)
-        save('theme', t)
-      },
-      isDark,
       avatarId,
       setAvatarId: (id) => {
         setAvatarIdState(id)
         save('avatarId', id)
       },
       providerId: activeProviderId,
+      preferredProviderId: providerId,
       setProviderId: (id) => {
         setProviderIdState(id)
         save('providerId', id)
       },
       providers,
+      providersLoaded,
+      connected,
       refreshProviders,
       conversations,
       activeConversation: conversations.find((c) => c.id === activeId),
@@ -230,7 +216,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       send,
       cancel
     }),
-    [view, theme, isDark, avatarId, activeProviderId, providers, refreshProviders, conversations, activeId, mood, pending, send, cancel]
+    [view, avatarId, activeProviderId, providerId, providers, providersLoaded, connected, refreshProviders, conversations, activeId, mood, pending, send, cancel]
   )
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

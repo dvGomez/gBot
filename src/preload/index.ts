@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { ChatEvent, GbotApi } from '@shared/types'
+import type { ChatEvent, GbotApi, ProviderActionProgress } from '@shared/types'
 
 declare const __APP_VERSION__: string
 
@@ -7,7 +7,13 @@ const api: GbotApi = {
   platform: process.platform,
   versions: { app: __APP_VERSION__, electron: process.versions.electron },
   providers: {
-    list: () => ipcRenderer.invoke('providers:list')
+    list: () => ipcRenderer.invoke('providers:list'),
+    runAction: (providerId, actionId) => ipcRenderer.invoke('providers:action', providerId, actionId),
+    onActionProgress: (listener) => {
+      const handler = (_: unknown, progress: ProviderActionProgress) => listener(progress)
+      ipcRenderer.on('providers:progress', handler)
+      return () => ipcRenderer.removeListener('providers:progress', handler)
+    }
   },
   chat: {
     send: (req) => ipcRenderer.invoke('chat:send', req),
@@ -17,9 +23,6 @@ const api: GbotApi = {
       ipcRenderer.on('chat:event', handler)
       return () => ipcRenderer.removeListener('chat:event', handler)
     }
-  },
-  theme: {
-    set: (pref) => ipcRenderer.invoke('theme:set', pref)
   }
 }
 

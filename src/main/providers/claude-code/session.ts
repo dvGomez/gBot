@@ -5,7 +5,7 @@ import { describeTool } from './tools'
 
 export interface SessionOptions {
   bin: string
-  path: string
+  env: NodeJS.ProcessEnv
   cwd: string
   sessionId: string
   /** true quando a sessão já existe em disco e deve ser retomada (`--resume`). */
@@ -62,7 +62,7 @@ export class ClaudeSession {
       ...(opts.appendSystemPrompt ? ['--append-system-prompt', opts.appendSystemPrompt] : []),
       ...(opts.model ? ['--model', opts.model] : [])
     ]
-    this.proc = spawn(opts.bin, args, { cwd: opts.cwd, env: { ...process.env, PATH: opts.path } })
+    this.proc = spawn(opts.bin, args, { cwd: opts.cwd, env: opts.env })
     this.proc.stdout.setEncoding('utf8')
     this.proc.stdout.on('data', (chunk: string) => this.onData(chunk))
     this.proc.stderr.on('data', (chunk: Buffer) => (this.stderrTail = (this.stderrTail + chunk.toString()).slice(-2000)))

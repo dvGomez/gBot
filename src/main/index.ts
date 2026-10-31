@@ -5,8 +5,7 @@ import { registerIpc } from './ipc'
 // Garante a mesma pasta de dados (~/Library/Application Support/gBot) em dev e no app instalado.
 app.setName('gBot')
 
-const BG_LIGHT = '#FFFFFF'
-const BG_DARK = '#141414'
+const BG = '#141414'
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -18,7 +17,7 @@ function createWindow() {
     title: 'gBot',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 18, y: 20 },
-    backgroundColor: nativeTheme.shouldUseDarkColors ? BG_DARK : BG_LIGHT,
+    backgroundColor: BG,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
@@ -27,7 +26,6 @@ function createWindow() {
   })
 
   win.once('ready-to-show', () => win.show())
-  nativeTheme.on('updated', () => win.setBackgroundColor(nativeTheme.shouldUseDarkColors ? BG_DARK : BG_LIGHT))
 
   // Links externos abrem no navegador padrão, nunca dentro do app.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -40,6 +38,8 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // O gBot só tem tema escuro: menus e diálogos nativos acompanham.
+  nativeTheme.themeSource = 'dark'
   registerIpc()
   createWindow()
   app.on('activate', () => {

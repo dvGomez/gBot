@@ -1,5 +1,5 @@
-import { ipcMain, nativeTheme, type WebContents } from 'electron'
-import type { ChatEvent, SendMessageRequest, ThemePreference } from '@shared/types'
+import { ipcMain, type WebContents } from 'electron'
+import type { ChatEvent, SendMessageRequest } from '@shared/types'
 import { getProvider, listProviders } from './providers/registry'
 
 const running = new Map<string, AbortController>()
@@ -10,6 +10,14 @@ function emitTo(sender: WebContents, requestId: string, event: ChatEvent) {
 
 export function registerIpc() {
   ipcMain.handle('providers:list', () => listProviders())
+
+  ipcMain.handle('providers:action', async (e, providerId: string, actionId: string) => {
+    const provider = getProvider(providerId)
+    if (!provider?.runAction) throw new Error('Ação indisponível')
+    return provider.runAction(actionId, (text, url) => {
+      if (!e.sender.isDestroyed()) e.sender.send('providers:progress', { providerId, actionId, text, url })
+    })
+  })
 
   ipcMain.handle('chat:send', async (e, req: SendMessageRequest) => {
     const provider = getProvider(req.providerId)
@@ -32,9 +40,5 @@ export function registerIpc() {
 
   ipcMain.handle('chat:cancel', (_e, requestId: string) => {
     running.get(requestId)?.abort()
-  })
-
-  ipcMain.handle('theme:set', (_e, pref: ThemePreference) => {
-    nativeTheme.themeSource = pref
   })
 }

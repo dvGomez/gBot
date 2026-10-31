@@ -15,8 +15,8 @@ export async function listProviders(): Promise<ProviderInfo[]> {
   return Promise.all(
     providers.map(async (p) => {
       try {
-        const { status, detail } = await p.checkStatus()
-        return { ...p.info, status, statusDetail: detail }
+        const { status, detail, actions } = await p.checkStatus()
+        return { ...p.info, status, statusDetail: detail, actions }
       } catch (e) {
         return { ...p.info, status: 'unavailable' as const, statusDetail: (e as Error).message }
       }

@@ -1,10 +1,10 @@
+import { spawn } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
 import type { Persona } from '@shared/types'
 import type { ChatProvider } from '../types'
-import { runInLoginShell } from '../shell'
-import { resolveClaudeEnv } from './env'
+import { resolveClaudeEnv, runClaude } from './env'
 import { ClaudeSession } from './session'
 
 interface AuthStatus {
@@ -28,7 +28,12 @@ setInterval(() => {
   }
 }, 60_000).unref()
 
-app.on('before-quit', () => sessions.forEach((s) => s.kill()))
+function closeAllSessions() {
+  sessions.forEach((s) => s.kill())
+  sessions.clear()
+}
+
+app.on('before-quit', closeAllSessions)
 
 /** Pasta onde o Claude Code trabalha. Configurável numa etapa futura. */
 export function workspaceDir(): string {
@@ -61,20 +66,60 @@ export const claudeCodeProvider: ChatProvider = {
   async checkStatus() {
     let version: string
     try {
-      const { bin } = await resolveClaudeEnv()
-      version = (await runInLoginShell(`"${bin}" --version`)).split(' ')[0]
+      version = (await runClaude(['--version'])).split(' ')[0]
     } catch {
-      return { status: 'unavailable', detail: 'Claude Code não encontrado. Instale e rode `claude` uma vez.' }
+      return { status: 'unavailable', detail: 'Claude Code não encontrado. Instale e rode `claude` uma vez no terminal.' }
     }
 
+    let auth: AuthStatus = { loggedIn: false }
     try {
-      const auth = JSON.parse(await runInLoginShell('claude auth status --json')) as AuthStatus
-      if (!auth.loggedIn) return { status: 'not-configured', detail: `v${version} · faça login com \`claude auth login\`` }
-      const plan = auth.subscriptionType ? `plano ${auth.subscriptionType}` : auth.authMethod
-      return { status: 'ready', detail: `v${version} · logado (${plan})` }
+      auth = JSON.parse(await runClaude(['auth', 'status', '--json'])) as AuthStatus
     } catch {
-      return { status: 'ready', detail: `v${version}` }
+      // sem login ainda: `auth status` pode sair com erro
     }
+    if (!auth.loggedIn) {
+      return {
+        status: 'not-configured',
+        detail: `v${version} · entre com a sua conta Claude para usar a assinatura`,
+        actions: [{ id: 'login', label: 'Entrar com conta Claude', primary: true }]
+      }
+    }
+    const plan = auth.subscriptionType ? `plano ${auth.subscriptionType}` : auth.authMethod
+    return { status: 'ready', detail: `v${version} · logado (${plan})`, actions: [{ id: 'logout', label: 'Sair' }] }
+  },
+
+  async runAction(actionId, progress) {
+    const { bin, env } = await resolveClaudeEnv()
+
+    if (actionId === 'logout') {
+      closeAllSessions()
+      await runClaude(['auth', 'logout'])
+      return 'Você saiu da conta Claude no gBot.'
+    }
+
+    if (actionId !== 'login') throw new Error(`Ação desconhecida: ${actionId}`)
+
+    // Login oficial do Claude Code: abre o navegador e conclui sozinho quando você autoriza.
+    progress('Abrindo o navegador para você entrar na sua conta Claude…')
+    return new Promise((resolve, reject) => {
+      const proc = spawn(bin, ['auth', 'login', '--claudeai'], { env })
+      let output = ''
+      const onOutput = (chunk: Buffer) => {
+        output += chunk.toString()
+        const url = output.match(/https:\/\/\S+/)?.[0]
+        if (url) progress('Conclua o login no navegador. Se ele não abriu, use o link abaixo.', url)
+      }
+      proc.stdout.on('data', onOutput)
+      proc.stderr.on('data', onOutput)
+      const timer = setTimeout(() => proc.kill('SIGTERM'), 5 * 60_000)
+      proc.on('error', (err) => reject(err))
+      proc.on('exit', (code) => {
+        clearTimeout(timer)
+        closeAllSessions()
+        if (code === 0) resolve('Login concluído.')
+        else reject(new Error(output.trim().split('\n').at(-1) || 'O login não foi concluído.'))
+      })
+    })
   },
 
   async send(req, emit, signal) {

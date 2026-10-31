@@ -23,6 +23,23 @@ export interface ProviderInfo {
   status: ProviderStatus
   /** Texto curto explicando o status (versão encontrada, plano, motivo do erro...). */
   statusDetail?: string
+  /** Ações disponíveis agora (ex.: entrar, sair). */
+  actions?: ProviderAction[]
+}
+
+export interface ProviderAction {
+  id: string
+  label: string
+  primary?: boolean
+}
+
+/** Progresso de uma ação demorada (ex.: login no navegador). */
+export interface ProviderActionProgress {
+  providerId: string
+  actionId: string
+  text: string
+  /** Link para o usuário abrir, se o navegador não abriu sozinho. */
+  url?: string
 }
 
 /** Uma ferramenta que o assistente usou durante a resposta (ler arquivo, rodar comando...). */
@@ -69,21 +86,19 @@ export type ChatEvent =
   | { type: 'done' }
   | { type: 'error'; message: string }
 
-export type ThemePreference = 'light' | 'dark' | 'system'
-
 /** API exposta pelo preload em `window.gbot`. */
 export interface GbotApi {
   platform: string
   versions: { app: string; electron: string }
   providers: {
     list(): Promise<ProviderInfo[]>
+    /** Executa uma ação do provedor; resolve com uma mensagem final ou rejeita com o erro. */
+    runAction(providerId: string, actionId: string): Promise<string | undefined>
+    onActionProgress(listener: (progress: ProviderActionProgress) => void): () => void
   }
   chat: {
     send(req: SendMessageRequest): Promise<void>
     cancel(requestId: string): Promise<void>
     onEvent(listener: (requestId: string, event: ChatEvent) => void): () => void
-  }
-  theme: {
-    set(pref: ThemePreference): Promise<void>
   }
 }

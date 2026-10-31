@@ -2,28 +2,9 @@
 @import '@fontsource-variable/geist';
 @import '@fontsource-variable/geist-mono';
 
-@custom-variant dark (&:where(.dark, .dark *));
-
-/* Tokens copiados do painel MagmaFit (tema claro / escuro). */
+/* Tokens do tema escuro do MagmaFit (o gBot usa só o escuro). */
 :root {
-  --page: #ffffff;
-  --sidebar: #f5f4f1;
-  --card: #ffffff;
-  --line: #e8e6e1;
-  --fg: #0a0a0a;
-  --fg-2: #3a3d42;
-  --muted: #7d8187;
-  --nav-active: #ffffff;
-  --hover: rgb(10 10 10 / 0.045);
-  --primary: #0a0a0a;
-  --on-primary: #ffffff;
-  --tile: #f5f4f1;
-  --danger: #d9443c;
-  --success: #2fae6b;
-  --warning: #e3a02b;
-}
-
-.dark {
+  color-scheme: dark;
   --page: #141414;
   --sidebar: #1c1c1c;
   --card: #141414;
@@ -36,6 +17,9 @@
   --primary: #f2f2f2;
   --on-primary: #141414;
   --tile: #242424;
+  --danger: #e5554d;
+  --success: #2fae6b;
+  --warning: #e3a02b;
 }
 
 @theme inline {
