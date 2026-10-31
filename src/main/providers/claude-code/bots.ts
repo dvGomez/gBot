@@ -1,4 +1,7 @@
 import type { Bot, ChatEvent } from '@shared/types'
+import type { Lesson } from '@shared/types'
+import { memoryPrompt } from '../../memory'
+import { reflectIfNeeded } from './reflect'
 import { listBots } from '../../store'
 import { GBOT_TOOLS, mcpConfigFor, setBotHandlers, type CallerContext } from './mcp'
 import { getSession, stableUuid, workContext, type WorkContext } from './sessions'
@@ -58,7 +61,8 @@ function botSystemPrompt(bot: Bot, work: WorkContext): string {
     '</instrucoes_do_bot>',
     'Nesta sessão você recebe mensagens de duas origens: do usuário, que chama você com @menção numa conversa, e de outros ' +
       'assistentes do gBot, que consultam você em nome do usuário (essas começam com "Mensagem de <nome>:"). ' +
-      'Para consultas de outros assistentes, responda de forma completa e objetiva: sua resposta será repassada.'
+      'Para consultas de outros assistentes, responda de forma completa e objetiva: sua resposta será repassada.',
+    ...memoryPrompt({ kind: 'bot', id: bot.id })
   ].join('\n')
 }
 
@@ -75,15 +79,23 @@ function enqueue<T>(key: string, task: () => Promise<T>): Promise<T> {
 const botContexts = new Map<string, { ctx: CallerContext; config: string }>()
 
 /** Uma sessão por bot dentro de cada conversa: ele lembra das consultas e @menções daquela conversa. */
-async function botSession(conversationId: string, projectId: string | undefined, bot: Bot) {
+async function botSession(conversationId: string, projectId: string | undefined, bot: Bot, source?: Lesson['source']) {
   const key = `${conversationId}:${bot.id}`
   let entry = botContexts.get(key)
   if (!entry) {
-    const ctx: CallerContext = { conversationId, projectId, callerName: bot.name, chain: [bot.id], depth: 1 }
+    const ctx: CallerContext = {
+      conversationId,
+      projectId,
+      callerName: bot.name,
+      chain: [bot.id],
+      depth: 1,
+      memory: { kind: 'bot', id: bot.id }
+    }
     entry = { ctx, config: (await mcpConfigFor(ctx)).config }
     botContexts.set(key, entry)
   }
   entry.ctx.projectId = projectId
+  entry.ctx.memorySource = source ?? { kind: 'conversation', id: conversationId }
   const work = workContext(projectId)
   const session = await getSession({
     key,
@@ -111,7 +123,7 @@ async function askBot(caller: CallerContext, ref: string, message: string, signa
     throw new Error(`Limite de ${MAX_DEPTH} consultas encadeadas atingido. Responda com o que você já tem.`)
   }
 
-  const { key, session, ctx } = await botSession(caller.conversationId, caller.projectId, bot)
+  const { key, session, ctx } = await botSession(caller.conversationId, caller.projectId, bot, caller.memorySource)
   return enqueue(key, async () => {
     ctx.chain = [...caller.chain, bot.id]
     ctx.depth = caller.depth + 1
@@ -124,6 +136,7 @@ async function askBot(caller: CallerContext, ref: string, message: string, signa
     const timeout = AbortSignal.timeout(ASK_TIMEOUT_MS)
     const from = caller.callerName || 'o assistente da conversa'
     await session.send(`Mensagem de ${from}:\n\n${message}`, collect, AbortSignal.any([signal, timeout]))
+    reflectIfNeeded(session, ctx.memory)
     if (error) throw new Error(`${bot.name} não conseguiu responder: ${error}`)
     if (timeout.aborted) throw new Error(`${bot.name} demorou demais para responder.`)
     return text.trim() || `${bot.name} não respondeu nada.`
@@ -137,18 +150,19 @@ export async function sendToBot(
   botId: string,
   text: string,
   emit: (ev: ChatEvent) => void,
-  signal: AbortSignal
+  signal: AbortSignal,
+  origin?: Lesson['source']
 ) {
   const bot = findBot(botId, projectId)
   if (!bot) {
     emit({ type: 'error', message: 'Esse bot não existe mais ou não está disponível neste projeto.' })
     return
   }
-  const { key, session, ctx } = await botSession(conversationId, projectId, bot)
+  const { key, session, ctx } = await botSession(conversationId, projectId, bot, origin)
   await enqueue(key, () => {
     ctx.chain = [bot.id]
     ctx.depth = 1
-    return session.send(text, emit, signal)
+    return session.send(text, emit, signal).then(() => reflectIfNeeded(session, ctx.memory))
   })
 }
 

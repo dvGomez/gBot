@@ -111,7 +111,8 @@ export const MOOD_LABELS: Record<AvatarMood, string> = {
   thinking: 'Pensando',
   talking: 'Falando',
   happy: 'Feliz',
-  attention: 'Atenção'
+  attention: 'Atenção',
+  sleeping: 'Dormindo'
 }
 
 const EYE = '#141414'
@@ -136,7 +137,12 @@ export function renderAvatar(avatar: AvatarDef, mood: AvatarMood, tick: number, 
   const blink = (mood === 'idle' || mood === 'talking') && k % 30 < 2
 
   // Olhos
-  if (mood === 'happy') {
+  if (mood === 'sleeping') {
+    // Fechados e um pouco caídos
+    for (const c of [3, 4, 7, 8]) set(E + 1, c)
+    set(E + 1, 2)
+    set(E + 1, 9)
+  } else if (mood === 'happy') {
     for (const [r, c] of [[E, 3], [E, 4], [E, 7], [E, 8], [E + 1, 2], [E + 1, 5], [E + 1, 6], [E + 1, 9]]) set(r, c)
   } else if (blink) {
     for (const c of [3, 4, 7, 8]) set(E + 1, c)
@@ -176,6 +182,9 @@ export function renderAvatar(avatar: AvatarDef, mood: AvatarMood, tick: number, 
     set(M, 6)
     set(M + 1, 5)
     set(M + 1, 6)
+  } else if (mood === 'sleeping') {
+    // Boquinha aberta de quem ronca, só às vezes
+    if (Math.floor((tick + seed * 5) / 12) % 2) set(M, 6)
   }
 
   // Pulinho (bob) para dar vida
@@ -184,6 +193,8 @@ export function renderAvatar(avatar: AvatarDef, mood: AvatarMood, tick: number, 
   else if (mood === 'happy') bob = Math.floor(tick / 2) % 2
   else if (mood === 'talking') bob = Math.floor(tick / 3) % 2
   else if (mood === 'attention') bob = tick % 2
+  // Respiração lenta de quem dorme
+  else if (mood === 'sleeping') bob = Math.floor((tick + seed * 4) / 14) % 2
 
   const pixels: Pixel[] = []
   avatar.sprite.forEach((row, r) => {

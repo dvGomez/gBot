@@ -2,6 +2,7 @@ import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync
 import { join } from 'node:path'
 import { app } from 'electron'
 import type { Bot, Conversation, ConversationMeta, Project } from '@shared/types'
+import { removeMemory } from './memory'
 
 /**
  * Armazenamento local em JSON (~/Library/Application Support/gBot/data):
@@ -90,6 +91,7 @@ export function removeBot(id: string) {
   )
   // As conversas do bot vão junto.
   for (const meta of listConversations()) if (meta.botId === id) removeConversation(meta.id)
+  removeMemory({ kind: 'bot', id })
 }
 
 // ── Conversas ───────────────────────────────────────────────────────

@@ -1,7 +1,10 @@
 import { spawn } from 'node:child_process'
 import type { SendMessageRequest } from '@shared/types'
 import type { ChatProvider } from '../types'
+import type { MemoryOwner } from '@shared/types'
+import { memoryPrompt } from '../../memory'
 import { sendToBot, TOOLS_HINT } from './bots'
+import { reflectIfNeeded } from './reflect'
 import { resolveClaudeEnv, runClaude } from './env'
 import { GBOT_TOOLS, mcpConfigFor, type CallerContext } from './mcp'
 import { closeAllSessions, getSession, workContext, type WorkContext } from './sessions'
@@ -11,6 +14,10 @@ interface AuthStatus {
   authMethod?: string
   subscriptionType?: string
 }
+
+/** Memória da mensagem: a pedida (ex.: fluxo) ou a do bot da conversa. Conversa normal não tem memória. */
+const memoryOf = (req: SendMessageRequest): MemoryOwner | undefined =>
+  req.memory ?? (req.bot ? { kind: 'bot', id: req.bot.id } : undefined)
 
 function systemPrompt(req: SendMessageRequest, work: WorkContext): string {
   const { bot } = req
@@ -28,7 +35,8 @@ function systemPrompt(req: SendMessageRequest, work: WorkContext): string {
     'Responda no idioma do usuário, de forma direta e amigável. Use Markdown quando ajudar a leitura.',
     ...work.promptLines,
     'O gBot ainda não consegue mostrar pedidos de permissão: ações que precisam de aprovação serão negadas. Se precisar de uma, explique ao usuário o que faria.',
-    TOOLS_HINT
+    TOOLS_HINT,
+    ...memoryPrompt(memoryOf(req))
   )
   return lines.join('\n')
 }
@@ -131,7 +139,7 @@ export const claudeCodeProvider: ChatProvider = {
 
   async send(req, emit, signal) {
     if (req.targetBotId) {
-      await sendToBot(req.conversationId, req.projectId, req.targetBotId, req.text, emit, signal)
+      await sendToBot(req.conversationId, req.projectId, req.targetBotId, req.text, emit, signal, req.origin)
       return
     }
     let entry = mainContexts.get(req.conversationId)
@@ -147,6 +155,8 @@ export const claudeCodeProvider: ChatProvider = {
       mainContexts.set(req.conversationId, entry)
     }
     entry.ctx.projectId = req.projectId
+    entry.ctx.memory = memoryOf(req)
+    entry.ctx.memorySource = req.origin ?? { kind: 'conversation', id: req.conversationId }
     const work = workContext(req.projectId)
     const session = await getSession({
       key: req.conversationId,
@@ -158,6 +168,7 @@ export const claudeCodeProvider: ChatProvider = {
       model: req.model
     })
     await session.send(req.text, emit, signal)
+    reflectIfNeeded(session, entry.ctx.memory)
   }
 }
 

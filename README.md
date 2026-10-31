@@ -56,6 +56,34 @@ Conversa normal não tem personagem: sem nome, avatar ou persona no prompt. Bots
 com um bot ou quando mencionados com `@`. Conversas e bots podem ser excluídos pelo "⋯" (menu lateral, cabeçalho
 do chat e página do bot), sempre com confirmação.
 
+## Memória (bots e fluxos aprendem)
+
+Cada bot e cada fluxo tem uma memória de **lições** (`data/memory/<bot|flow>-<id>.json`): título, quando usar,
+passos curtos e por quê.
+
+- O próprio Claude registra com a ferramenta `save_lesson` (só existe em sessões de bot ou de fluxo; conversa normal
+  não tem memória). Mesmo título atualiza a lição em vez de duplicar.
+- **Reflexão automática:** se num turno alguma ferramenta falhou ou foi negada, o gBot manda (sem aparecer no chat)
+  um pedido curto para registrar a lição, se houver. Os turnos da sessão ficam em fila, então a próxima mensagem espera.
+- As lições ativas entram no prompt de sistema num bloco compacto (`título | quando | passos`, sem o "por quê"),
+  no máximo 30. A tela mostra ~quantos tokens isso ocupa.
+- Onde ver/editar: página do bot (card **Memória**) e aba **Memória** do fluxo. Dá para adicionar à mão, editar,
+  desligar (não vai para o prompt) e excluir. Caixinhas de prompt usam a memória do fluxo; caixinhas de bot, a do bot.
+
+## Fluxos (canvas de automações)
+
+Um fluxo é um canvas (React Flow) com um **gatilho** e caixinhas ligadas por setas:
+
+- **Gatilho:** em horários (dias da semana + um ou mais horários) ou "repetir a cada N minutos/horas". Só fluxos
+  **ativos** disparam; "Rodar agora" funciona sempre.
+- **Bot:** manda uma mensagem a um bot (usa o modelo e as instruções dele).
+- **Prompt:** prompt solto, com IA (provedor) e modelo escolhidos na caixinha.
+- O resultado das caixinhas anteriores vai junto automaticamente; `{{anterior}}` escolhe onde ele entra.
+- Pode ramificar: ramos rodam em paralelo e uma caixinha espera todas as que chegam nela. Ciclos são recusados.
+- Histórico das últimas 50 execuções por fluxo, com o resultado de cada caixinha (`data/flow-runs/<fluxo>.json`).
+- O agendador roda no processo principal a cada 20 s. Fechar a janela não encerra o app: ele fica no **ícone da
+  barra de menu** (Abrir gBot / fluxos ativos / Sair). Horários em que o app estava fechado não são executados depois.
+
 ## Navegador do gBot
 
 O gBot abre o Edge/Chrome/Brave **instalado** (escolha em Configurações; padrão: Edge) com um perfil fixo em
@@ -118,5 +146,6 @@ A interface lista o provedor automaticamente; `send` emite eventos `mood`, `delt
 3. ✅ Bots (nome, avatar, instruções), 20 avatares + gerador, conversas salvas em disco
 4. ✅ Bots consultando outros bots (`list_bots` / `ask_bot` via MCP local) e `@menções`
 5. ✅ Projetos: agrupam bots e conversas, com pasta de trabalho e instruções opcionais
-6. Aprovar permissões no app
-7. Ações no computador, ícone na barra de menu
+6. ✅ Fluxos: canvas com gatilho por horário/intervalo, caixinhas de bot e prompt, histórico e barra de menu
+7. Aprovar permissões no app
+8. Ações no computador

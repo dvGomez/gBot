@@ -4,7 +4,9 @@ import type { AddressInfo } from 'node:net'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
+import type { Lesson, MemoryOwner } from '@shared/types'
 import { BROWSER_TOOL_NAMES, registerBrowserTools } from '../../browser/tools'
+import { learn } from '../../memory'
 import { ASK_BOT_TOOL, LIST_BOTS_TOOL } from './tools'
 
 /**
@@ -21,6 +23,10 @@ export interface CallerContext {
   /** Bots já envolvidos nesta cadeia de consultas (evita A → B → A). */
   chain: string[]
   depth: number
+  /** Memória usada por esta sessão (bot ou fluxo); sem ela, save_lesson não é oferecida. */
+  memory?: MemoryOwner
+  /** Origem registrada nas lições aprendidas. */
+  memorySource?: Lesson['source']
 }
 
 export interface BotHandlers {
@@ -28,8 +34,18 @@ export interface BotHandlers {
   ask(ctx: CallerContext, bot: string, message: string, signal: AbortSignal): Promise<string>
 }
 
-/** Ferramentas liberadas sem pedir permissão em toda sessão aberta pelo gBot. */
-export const GBOT_TOOLS = [LIST_BOTS_TOOL, ASK_BOT_TOOL, ...BROWSER_TOOL_NAMES.map((n) => `mcp__gbot__${n}`)]
+/**
+ * Ferramentas liberadas sem pedir permissão em toda sessão aberta pelo gBot: as do próprio gBot e a busca /
+ * leitura de páginas do Claude Code (só leitura; sem elas o Claude Code nega e fluxos automáticos param).
+ */
+export const GBOT_TOOLS = [
+  LIST_BOTS_TOOL,
+  ASK_BOT_TOOL,
+  ...BROWSER_TOOL_NAMES.map((n) => `mcp__gbot__${n}`),
+  'mcp__gbot__save_lesson',
+  'WebSearch',
+  'WebFetch'
+]
 
 const contexts = new Map<string, CallerContext>()
 let handlers: BotHandlers | undefined
@@ -74,6 +90,30 @@ function buildServer(ctx: CallerContext): McpServer {
       }
     }
   )
+
+  if (ctx.memory) {
+    server.registerTool(
+      'save_lesson',
+      {
+        description:
+          'Registra na sua memória um procedimento aprendido, para acertar de primeira nas próximas vezes. Use quando uma ' +
+          'tentativa falhar e você descobrir o jeito certo ou um cuidado importante. Seja curto: cada lição vai no seu prompt. ' +
+          'Mesmo título atualiza a lição existente.',
+        inputSchema: {
+          title: z.string().describe('Nome curto do procedimento, ex.: "Enviar mensagem no WhatsApp Web"'),
+          when: z.string().describe('Quando usar, em poucas palavras'),
+          steps: z.string().describe('Passos ou cuidados objetivos, até 5 linhas curtas'),
+          why: z.string().describe('O que deu errado antes (uma frase)')
+        }
+      },
+      async (input) => {
+        const owner = ctx.memory!
+        const source = ctx.memorySource ?? { kind: 'conversation' as const, id: ctx.conversationId }
+        const { updated } = learn(owner, input, source)
+        return { content: [{ type: 'text', text: updated ? 'Lição atualizada na memória.' : 'Lição salva na memória.' }] }
+      }
+    )
+  }
 
   // O contexto é mutável (a cadeia muda a cada consulta): o navegador lê os valores na hora da chamada.
   registerBrowserTools(server, {

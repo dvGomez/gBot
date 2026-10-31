@@ -1,5 +1,6 @@
 import { ChevronRight, Trash2 } from 'lucide-react'
 import type { ConversationMeta } from '@shared/types'
+import { draggable } from '@/lib/dnd'
 import { useApp } from '@/state/app'
 import { AgentAvatar } from './AgentAvatar'
 
@@ -20,7 +21,11 @@ export function ConversationList({ items, empty }: { items: ConversationMeta[]; 
         const bot = app.getBot(c.botId)
         const project = app.getProject(c.projectId)
         return (
-          <div key={c.id} className="group flex items-center gap-4 border-b border-line py-3 last:border-0">
+          <div
+            key={c.id}
+            {...draggable({ kind: 'conversation', id: c.id, projectId: c.projectId })}
+            className="group flex items-center gap-4 border-b border-line py-3 last:border-0"
+          >
             <button onClick={() => app.openConversation(c.id)} className="flex min-w-0 flex-1 items-center gap-4 text-left">
               <AgentAvatar avatar={bot?.avatar} size={30} animated={false} />
               <div className="min-w-0 flex-1">

@@ -18,6 +18,8 @@ export function describeTool(name: string, input: Input = {}): string {
   switch (name) {
     case LIST_BOTS_TOOL:
       return 'Viu a lista de bots'
+    case 'mcp__gbot__save_lesson':
+      return input.title ? `Aprendeu: ${clip(str(input.title), 50)}` : 'Guardando na memória'
     case 'mcp__gbot__browser_navigate':
       try {
         return `Abriu ${new URL(/^[a-z]+:\/\//i.test(str(input.url)) ? str(input.url) : `https://${str(input.url)}`).hostname.replace(/^www\./, '')}`

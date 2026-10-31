@@ -1,0 +1,118 @@
+import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
+import { Clock, Sparkles } from 'lucide-react'
+import type { FlowNodeData, FlowStepStatus } from '@shared/types'
+import { PixelAvatar } from '@/components/PixelAvatar'
+import { modelLabel } from '@/components/ModelSelect'
+import { cn } from '@/lib/cn'
+import { describeSchedule, formatWhen, nextRun } from '@/lib/schedule'
+import { useApp } from '@/state/app'
+
+/** Dados que o canvas passa para cada caixinha: os do fluxo + o estado na execução atual. */
+export type CanvasNodeData = FlowNodeData & { status?: FlowStepStatus } & Record<string, unknown>
+export type CanvasNode = Node<CanvasNodeData>
+
+const STATUS_RING: Record<FlowStepStatus, string> = {
+  pending: 'border-line',
+  running: 'border-warning animate-pulse',
+  done: 'border-success',
+  error: 'border-danger',
+  skipped: 'border-line opacity-60'
+}
+
+function Box({
+  selected,
+  status,
+  children,
+  target = true,
+  source = true
+}: {
+  selected?: boolean
+  status?: FlowStepStatus
+  children: React.ReactNode
+  target?: boolean
+  source?: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        'w-[250px] rounded-card border-2 bg-card px-4 py-3.5 shadow-lg transition-colors',
+        status ? STATUS_RING[status] : selected ? 'border-fg-2' : 'border-line'
+      )}
+    >
+      {target && <Handle type="target" position={Position.Left} className="!size-3 !border-2 !border-page !bg-muted" />}
+      {children}
+      {source && <Handle type="source" position={Position.Right} className="!size-3 !border-2 !border-page !bg-fg-2" />}
+    </div>
+  )
+}
+
+function Preview({ text }: { text?: string }) {
+  return (
+    <p className={cn('mt-2 line-clamp-2 text-[12px] leading-snug', text?.trim() ? 'text-fg-2' : 'text-muted italic')}>
+      {text?.trim() || 'Sem mensagem ainda'}
+    </p>
+  )
+}
+
+export function TriggerNode({ data, selected }: NodeProps<CanvasNode>) {
+  const next = nextRun(data.schedule)
+  return (
+    <Box selected={selected} target={false} status={data.status}>
+      <div className="flex items-center gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-tile bg-primary text-on-primary">
+          <Clock size={17} />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[14px] font-semibold">{data.label || 'Gatilho'}</p>
+          <p className="truncate text-[12px] text-muted">{describeSchedule(data.schedule)}</p>
+        </div>
+      </div>
+      {next && <p className="mt-2 text-[12px] text-fg-2">Próxima: {formatWhen(next)}</p>}
+    </Box>
+  )
+}
+
+export function BotNode({ data, selected }: NodeProps<CanvasNode>) {
+  const app = useApp()
+  const bot = app.getBot(data.botId)
+  return (
+    <Box selected={selected} status={data.status}>
+      <div className="flex items-center gap-3">
+        {bot ? (
+          <PixelAvatar avatar={bot.avatar} size={34} animated={data.status === 'running'} mood={data.status === 'running' ? 'thinking' : 'idle'} />
+        ) : (
+          <div className="size-9 shrink-0 rounded-tile bg-tile" />
+        )}
+        <div className="min-w-0">
+          <p className="truncate text-[14px] font-semibold">{data.label || bot?.name || 'Escolha um bot'}</p>
+          <p className="truncate text-[12px] text-muted">Bot{bot && app.models.length ? ` · ${modelLabel(app.models, bot.model)}` : ''}</p>
+        </div>
+      </div>
+      <Preview text={data.message} />
+    </Box>
+  )
+}
+
+export function PromptNode({ data, selected }: NodeProps<CanvasNode>) {
+  const app = useApp()
+  const provider = app.providers.find((p) => p.id === (data.providerId ?? 'claude-code'))
+  return (
+    <Box selected={selected} status={data.status}>
+      <div className="flex items-center gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-tile bg-tile text-fg-2">
+          <Sparkles size={17} />
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-[14px] font-semibold">{data.label || 'Prompt'}</p>
+          <p className="truncate text-[12px] text-muted">
+            {provider?.name ?? 'Provedor'}
+            {provider?.models?.length ? ` · ${modelLabel(provider.models, data.model)}` : ''}
+          </p>
+        </div>
+      </div>
+      <Preview text={data.message} />
+    </Box>
+  )
+}
+
+export const nodeTypes = { trigger: TriggerNode, bot: BotNode, prompt: PromptNode }

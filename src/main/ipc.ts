@@ -1,5 +1,19 @@
 import { BrowserWindow, dialog, ipcMain, type WebContents } from 'electron'
-import type { AppSettings, ApprovalDecision, Bot, ChatEvent, Conversation, Project, SendMessageRequest } from '@shared/types'
+import type {
+  AppSettings,
+  ApprovalDecision,
+  Bot,
+  ChatEvent,
+  Conversation,
+  Flow,
+  Lesson,
+  MemoryOwner,
+  Project,
+  SendMessageRequest
+} from '@shared/types'
+import { runFlow } from './flows/runner'
+import { listLessons, removeLesson, saveLesson } from './memory'
+import * as flows from './flows/store'
 import { respondApproval } from './approvals'
 import { listBrowsers } from './browser/browsers'
 import { browserController } from './browser/controller'
@@ -15,6 +29,20 @@ function emitTo(sender: WebContents, requestId: string, event: ChatEvent) {
 }
 
 export function registerIpc() {
+  ipcMain.handle('memory:list', (_e, owner: MemoryOwner) => listLessons(owner))
+  ipcMain.handle('memory:save', (_e, lesson: Lesson) => saveLesson(lesson))
+  ipcMain.handle('memory:remove', (_e, owner: MemoryOwner, id: string) => removeLesson(owner, id))
+
+  ipcMain.handle('flows:list', () => flows.listFlows())
+  ipcMain.handle('flows:save', (_e, flow: Flow) => flows.saveFlow(flow))
+  ipcMain.handle('flows:remove', (_e, id: string) => flows.removeFlow(id))
+  ipcMain.handle('flows:runs', (_e, flowId: string) => flows.listRuns(flowId))
+  ipcMain.handle('flows:run', (_e, id: string) => {
+    const flow = flows.getFlow(id)
+    if (!flow) throw new Error('Fluxo não encontrado.')
+    return runFlow(flow, 'manual')
+  })
+
   ipcMain.handle('settings:get', () => getSettings())
   ipcMain.handle('settings:set', (_e, patch: Partial<AppSettings>) => updateSettings(patch))
   ipcMain.handle('browser:list', () => listBrowsers())
@@ -23,7 +51,10 @@ export function registerIpc() {
 
   ipcMain.handle('projects:list', () => store.listProjects())
   ipcMain.handle('projects:save', (_e, project: Project) => store.saveProject(project))
-  ipcMain.handle('projects:remove', (_e, id: string) => store.removeProject(id))
+  ipcMain.handle('projects:remove', (_e, id: string) => {
+    store.removeProject(id)
+    flows.detachFlows(id)
+  })
   ipcMain.handle('projects:pickFolder', async (e, current?: string) => {
     const win = BrowserWindow.fromWebContents(e.sender)
     const options: Electron.OpenDialogOptions = {

@@ -21,7 +21,7 @@ export interface AvatarDef {
 }
 
 /** Humor do avatar — reflete o que o provedor está fazendo. */
-export type AvatarMood = 'idle' | 'thinking' | 'talking' | 'happy' | 'attention'
+export type AvatarMood = 'idle' | 'thinking' | 'talking' | 'happy' | 'attention' | 'sleeping'
 
 /**
  * Como o provedor fala com o modelo:
@@ -163,6 +163,10 @@ export interface SendMessageRequest {
   projectId?: string
   /** Modelo da conversa (ignorado em @menções: o bot mencionado usa o modelo dele). */
   model?: string
+  /** De quem é a memória usada e preenchida nesta mensagem (bot da conversa ou fluxo). */
+  memory?: MemoryOwner
+  /** Mensagem disparada por um fluxo (para a memória registrar a origem). */
+  origin?: { kind: 'flow'; id: string }
 }
 
 /** Eventos que um provedor emite enquanto responde. */
@@ -206,6 +210,114 @@ export interface ApprovalRequest {
   action: string
 }
 
+// ── Memória (procedimentos aprendidos) ──────────────────────────────
+
+/** Dono de uma memória: um bot ou um fluxo. */
+export interface MemoryOwner {
+  kind: 'bot' | 'flow'
+  id: string
+}
+
+/**
+ * Procedimento aprendido: curto e objetivo, porque vai inteiro no prompt de sistema do dono.
+ * O próprio bot/fluxo registra (ferramenta save_lesson) quando descobre como fazer algo que falhou;
+ * o usuário pode ver, editar, desligar e apagar.
+ */
+export interface Lesson {
+  id: string
+  owner: MemoryOwner
+  /** Nome curto do procedimento (ex.: "Enviar mensagem no WhatsApp Web"). */
+  title: string
+  /** Quando usar (ex.: "ao mandar texto longo num grupo"). */
+  when: string
+  /** Passos ou cuidados, em poucas linhas. */
+  steps: string
+  /** Por que foi registrado (o que deu errado antes). Não vai para o prompt. */
+  why: string
+  /** De onde veio: conversa, execução de fluxo ou manual. */
+  source: { kind: 'conversation' | 'flow' | 'manual'; id?: string }
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+// ── Fluxos (canvas de automações) ───────────────────────────────────
+
+/**
+ * Agenda do gatilho:
+ *   `times`: nos dias da semana escolhidos (0 = domingo), em cada horário "HH:MM"
+ *   `interval`: a cada N minutos
+ */
+export type FlowSchedule =
+  | { mode: 'times'; days: number[]; times: string[] }
+  | { mode: 'interval'; everyMinutes: number }
+
+export type FlowNodeType = 'trigger' | 'bot' | 'prompt'
+
+export interface FlowNodeData {
+  /** Nome da caixinha no canvas (opcional; senão usa o padrão do tipo). */
+  label?: string
+  // gatilho
+  schedule?: FlowSchedule
+  // bot
+  botId?: string
+  // bot e prompt: texto enviado (o resultado das caixinhas anteriores vai junto; {{anterior}} posiciona)
+  message?: string
+  // prompt
+  providerId?: string
+  model?: string
+}
+
+export interface FlowNode {
+  id: string
+  type: FlowNodeType
+  position: { x: number; y: number }
+  data: FlowNodeData
+}
+
+export interface FlowEdge {
+  id: string
+  source: string
+  target: string
+}
+
+export interface Flow {
+  id: string
+  name: string
+  /** Só fluxos ativos disparam pelo gatilho (o "Rodar agora" funciona sempre). */
+  enabled: boolean
+  /** Projeto do fluxo; ausente = fluxo solto. Caixinhas de prompt usam a pasta e as instruções dele. */
+  projectId?: string
+  nodes: FlowNode[]
+  edges: FlowEdge[]
+  createdAt: number
+  updatedAt: number
+}
+
+export type FlowStepStatus = 'pending' | 'running' | 'done' | 'error' | 'skipped'
+
+export interface FlowRunStep {
+  nodeId: string
+  label: string
+  status: FlowStepStatus
+  output?: string
+  error?: string
+  /** Avisos da execução (ex.: uma ferramenta precisou de permissão e foi negada). */
+  notices?: string[]
+  startedAt?: number
+  finishedAt?: number
+}
+
+export interface FlowRun {
+  id: string
+  flowId: string
+  trigger: 'schedule' | 'manual'
+  status: 'running' | 'done' | 'error'
+  startedAt: number
+  finishedAt?: number
+  steps: FlowRunStep[]
+}
+
 /** API exposta pelo preload em `window.gbot`. */
 export interface GbotApi {
   platform: string
@@ -219,7 +331,7 @@ export interface GbotApi {
   projects: {
     list(): Promise<Project[]>
     save(project: Project): Promise<void>
-    /** Remove o projeto; bots e conversas dele continuam existindo, soltos. */
+    /** Remove o projeto; bots, conversas e fluxos dele continuam existindo, soltos. */
     remove(id: string): Promise<void>
     /** Abre o seletor de pastas do sistema; undefined se o usuário cancelar. */
     pickFolder(current?: string): Promise<string | undefined>
@@ -251,6 +363,23 @@ export interface GbotApi {
     /** Avisa que um pedido foi respondido (aqui ou expirou), para tirar o cartão da tela. */
     onResolved(listener: (id: string) => void): () => void
     respond(id: string, decision: ApprovalDecision): Promise<void>
+  }
+  memory: {
+    list(owner: MemoryOwner): Promise<Lesson[]>
+    save(lesson: Lesson): Promise<void>
+    remove(owner: MemoryOwner, id: string): Promise<void>
+    /** Avisa quando a memória de alguém mudou (ex.: um bot aprendeu algo durante uma conversa). */
+    onChanged(listener: (owner: MemoryOwner) => void): () => void
+  }
+  flows: {
+    list(): Promise<Flow[]>
+    save(flow: Flow): Promise<void>
+    remove(id: string): Promise<void>
+    /** Roda o fluxo agora (sem esperar o gatilho); resolve com o id da execução. */
+    run(id: string): Promise<string>
+    runs(flowId: string): Promise<FlowRun[]>
+    /** Atualizações ao vivo das execuções (início, cada caixinha, fim). */
+    onRunUpdate(listener: (run: FlowRun) => void): () => void
   }
   chat: {
     send(req: SendMessageRequest): Promise<void>

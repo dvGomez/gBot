@@ -1,11 +1,22 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, nativeTheme, shell } from 'electron'
+import { startScheduler } from './flows/scheduler'
 import { registerIpc } from './ipc'
+import { createTray } from './tray'
 
 // Garante a mesma pasta de dados (~/Library/Application Support/gBot) em dev e no app instalado.
 app.setName('gBot')
 
 const BG = '#141414'
+
+/** Abre a janela, ou mostra a que já existe. */
+function openWindow() {
+  const win = BrowserWindow.getAllWindows()[0]
+  if (!win) return createWindow()
+  if (win.isMinimized()) win.restore()
+  win.show()
+  win.focus()
+}
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -42,11 +53,11 @@ app.whenReady().then(() => {
   nativeTheme.themeSource = 'dark'
   registerIpc()
   createWindow()
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-  })
+  createTray(openWindow)
+  startScheduler()
+  app.on('activate', openWindow)
 })
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
-})
+// Fechar a janela não encerra o app: ele segue na barra de menu para os fluxos agendados.
+// Para sair de vez: "Sair do gBot" no ícone da barra de menu (ou Cmd+Q).
+app.on('window-all-closed', () => undefined)

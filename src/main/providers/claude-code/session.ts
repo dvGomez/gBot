@@ -64,6 +64,10 @@ export class ClaudeSession {
   private turn?: Turn
   lastUsed = Date.now()
   exited = false
+  /** O último turno teve ferramenta com erro ou negada (usado para a reflexão automática da memória). */
+  lastTurnFailed = false
+  /** Turnos entram em fila: uma mensagem nova espera a anterior (inclusive a reflexão automática). */
+  private queue: Promise<unknown> = Promise.resolve()
 
   constructor(private opts: SessionOptions) {
     const args = [
@@ -97,16 +101,24 @@ export class ClaudeSession {
     return !!this.turn
   }
 
-  /** Envia uma mensagem e resolve quando o turno termina. */
+  /** Envia uma mensagem (depois da anterior, se houver) e resolve quando o turno termina. */
   send(text: string, emit: (event: ChatEvent) => void, signal: AbortSignal): Promise<void> {
-    if (this.turn) return Promise.reject(new Error('Ainda respondendo a mensagem anterior'))
-    this.lastUsed = Date.now()
-    return new Promise((resolve) => {
-      this.turn = { emit, done: resolve, interrupted: false, hasText: false, tools: new Map() }
-      signal.addEventListener('abort', () => this.interrupt(), { once: true })
-      emit({ type: 'mood', mood: 'thinking' })
-      this.write({ type: 'user', message: { role: 'user', content: text } })
-    })
+    const run = () =>
+      new Promise<void>((resolve) => {
+        if (this.exited || signal.aborted) {
+          if (!signal.aborted) emit({ type: 'error', message: 'A sessão do Claude Code foi encerrada.' })
+          return resolve()
+        }
+        this.lastUsed = Date.now()
+        this.lastTurnFailed = false
+        this.turn = { emit, done: resolve, interrupted: false, hasText: false, tools: new Map() }
+        signal.addEventListener('abort', () => this.interrupt(), { once: true })
+        emit({ type: 'mood', mood: 'thinking' })
+        this.write({ type: 'user', message: { role: 'user', content: text } })
+      })
+    const p = this.queue.then(run)
+    this.queue = p.catch(() => undefined)
+    return p
   }
 
   /** Pede ao Claude Code para parar o turno atual; se não responder, encerra o processo. */
@@ -201,6 +213,7 @@ export class ClaudeSession {
           if (b.type !== 'tool_result' || !b.tool_use_id) continue
           const t = turn.tools.get(b.tool_use_id)
           if (!t) continue
+          if (b.is_error) this.lastTurnFailed = true
           const summary = b.is_error ? `Não concluiu: ${t.summary.charAt(0).toLowerCase()}${t.summary.slice(1)}` : t.summary
           // Para consultas a bots, guarda a resposta para mostrar no chat.
           const detail = t.botName ? blockText(b.content).slice(0, 20_000) : undefined
@@ -221,10 +234,11 @@ export class ClaudeSession {
 
       case 'result': {
         const denied = [...new Set((line.permission_denials ?? []).map((d) => d.tool_name))]
+        if (denied.length) this.lastTurnFailed = true
         if (denied.length) {
           emit({
             type: 'notice',
-            text: `Precisou de permissão para ${denied.join(', ')} e foi negado. Aprovar pelo app chega na Etapa 3.`
+            text: `Precisou de permissão para ${denied.join(', ')} e foi negado (o gBot ainda não aprova essas ações).`
           })
         }
         if (line.subtype === 'success' && !line.is_error) {

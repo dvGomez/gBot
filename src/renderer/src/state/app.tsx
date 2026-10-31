@@ -8,15 +8,26 @@ import type {
   ChatMessage,
   Conversation,
   ConversationMeta,
+  Flow,
   Project,
   ProviderInfo,
   ProviderModel
 } from '@shared/types'
+import type { ItemRef } from '@/lib/dnd'
 import { uid } from '@/lib/format'
 import { findMention } from '@/lib/mentions'
 import { load, save } from './storage'
 
-export type View = 'home' | 'chat' | 'bot' | 'bot-editor' | 'project' | 'project-editor' | 'providers' | 'settings'
+export type View =
+  | 'home'
+  | 'chat'
+  | 'bot'
+  | 'bot-editor'
+  | 'project'
+  | 'project-editor'
+  | 'flow-editor'
+  | 'providers'
+  | 'settings'
 
 interface Pending {
   requestId: string
@@ -38,6 +49,15 @@ interface AppState {
   /** Há pelo menos um provedor real (não de teste) pronto para uso. */
   connected: boolean
   refreshProviders(): Promise<void>
+
+  flows: Flow[]
+  /** Fluxo aberto no canvas. */
+  selectedFlow?: Flow
+  openFlow(id: string): void
+  /** Cria um fluxo novo (com o gatilho) e abre no canvas; com `projectId`, dentro do projeto. */
+  newFlow(projectId?: string): Promise<void>
+  saveFlow(flow: Flow): Promise<void>
+  removeFlow(id: string): Promise<void>
 
   projects: Project[]
   /** Projeto aberto na página do projeto ou no editor (ausente no editor = criando um novo). */
@@ -78,6 +98,8 @@ interface AppState {
   newConversation(botId?: string, projectId?: string): void
   /** Move a conversa para um projeto (ou para fora de projetos, com undefined). */
   moveConversation(id: string, projectId?: string): Promise<void>
+  /** Move uma conversa, bot ou fluxo para um projeto (ou para fora, com undefined). */
+  moveItem(item: ItemRef, projectId?: string): Promise<void>
   removeConversation(id: string): Promise<void>
 
   /** Avatar do bot da conversa ativa; ausente numa conversa normal (sem personagem). */
@@ -119,6 +141,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [providersLoaded, setProvidersLoaded] = useState(false)
 
+  const [flows, setFlows] = useState<Flow[]>([])
+  const [selectedFlowId, setSelectedFlowId] = useState<string>()
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>()
   const [bots, setBots] = useState<Bot[]>([])
@@ -158,6 +182,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refreshProviders()
     void window.gbot.projects.list().then(setProjects)
+    void window.gbot.flows.list().then(setFlows)
     void window.gbot.bots.list().then(setBots)
     void window.gbot.conversations.list().then(setMetas)
   }, [refreshProviders])
@@ -395,6 +420,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
       connected,
       refreshProviders,
 
+      flows,
+      selectedFlow: flows.find((f) => f.id === selectedFlowId),
+      openFlow: (id) => {
+        setSelectedFlowId(id)
+        setView('flow-editor')
+      },
+      newFlow: async (projectId) => {
+        const now = Date.now()
+        const flow: Flow = {
+          id: uid(),
+          name: 'Novo fluxo',
+          enabled: false,
+          projectId,
+          nodes: [
+            {
+              id: uid(),
+              type: 'trigger',
+              position: { x: 0, y: 0 },
+              data: { schedule: { mode: 'times', days: [1, 2, 3, 4, 5], times: ['09:00'] } }
+            }
+          ],
+          edges: [],
+          createdAt: now,
+          updatedAt: now
+        }
+        await window.gbot.flows.save(flow)
+        setFlows((fs) => [...fs, flow])
+        setSelectedFlowId(flow.id)
+        setView('flow-editor')
+      },
+      saveFlow: async (flow) => {
+        setFlows((fs) => fs.map((f) => (f.id === flow.id ? flow : f)))
+        await window.gbot.flows.save(flow)
+      },
+      removeFlow: async (id) => {
+        await window.gbot.flows.remove(id)
+        setFlows((fs) => fs.filter((f) => f.id !== id))
+        if (view === 'flow-editor' && selectedFlowId === id) {
+          setSelectedFlowId(undefined)
+          setView('home')
+        }
+      },
+
       projects,
       selectedProject: getProject(selectedProjectId),
       openProject: (id) => {
@@ -416,6 +484,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setProjects((ps) => ps.filter((p) => p.id !== id))
         // O que estava no projeto fica solto (o processo principal já gravou em disco).
         setBots((bs) => bs.map(({ projectId, ...b }) => (projectId === id ? b : { ...b, projectId })))
+        setFlows((fs) => fs.map(({ projectId, ...f }) => (projectId === id ? f : { ...f, projectId })))
         setMetas((ms) => ms.map(({ projectId, ...m }) => (projectId === id ? m : { ...m, projectId })))
         setLoaded((all) =>
           Object.fromEntries(
@@ -474,6 +543,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setView('chat')
       },
       moveConversation,
+      moveItem: async (item, projectId) => {
+        if (item.projectId === projectId) return
+        const now = Date.now()
+        if (item.kind === 'conversation') return moveConversation(item.id, projectId)
+        if (item.kind === 'bot') {
+          const bot = bots.find((b) => b.id === item.id)
+          if (!bot) return
+          const moved = { ...bot, projectId, updatedAt: now }
+          setBots((bs) => bs.map((b) => (b.id === bot.id ? moved : b)))
+          await window.gbot.bots.save(moved)
+          return
+        }
+        const flow = flows.find((f) => f.id === item.id)
+        if (!flow) return
+        const moved = { ...flow, projectId, updatedAt: now }
+        setFlows((fs) => fs.map((f) => (f.id === flow.id ? moved : f)))
+        await window.gbot.flows.save(moved)
+      },
       removeConversation: async (id) => {
         await window.gbot.conversations.remove(id)
         setMetas((ms) => ms.filter((m) => m.id !== id))
@@ -503,6 +590,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       providersLoaded,
       connected,
       refreshProviders,
+      flows,
+      selectedFlowId,
       projects,
       selectedProjectId,
       getProject,

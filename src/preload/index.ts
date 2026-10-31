@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { ApprovalRequest, ChatEvent, GbotApi, ProviderActionProgress } from '@shared/types'
+import type { ApprovalRequest, ChatEvent, FlowRun, GbotApi, MemoryOwner, ProviderActionProgress } from '@shared/types'
 
 declare const __APP_VERSION__: string
 
@@ -53,6 +53,28 @@ const api: GbotApi = {
       return () => ipcRenderer.removeListener('approval:resolved', handler)
     },
     respond: (id, decision) => ipcRenderer.invoke('approvals:respond', id, decision)
+  },
+  memory: {
+    list: (owner) => ipcRenderer.invoke('memory:list', owner),
+    save: (lesson) => ipcRenderer.invoke('memory:save', lesson),
+    remove: (owner, id) => ipcRenderer.invoke('memory:remove', owner, id),
+    onChanged: (listener) => {
+      const handler = (_: unknown, owner: MemoryOwner) => listener(owner)
+      ipcRenderer.on('memory:changed', handler)
+      return () => ipcRenderer.removeListener('memory:changed', handler)
+    }
+  },
+  flows: {
+    list: () => ipcRenderer.invoke('flows:list'),
+    save: (flow) => ipcRenderer.invoke('flows:save', flow),
+    remove: (id) => ipcRenderer.invoke('flows:remove', id),
+    run: (id) => ipcRenderer.invoke('flows:run', id),
+    runs: (flowId) => ipcRenderer.invoke('flows:runs', flowId),
+    onRunUpdate: (listener) => {
+      const handler = (_: unknown, run: FlowRun) => listener(run)
+      ipcRenderer.on('flows:run-update', handler)
+      return () => ipcRenderer.removeListener('flows:run-update', handler)
+    }
   },
   chat: {
     send: (req) => ipcRenderer.invoke('chat:send', req),

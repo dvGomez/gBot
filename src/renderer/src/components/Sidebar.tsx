@@ -1,16 +1,30 @@
 import type { ComponentType, ReactNode } from 'react'
-import { Bot as BotIcon, FolderPlus, House, MessageSquarePlus, Pencil, Plug, Plus, Settings, Trash2 } from 'lucide-react'
+import { Bot as BotIcon, FolderPlus, House, MessageSquarePlus, Pencil, Plug, Plus, Settings, Trash2, Workflow } from 'lucide-react'
+import type { Project } from '@shared/types'
 import { cn } from '@/lib/cn'
+import { draggable, useDrop, type ItemRef } from '@/lib/dnd'
 import { useApp, type View } from '@/state/app'
 import { AgentAvatar } from './AgentAvatar'
 import { ItemMenu, type MenuAction } from './ItemMenu'
 import { PixelAvatar } from './PixelAvatar'
 import { ProjectIcon } from './ProjectBadge'
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+/** Seção do menu; com `dropKind`, aceita itens desse tipo arrastados de um projeto (tira do projeto). */
+function Section({ title, dropKind, children }: { title: string; dropKind?: ItemRef['kind']; children: ReactNode }) {
+  const app = useApp()
+  const drop = useDrop(
+    (item) => !!dropKind && item.kind === dropKind && !!item.projectId,
+    (item) => void app.moveItem(item, undefined)
+  )
   return (
-    <div className="mt-5">
-      <p className="px-3 pb-1.5 text-[12px] font-medium text-muted">{title}</p>
+    <div
+      {...drop.props}
+      className={cn('mt-5 rounded-nav transition-colors', drop.over && 'bg-hover outline-[1.5px] outline-offset-2 outline-muted outline-dashed')}
+    >
+      <p className="px-3 pb-1.5 text-[12px] font-medium text-muted">
+        {title}
+        {drop.over && <span className="text-fg-2"> · soltar aqui tira do projeto</span>}
+      </p>
       <div className="flex flex-col gap-0.5">{children}</div>
     </div>
   )
@@ -22,7 +36,9 @@ function NavItem({
   label,
   active,
   onClick,
-  menu
+  menu,
+  drag,
+  dropOver
 }: {
   icon?: ComponentType<{ size?: number; strokeWidth?: number; className?: string }>
   leading?: ReactNode
@@ -31,12 +47,17 @@ function NavItem({
   onClick(): void
   /** Ações do "⋯", que aparece ao passar o mouse. */
   menu?: MenuAction[]
+  /** Item que este link representa, para arrastar para um projeto. */
+  drag?: ItemRef
+  /** Um item arrastado está por cima (destaque de alvo). */
+  dropOver?: boolean
 }) {
   return (
     <div
+      {...(drag && draggable(drag))}
       className={cn(
         'group relative flex h-9 items-center rounded-nav transition-colors',
-        active ? 'bg-nav-active' : 'hover:bg-hover'
+        dropOver ? 'bg-hover outline-[1.5px] outline-muted outline-dashed' : active ? 'bg-nav-active' : 'hover:bg-hover'
       )}
     >
       <button
@@ -60,6 +81,26 @@ function NavItem({
   )
 }
 
+/** Projeto no menu: abre o projeto e aceita conversas, bots e fluxos soltos em cima dele. */
+function ProjectItem({ project, active }: { project: Project; active: boolean }) {
+  const app = useApp()
+  const drop = useDrop(
+    (item) => item.projectId !== project.id,
+    (item) => void app.moveItem(item, project.id)
+  )
+  return (
+    <div {...drop.props}>
+      <NavItem
+        leading={<ProjectIcon project={project} size={17} />}
+        label={project.name}
+        active={active}
+        dropOver={drop.over}
+        onClick={() => app.openProject(project.id)}
+      />
+    </div>
+  )
+}
+
 export function Sidebar() {
   const app = useApp()
   const isMac = window.gbot.platform === 'darwin'
@@ -68,6 +109,7 @@ export function Sidebar() {
   // No menu ficam só os itens soltos; o que está em projeto aparece na página do projeto.
   const plainConversations = app.conversations.filter((c) => !c.projectId).slice(0, 8)
   const looseBots = app.bots.filter((b) => !b.projectId)
+  const looseFlows = app.flows.filter((f) => !f.projectId)
 
   const conversationMenu = (id: string): MenuAction[] => [
     {
@@ -97,7 +139,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 pb-4">
-        <Section title="Conversas">
+        <Section title="Conversas" dropKind="conversation">
           <NavItem icon={House} label="Início" active={app.view === 'home'} onClick={go('home')} />
           <NavItem icon={MessageSquarePlus} label="Nova conversa" onClick={() => app.newConversation()} />
           {plainConversations.map((c) => (
@@ -107,6 +149,7 @@ export function Sidebar() {
                 <AgentAvatar avatar={app.getBot(c.botId)?.avatar} size={17} animated={false} className="shrink-0" />
               }
               label={c.title}
+              drag={{ kind: 'conversation', id: c.id }}
               active={chatActive(c.id)}
               onClick={() => app.openConversation(c.id)}
               menu={conversationMenu(c.id)}
@@ -116,15 +159,14 @@ export function Sidebar() {
 
         <Section title="Projetos">
           {app.projects.map((p) => (
-            <NavItem
+            <ProjectItem
               key={p.id}
-              leading={<ProjectIcon project={p} size={17} />}
-              label={p.name}
+              project={p}
               active={
                 ((app.view === 'project' || app.view === 'project-editor') && app.selectedProject?.id === p.id) ||
-                (app.view === 'chat' && app.activeProject?.id === p.id)
+                (app.view === 'chat' && app.activeProject?.id === p.id) ||
+                (app.view === 'flow-editor' && app.selectedFlow?.projectId === p.id)
               }
-              onClick={() => app.openProject(p.id)}
             />
           ))}
           <NavItem
@@ -135,12 +177,13 @@ export function Sidebar() {
           />
         </Section>
 
-        <Section title="Bots">
+        <Section title="Bots" dropKind="bot">
           {looseBots.map((b) => (
             <NavItem
               key={b.id}
               leading={<PixelAvatar avatar={b.avatar} size={17} animated={false} className="shrink-0" />}
               label={b.name}
+              drag={{ kind: 'bot', id: b.id }}
               active={
                 ((app.view === 'bot' || app.view === 'bot-editor') && app.selectedBot?.id === b.id) ||
                 (app.view === 'chat' && app.activeBot?.id === b.id)
@@ -155,6 +198,34 @@ export function Sidebar() {
             active={app.view === 'bot-editor' && !app.selectedBot}
             onClick={() => app.editBot()}
           />
+        </Section>
+
+        <Section title="Fluxos" dropKind="flow">
+          {looseFlows.map((f) => (
+            <NavItem
+              key={f.id}
+              leading={
+                <span className="relative shrink-0">
+                  <Workflow size={17} strokeWidth={1.6} />
+                  {f.enabled && <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full border border-sidebar bg-success" />}
+                </span>
+              }
+              label={f.name}
+              drag={{ kind: 'flow', id: f.id }}
+              active={app.view === 'flow-editor' && app.selectedFlow?.id === f.id}
+              onClick={() => app.openFlow(f.id)}
+              menu={[
+                {
+                  label: 'Excluir fluxo',
+                  icon: Trash2,
+                  danger: true,
+                  confirm: 'Excluir este fluxo e o histórico dele? Não dá para desfazer.',
+                  onSelect: () => void app.removeFlow(f.id)
+                }
+              ]}
+            />
+          ))}
+          <NavItem icon={Plus} label="Novo fluxo" onClick={() => void app.newFlow()} />
         </Section>
 
         <Section title="Sistema">
