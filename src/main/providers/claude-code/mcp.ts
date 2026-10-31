@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
+import { BROWSER_TOOL_NAMES, registerBrowserTools } from '../../browser/tools'
 import { ASK_BOT_TOOL, LIST_BOTS_TOOL } from './tools'
 
 /**
@@ -28,7 +29,7 @@ export interface BotHandlers {
 }
 
 /** Ferramentas liberadas sem pedir permissão em toda sessão aberta pelo gBot. */
-export const GBOT_TOOLS = [LIST_BOTS_TOOL, ASK_BOT_TOOL]
+export const GBOT_TOOLS = [LIST_BOTS_TOOL, ASK_BOT_TOOL, ...BROWSER_TOOL_NAMES.map((n) => `mcp__gbot__${n}`)]
 
 const contexts = new Map<string, CallerContext>()
 let handlers: BotHandlers | undefined
@@ -73,6 +74,16 @@ function buildServer(ctx: CallerContext): McpServer {
       }
     }
   )
+
+  // O contexto é mutável (a cadeia muda a cada consulta): o navegador lê os valores na hora da chamada.
+  registerBrowserTools(server, {
+    get conversationId() {
+      return ctx.conversationId
+    },
+    get callerName() {
+      return ctx.callerName
+    }
+  })
 
   return server
 }

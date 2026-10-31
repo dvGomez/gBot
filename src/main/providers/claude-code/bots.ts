@@ -30,7 +30,11 @@ export function findBot(ref: string, projectId?: string): Bot | undefined {
 export const TOOLS_HINT = [
   'Ferramentas do gBot: `list_bots` mostra os bots especializados do usuário e `ask_bot` envia uma pergunta a um deles.',
   'Consulte um bot quando o pedido combinar com a especialidade dele ou quando o usuário pedir; não consulte sem necessidade.',
-  'Ao usar a resposta de um bot, diga de qual bot ela veio.'
+  'Ao usar a resposta de um bot, diga de qual bot ela veio.',
+  'Você também controla o navegador do gBot (Edge/Chrome com perfil próprio, onde o usuário pode estar logado) com as ferramentas browser_*:',
+  'abra endereços com browser_navigate, leia com browser_read e use os números [n] para clicar (browser_click) e digitar (browser_type).',
+  'Se o usuário ativou a aprovação de sites, uma ação pode ser negada; nesse caso não insista.',
+  'Nunca digite senhas nem códigos de verificação: se aparecer login, MFA ou CAPTCHA, peça ao usuário para concluir na janela do navegador e continue quando ele avisar.'
 ].join(' ')
 
 function baseLines(work: WorkContext): string[] {
@@ -118,7 +122,8 @@ async function askBot(caller: CallerContext, ref: string, message: string, signa
       if (ev.type === 'error') error = ev.message
     }
     const timeout = AbortSignal.timeout(ASK_TIMEOUT_MS)
-    await session.send(`Mensagem de ${caller.callerName}:\n\n${message}`, collect, AbortSignal.any([signal, timeout]))
+    const from = caller.callerName || 'o assistente da conversa'
+    await session.send(`Mensagem de ${from}:\n\n${message}`, collect, AbortSignal.any([signal, timeout]))
     if (error) throw new Error(`${bot.name} não conseguiu responder: ${error}`)
     if (timeout.aborted) throw new Error(`${bot.name} demorou demais para responder.`)
     return text.trim() || `${bot.name} não respondeu nada.`

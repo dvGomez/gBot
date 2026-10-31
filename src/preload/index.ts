@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { ChatEvent, GbotApi, ProviderActionProgress } from '@shared/types'
+import type { ApprovalRequest, ChatEvent, GbotApi, ProviderActionProgress } from '@shared/types'
 
 declare const __APP_VERSION__: string
 
@@ -32,6 +32,27 @@ const api: GbotApi = {
     get: (id) => ipcRenderer.invoke('conversations:get', id),
     save: (c) => ipcRenderer.invoke('conversations:save', c),
     remove: (id) => ipcRenderer.invoke('conversations:remove', id)
+  },
+  settings: {
+    get: () => ipcRenderer.invoke('settings:get'),
+    set: (patch) => ipcRenderer.invoke('settings:set', patch)
+  },
+  browser: {
+    list: () => ipcRenderer.invoke('browser:list'),
+    open: () => ipcRenderer.invoke('browser:open')
+  },
+  approvals: {
+    onRequest: (listener) => {
+      const handler = (_: unknown, req: ApprovalRequest) => listener(req)
+      ipcRenderer.on('approval:request', handler)
+      return () => ipcRenderer.removeListener('approval:request', handler)
+    },
+    onResolved: (listener) => {
+      const handler = (_: unknown, id: string) => listener(id)
+      ipcRenderer.on('approval:resolved', handler)
+      return () => ipcRenderer.removeListener('approval:resolved', handler)
+    },
+    respond: (id, decision) => ipcRenderer.invoke('approvals:respond', id, decision)
   },
   chat: {
     send: (req) => ipcRenderer.invoke('chat:send', req),

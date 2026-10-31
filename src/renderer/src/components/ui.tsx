@@ -112,3 +112,27 @@ export function Field({
 
 export const inputClass =
   'selectable w-full rounded-tile border border-line bg-card px-3.5 py-2.5 text-[14px] text-fg outline-none transition-colors placeholder:text-muted focus:border-muted/60'
+
+/** Interruptor liga/desliga. */
+export function Toggle({ checked, onChange, label }: { checked: boolean; onChange(v: boolean): void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'relative h-6 w-11 shrink-0 rounded-full transition-colors',
+        checked ? 'bg-primary' : 'border border-line bg-tile'
+      )}
+    >
+      <span
+        className={cn(
+          'absolute top-1/2 size-4 -translate-y-1/2 rounded-full transition-all',
+          checked ? 'left-6 bg-on-primary' : 'left-1 bg-muted'
+        )}
+      />
+    </button>
+  )
+}

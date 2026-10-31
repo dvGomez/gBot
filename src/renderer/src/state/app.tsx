@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type {
+  ApprovalDecision,
+  ApprovalRequest,
   AvatarDef,
   AvatarMood,
   Bot,
@@ -80,6 +82,9 @@ interface AppState {
 
   /** Avatar do bot da conversa ativa; ausente numa conversa normal (sem personagem). */
   activeAvatar?: AvatarDef
+  /** Pedidos de aprovação esperando resposta (ex.: navegador abrir um site). */
+  approvals: ApprovalRequest[]
+  respondApproval(id: string, decision: ApprovalDecision): void
   mood: AvatarMood
   busy: boolean
   send(text: string): void
@@ -129,6 +134,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [draftModel, setDraftModel] = useState<string>()
 
   const [mood, setMood] = useState<AvatarMood>('idle')
+  const [approvals, setApprovals] = useState<ApprovalRequest[]>([])
   const [pending, setPending] = useState<Pending>()
   const pendingRef = useRef<Pending>(undefined)
   const moodTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -199,6 +205,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     []
   )
+
+  // Pedidos de aprovação vindos do processo principal
+  useEffect(() => {
+    const offReq = window.gbot.approvals.onRequest((req) => {
+      setApprovals((list) => [...list, req])
+      clearTimeout(moodTimer.current)
+      setMood('attention')
+    })
+    const offRes = window.gbot.approvals.onResolved((id) => setApprovals((list) => list.filter((a) => a.id !== id)))
+    return () => {
+      offReq()
+      offRes()
+    }
+  }, [])
 
   // Eventos de streaming vindos do provedor
   useEffect(() => {
@@ -464,6 +484,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
 
       activeAvatar,
+      approvals,
+      respondApproval: (id, decision) => {
+        setApprovals((list) => list.filter((a) => a.id !== id))
+        setMood(pendingRef.current ? 'thinking' : 'idle')
+        void window.gbot.approvals.respond(id, decision)
+      },
       mood,
       busy: !!pending,
       send,
@@ -496,6 +522,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       openConversation,
       moveConversation,
       activeAvatar,
+      approvals,
       mood,
       pending,
       send,

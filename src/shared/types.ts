@@ -174,6 +174,38 @@ export type ChatEvent =
   | { type: 'done' }
   | { type: 'error'; message: string }
 
+/** Navegador que o gBot pode abrir (Edge, Chrome...), com perfil próprio. */
+export interface BrowserInfo {
+  id: string
+  name: string
+  installed: boolean
+}
+
+/** Configurações do app guardadas no processo principal. */
+export interface AppSettings {
+  /** Navegador usado pelas ferramentas de navegação. Ausente = o primeiro instalado (Edge, depois Chrome). */
+  browserId?: string
+  /** Pedir aprovação antes de o navegador agir num site (desligado por padrão). */
+  browserApprovals?: boolean
+  /** Sites em que o usuário escolheu "Permitir sempre" (só usado com a aprovação ligada). */
+  allowedSites: string[]
+}
+
+/** `conversation`: vale para o site nesta conversa; `always`: vale para o site em qualquer conversa. */
+export type ApprovalDecision = 'conversation' | 'always' | 'deny'
+
+/** Pedido de aprovação de uma ação (ex.: o navegador abrir ou clicar num site). */
+export interface ApprovalRequest {
+  id: string
+  conversationId?: string
+  /** Bot que pediu; vazio quando é o assistente de uma conversa normal. */
+  requester: string
+  /** Site afetado (ex.: github.com). */
+  host: string
+  /** Descrição curta da ação (ex.: "Abrir https://github.com/login"). */
+  action: string
+}
+
 /** API exposta pelo preload em `window.gbot`. */
 export interface GbotApi {
   platform: string
@@ -204,6 +236,21 @@ export interface GbotApi {
     get(id: string): Promise<Conversation | undefined>
     save(conversation: Conversation): Promise<void>
     remove(id: string): Promise<void>
+  }
+  settings: {
+    get(): Promise<AppSettings>
+    set(patch: Partial<AppSettings>): Promise<AppSettings>
+  }
+  browser: {
+    list(): Promise<BrowserInfo[]>
+    /** Abre (ou traz para frente) a janela do navegador do gBot. */
+    open(): Promise<void>
+  }
+  approvals: {
+    onRequest(listener: (req: ApprovalRequest) => void): () => void
+    /** Avisa que um pedido foi respondido (aqui ou expirou), para tirar o cartão da tela. */
+    onResolved(listener: (id: string) => void): () => void
+    respond(id: string, decision: ApprovalDecision): Promise<void>
   }
   chat: {
     send(req: SendMessageRequest): Promise<void>

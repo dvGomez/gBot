@@ -56,6 +56,21 @@ Conversa normal não tem personagem: sem nome, avatar ou persona no prompt. Bots
 com um bot ou quando mencionados com `@`. Conversas e bots podem ser excluídos pelo "⋯" (menu lateral, cabeçalho
 do chat e página do bot), sempre com confirmação.
 
+## Navegador do gBot
+
+O gBot abre o Edge/Chrome/Brave **instalado** (escolha em Configurações; padrão: Edge) com um perfil fixo em
+`~/Library/Application Support/gBot/browser-profiles/<navegador>` e se conecta via CDP (`playwright-core`).
+
+- O perfil é um só por navegador, compartilhado por todas as conversas e bots: logins e cookies ficam salvos
+  entre conversas, bots e reinícios (o perfil já nasce com "continuar de onde parou" para manter cookies de sessão).
+- Abre com `--disable-blink-features=AutomationControlled`, então os sites não veem `navigator.webdriver`.
+- Ferramentas no MCP do gBot: `browser_navigate`, `browser_read`, `browser_click`, `browser_type`,
+  `browser_press`, `browser_screenshot`, `browser_tabs`, `browser_back`.
+- Por padrão o navegador acessa os sites direto. Em Configurações dá para ligar **Pedir aprovação antes de usar
+  sites**: aí cada site novo mostra no chat **Permitir nesta conversa**, **Sempre em <site>** (vai para a lista de
+  sites sempre permitidos) ou **Negar**; sem resposta em 5 min, é negado.
+- O Claude não digita senhas nem códigos: login, MFA e CAPTCHA são feitos pelo usuário na janela.
+
 ## Modelos
 
 Cada provedor declara os modelos que oferece (`ProviderInfo.models`). No Claude Code são os aliases

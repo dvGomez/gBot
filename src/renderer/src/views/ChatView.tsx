@@ -9,6 +9,7 @@ import { MOOD_LABELS } from '@/avatars/sprites'
 import { modelLabel } from '@/components/ModelSelect'
 import { ProjectIcon } from '@/components/ProjectBadge'
 import { ItemMenu } from '@/components/ItemMenu'
+import { ApprovalCard } from '@/components/ApprovalCard'
 import { useApp } from '@/state/app'
 
 function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
@@ -155,6 +156,11 @@ export function ChatView() {
       </div>
 
       <div className="mx-auto w-full max-w-[860px] px-8 pt-2 pb-6">
+        {app.approvals
+          .filter((r) => !r.conversationId || r.conversationId === conv?.id)
+          .map((r) => (
+            <ApprovalCard key={r.id} req={r} />
+          ))}
         <Composer autoFocus placeholder={empty ? (bot ? `Mensagem para ${bot.name}…` : 'Mensagem…') : 'Responder…'} />
       </div>
     </div>

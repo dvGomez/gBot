@@ -1,5 +1,9 @@
 import { BrowserWindow, dialog, ipcMain, type WebContents } from 'electron'
-import type { Bot, ChatEvent, Conversation, Project, SendMessageRequest } from '@shared/types'
+import type { AppSettings, ApprovalDecision, Bot, ChatEvent, Conversation, Project, SendMessageRequest } from '@shared/types'
+import { respondApproval } from './approvals'
+import { listBrowsers } from './browser/browsers'
+import { browserController } from './browser/controller'
+import { getSettings, updateSettings } from './settings'
 import { suggestBotIdentity } from './providers/claude-code'
 import { getProvider, listProviders } from './providers/registry'
 import * as store from './store'
@@ -11,6 +15,12 @@ function emitTo(sender: WebContents, requestId: string, event: ChatEvent) {
 }
 
 export function registerIpc() {
+  ipcMain.handle('settings:get', () => getSettings())
+  ipcMain.handle('settings:set', (_e, patch: Partial<AppSettings>) => updateSettings(patch))
+  ipcMain.handle('browser:list', () => listBrowsers())
+  ipcMain.handle('browser:open', () => browserController.show())
+  ipcMain.handle('approvals:respond', (_e, id: string, decision: ApprovalDecision) => respondApproval(id, decision))
+
   ipcMain.handle('projects:list', () => store.listProjects())
   ipcMain.handle('projects:save', (_e, project: Project) => store.saveProject(project))
   ipcMain.handle('projects:remove', (_e, id: string) => store.removeProject(id))

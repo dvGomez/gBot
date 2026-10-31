@@ -138,7 +138,8 @@ export const claudeCodeProvider: ChatProvider = {
     if (!entry) {
       const ctx: CallerContext = {
         conversationId: req.conversationId,
-        callerName: req.bot?.name ?? 'Claude',
+        // Conversa normal não tem nome (sem persona).
+        callerName: req.bot?.name ?? '',
         chain: req.bot ? [req.bot.id] : [],
         depth: 0
       }

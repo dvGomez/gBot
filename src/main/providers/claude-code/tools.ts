@@ -18,6 +18,26 @@ export function describeTool(name: string, input: Input = {}): string {
   switch (name) {
     case LIST_BOTS_TOOL:
       return 'Viu a lista de bots'
+    case 'mcp__gbot__browser_navigate':
+      try {
+        return `Abriu ${new URL(/^[a-z]+:\/\//i.test(str(input.url)) ? str(input.url) : `https://${str(input.url)}`).hostname.replace(/^www\./, '')}`
+      } catch {
+        return 'Abrindo site'
+      }
+    case 'mcp__gbot__browser_read':
+      return 'Leu a página'
+    case 'mcp__gbot__browser_click':
+      return input.description ? `Clicou em ${clip(str(input.description), 40)}` : 'Clicando'
+    case 'mcp__gbot__browser_type':
+      return input.description ? `Digitou em ${clip(str(input.description), 40)}` : 'Digitando'
+    case 'mcp__gbot__browser_press':
+      return input.key ? `Apertou ${str(input.key)}` : 'Apertando tecla'
+    case 'mcp__gbot__browser_screenshot':
+      return 'Tirou print da página'
+    case 'mcp__gbot__browser_tabs':
+      return 'Viu as abas do navegador'
+    case 'mcp__gbot__browser_back':
+      return 'Voltou uma página'
     case ASK_BOT_TOOL:
       return input.bot ? `Perguntou a ${str(input.bot)}` : 'Consultando um bot'
     case 'Bash':
