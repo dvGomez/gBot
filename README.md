@@ -262,7 +262,10 @@ gBot opens your **installed** Edge/Chrome/Brave (pick it in Settings; default: E
   restarts (the profile starts with "continue where you left off" to keep session cookies).
 - It launches with `--disable-blink-features=AutomationControlled`, so sites don't see `navigator.webdriver`.
 - Tools on gBot's MCP server: `browser_navigate`, `browser_read`, `browser_click`, `browser_type`,
-  `browser_press`, `browser_screenshot`, `browser_tabs`, `browser_back`.
+  `browser_press`, `browser_upload`, `browser_screenshot`, `browser_tabs`, `browser_back`.
+- **Attaching files:** `browser_upload` clicks the element that would open the system's file picker (e.g. WhatsApp
+  Web's "Document") and hands the files straight to the page, so the native window never opens. Files from gBot's
+  folders (workspace, project folders, bot files) go without asking; anything else asks for approval first.
 - By default the browser goes straight to sites. In Settings you can turn on **Ask before using sites**: each new
   site then shows **Allow in this chat**, **Always on <site>** or **Deny** in the chat; with no answer in 5 min, it's
   denied.

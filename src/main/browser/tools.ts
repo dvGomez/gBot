@@ -1,7 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { Page } from 'playwright-core'
 import { z } from 'zod'
+import { existsSync, statSync } from 'node:fs'
+import { basename, dirname, resolve, sep } from 'node:path'
+import { app } from 'electron'
 import { requestApproval } from '../approvals'
+import { listProjects } from '../store'
 import { browserController } from './controller'
 
 /** Quem chama a ferramenta (para o pedido de aprovação mostrar a conversa e o nome certos). */
@@ -26,6 +30,16 @@ function hostOf(url: string): string {
 function normalizeUrl(url: string): string {
   const u = url.trim()
   return /^[a-z]+:\/\//i.test(u) || u.startsWith('about:') ? u : `https://${u}`
+}
+
+/** Arquivo dentro das pastas do gBot (trabalho, arquivos dos bots) ou de um projeto: pode ser anexado sem perguntar. */
+function isShareable(file: string): boolean {
+  const roots = [
+    app.getPath('userData') + sep + 'workspace',
+    app.getPath('userData') + sep + 'data' + sep + 'bot-files',
+    ...listProjects().flatMap((p) => (p.folder ? [p.folder] : []))
+  ]
+  return roots.some((root) => file === root || file.startsWith(root.endsWith(sep) ? root : root + sep))
 }
 
 /** Pede aprovação para agir num site; páginas sem site (about:blank) passam direto. */
@@ -69,6 +83,7 @@ const SNAPSHOT = `(() => {
       if (ty === 'radio') return 'opção'
       if (ty === 'submit' || ty === 'button') return 'botão'
       if (ty === 'password') return 'campo de senha'
+      if (ty === 'file') return 'campo de arquivo'
       return 'campo de texto'
     }
     if (el.isContentEditable) return 'campo de texto'
@@ -267,6 +282,54 @@ export function registerBrowserTools(server: McpServer, caller: BrowserCaller) {
   )
 
   server.registerTool(
+    'browser_upload',
+    {
+      description:
+        'Anexa arquivos do computador na página sem abrir a janela de arquivos do sistema (que você não consegue usar). ' +
+        'Informe o elemento [n] que abriria essa janela, como o item "Documento" do menu de anexar do WhatsApp Web ou um ' +
+        'botão "Enviar arquivo", e os caminhos completos dos arquivos. Use sempre esta ferramenta em vez de browser_click ' +
+        'quando o clique abriria a janela de escolher arquivos.',
+      inputSchema: {
+        ref: z.number().int().describe('Número em browser_read do elemento que abre a escolha de arquivos (ou do campo de arquivo)'),
+        paths: z.array(z.string()).min(1).describe('Caminhos completos dos arquivos, ex.: /Users/ana/cotacao.pdf'),
+        description: z.string().describe('O que está sendo anexado e onde, para o usuário (ex.: cotação no WhatsApp)')
+      }
+    },
+    ({ ref, paths, description }) =>
+      run(async () => {
+        const files = paths.map((p) => resolve(p))
+        const missing = files.filter((f) => !existsSync(f) || !statSync(f).isFile())
+        if (missing.length) throw new Error(`Arquivo não encontrado: ${missing.join(', ')}`)
+        const page = await browserController.page()
+        const host = hostOf(page.url())
+        await approve(caller, host, `Anexar ${files.map((f) => basename(f)).join(', ')}: ${description}`)
+        // Arquivos fora das pastas do gBot (trabalho, projetos, arquivos dos bots) só saem com aprovação do usuário.
+        for (const dir of new Set(files.filter((f) => !isShareable(f)).map((f) => dirname(f)))) {
+          const decision = await requestApproval({
+            kind: 'tool',
+            conversationId: caller.conversationId,
+            requester: caller.callerName,
+            host: `Upload:${dir}`,
+            action: `Enviar para ${host || 'o site'} arquivos de ${dir}:\n${files.filter((f) => dirname(f) === dir).join('\n')}`,
+            alwaysLabel: `Sempre de ${basename(dir) || dir}`
+          })
+          if (decision === 'deny') throw new Error('O usuário não permitiu enviar esses arquivos. Não tente de novo a menos que ele peça.')
+        }
+        const el = await element(page, ref)
+        const isFileInput = (await el.getAttribute('type'))?.toLowerCase() === 'file'
+        if (isFileInput) {
+          await el.setInputFiles(files, { timeout: 10_000 })
+        } else {
+          // O clique abriria a janela do sistema: o Playwright intercepta e entrega os arquivos direto para a página.
+          const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10_000 }), el.click({ timeout: 10_000 })])
+          await chooser.setFiles(files)
+        }
+        await settle(page)
+        return text(`Anexado: ${files.map((f) => basename(f)).join(', ')}.\n\n${await readPage(page)}`)
+      })
+  )
+
+  server.registerTool(
     'browser_back',
     { description: 'Volta para a página anterior na aba atual.', inputSchema: {} },
     () =>
@@ -282,6 +345,7 @@ export function registerBrowserTools(server: McpServer, caller: BrowserCaller) {
 
 export const BROWSER_TOOL_NAMES = [
   'browser_navigate',
+  'browser_upload',
   'browser_read',
   'browser_click',
   'browser_type',

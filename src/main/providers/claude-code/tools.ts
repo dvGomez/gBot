@@ -38,6 +38,10 @@ export function describeTool(name: string, input: Input = {}): string {
       return 'Tirou print da página'
     case 'mcp__gbot__browser_tabs':
       return 'Viu as abas do navegador'
+    case 'mcp__gbot__browser_upload':
+      return Array.isArray(input.paths) && input.paths.length
+        ? `Anexou ${clip(input.paths.map((p) => str(p).split(/[\\/]/).pop()).join(', '), 50)}`
+        : 'Anexando arquivo'
     case 'mcp__gbot__browser_back':
       return 'Voltou uma página'
     case ASK_BOT_TOOL:

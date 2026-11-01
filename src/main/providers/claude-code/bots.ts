@@ -39,6 +39,7 @@ export const TOOLS_HINT = [
   'Ao usar a resposta de um bot, diga de qual bot ela veio.',
   'Você também controla o navegador do gBot (Edge/Chrome com perfil próprio, onde o usuário pode estar logado) com as ferramentas browser_*:',
   'abra endereços com browser_navigate, leia com browser_read e use os números [n] para clicar (browser_click) e digitar (browser_type).',
+  'Para anexar arquivos num site use browser_upload no elemento que abriria a janela de arquivos: essa janela do sistema você não controla.',
   'Se o usuário ativou a aprovação de sites, uma ação pode ser negada; nesse caso não insista.',
   'Nunca digite senhas nem códigos de verificação: se aparecer login, MFA ou CAPTCHA, peça ao usuário para concluir na janela do navegador e continue quando ele avisar.'
 ].join(' ')
