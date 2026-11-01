@@ -131,6 +131,17 @@ async function botSession(conversationId: string, projectId: string | undefined,
   return { key, session, ctx: entry.ctx }
 }
 
+/** Dispatch configured bots through the same provider registry as chats and flows. */
+async function sendExternalBot(bot: Bot, conversationId: string, projectId: string | undefined, text: string,
+  emit: (ev: ChatEvent) => void, signal: AbortSignal, chain: string[], source?: Lesson['source']) {
+  const { getProvider } = await import('../registry')
+  const provider = getProvider(bot.providerId!)
+  if (!provider) throw new Error(`Provedor desconhecido: ${bot.providerId}`)
+  await provider.send({ requestId: stableUuid(`${conversationId}:${bot.id}`), providerId: bot.providerId!,
+    conversationId: `${conversationId}:${bot.id}`, projectId, text, history: [], bot, model: bot.model,
+    botChain: chain, origin: source?.kind === 'flow' && source.id ? { kind: 'flow', id: source.id } : undefined }, emit, signal)
+}
+
 /** Consulta feita por outro assistente (ferramenta `ask_bot`): devolve o texto da resposta. */
 async function askBot(caller: CallerContext, ref: string, message: string, signal: AbortSignal): Promise<string> {
   const bot = findBot(ref, caller.projectId)
@@ -145,6 +156,18 @@ async function askBot(caller: CallerContext, ref: string, message: string, signa
     throw new Error(`Limite de ${MAX_DEPTH} consultas encadeadas atingido. Responda com o que você já tem.`)
   }
 
+  if (bot.providerId && bot.providerId !== 'claude-code') {
+    return runAsBot(bot.id, { label: `Consulta de ${caller.callerName || 'assistente'}`, origin: 'consult', originId: caller.conversationId }, signal,
+      (stop) => enqueue(`${caller.conversationId}:${bot.id}`, async () => {
+        let text = ''
+        let error: string | undefined
+        await sendExternalBot(bot, caller.conversationId, caller.projectId, `Mensagem de ${caller.callerName || 'assistente'}:\n\n${message}`,
+          (ev) => { if (ev.type === 'delta') text += ev.text; if (ev.type === 'error') error = ev.message },
+          AbortSignal.any([stop, AbortSignal.timeout(ASK_TIMEOUT_MS)]), [...caller.chain, bot.id], caller.memorySource)
+        if (error) throw new Error(error)
+        return text.trim() || `${bot.name} não respondeu nada.`
+      }))
+  }
   const { key, session, ctx } = await botSession(caller.conversationId, caller.projectId, bot, caller.memorySource, signal)
   const from = caller.callerName || 'o assistente da conversa'
   // Consultas também entram na fila do bot consultado: ele faz uma tarefa por vez.
@@ -186,6 +209,10 @@ export async function sendToBot(
   const bot = findBot(botId, projectId)
   if (!bot) {
     emit({ type: 'error', message: 'Esse bot não existe mais ou não está disponível neste projeto.' })
+    return
+  }
+  if (bot.providerId && bot.providerId !== 'claude-code') {
+    await enqueue(`${conversationId}:${bot.id}`, () => sendExternalBot(bot, conversationId, projectId, text, emit, signal, [bot.id], origin))
     return
   }
   const { key, session, ctx } = await botSession(conversationId, projectId, bot, origin, signal)

@@ -2,7 +2,8 @@ import { t as tr, useLanguage } from '@/i18n'
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, ChevronDown, ChevronRight, FlaskConical, Search, SquareTerminal } from 'lucide-react'
-import type { ProviderInfo, ProviderModel } from '@shared/types'
+import { useApp } from '@/state/app'
+import type { ProviderModel } from '@shared/types'
 import { cn } from '@/lib/cn'
 
 /** Nome legível de um modelo (ou "Padrão"). */
@@ -22,8 +23,7 @@ function ProviderIcon({ id }: { id: string }) {
 }
 
 /** One themed picker for providers and models, portaled to avoid clipping in composers and side panels. */
-export function ModelSelect({ providers, providerId, value, onChange, disabled, fullWidth, placement = 'down' }: {
-  providers: ProviderInfo[]
+export function ModelSelect({ providerId, value, onChange, disabled, fullWidth, placement = 'down' }: {
   providerId: string
   value?: string
   onChange(providerId: string, model: string): void
@@ -32,6 +32,7 @@ export function ModelSelect({ providers, providerId, value, onChange, disabled, 
   placement?: 'up' | 'down'
 }) {
   useLanguage()
+  const { providers } = useApp()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())

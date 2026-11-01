@@ -169,6 +169,8 @@ export const claudeCodeProvider: ChatProvider = {
       entry = { ctx, config: (await mcpConfigFor(ctx)).config }
       mainContexts.set(req.conversationId, entry)
     }
+    entry.ctx.chain = req.botChain ?? (req.bot ? [req.bot.id] : [])
+    entry.ctx.depth = entry.ctx.chain.length
     entry.ctx.projectId = req.projectId
     entry.ctx.signal = signal
     entry.ctx.architect = req.architect

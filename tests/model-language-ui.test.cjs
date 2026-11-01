@@ -49,6 +49,7 @@ test('unified picker, saved language override and user content work together', {
         { id: 'codex', name: 'Codex (ChatGPT)', status: 'ready', kind: 'local-cli', models: [{ id: 'default', label: 'Padrão' }, { id: 'gpt-test', label: 'GPT test' }] },
         { id: 'anthropic-api', name: 'Anthropic API', status: 'coming-soon', kind: 'api' }
       ], onActionProgress: () => () => {} },
+      bots: new Proxy({ list: async () => [], save: async (bot) => { window.testState.savedBot = bot } }, { get: (obj, key) => obj[key] || fallback[key] }),
       conversations: {
         list: async () => conversations,
         get: async (id) => conversations.find((c) => c.id === id),
@@ -125,6 +126,16 @@ test('unified picker, saved language override and user content work together', {
   await picker.click()
   assert(await dialog.getByRole('treeitem', { name: 'GPT test', exact: true }).isEnabled())
   await page.keyboard.press('Escape')
+  // Every picker gets its catalog centrally, including the bot editor.
+  await page.getByRole('button', { name: 'New bot', exact: true }).click()
+  await picker.click()
+  assert(await dialog.getByRole('treeitem', { name: 'Sonnet', exact: true }).isEnabled())
+  await dialog.getByRole('treeitem', { name: 'GPT test', exact: true }).click()
+  await page.getByRole('textbox', { name: 'Bot name', exact: true }).fill('Codex bot')
+  await page.locator('textarea').fill('Test bot instructions')
+  await page.getByRole('button', { name: 'Create bot', exact: true }).click()
+  await page.waitForFunction(() => window.testState.savedBot?.providerId === 'codex')
+  assert.equal(await page.evaluate(() => window.testState.savedBot.model), 'gpt-test')
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
   assert(await page.getByRole('button', { name: 'Follow system', exact: true }).getAttribute('aria-pressed') === 'true')
   await page.getByRole('button', { name: 'Português (Brasil)', exact: true }).click()

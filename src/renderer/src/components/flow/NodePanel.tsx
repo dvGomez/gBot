@@ -216,7 +216,7 @@ export function NodePanel({
       {type === 'decision' && (
         <>
           <Field label={tr('IA que decide')}>
-            <ModelSelect providers={app.providers} providerId={data.providerId ?? 'claude-code'} value={data.model}
+            <ModelSelect providerId={data.providerId ?? 'claude-code'} value={data.model}
               onChange={(providerId, model) => {
                 const value = model === 'default' ? undefined : model
                 onChange({ providerId, model: value })
@@ -276,7 +276,7 @@ export function NodePanel({
       {type === 'prompt' && (
         <>
           <Field label={tr('Modelo')}>
-            <ModelSelect providers={app.providers} providerId={data.providerId ?? 'claude-code'} value={data.model}
+            <ModelSelect providerId={data.providerId ?? 'claude-code'} value={data.model}
               onChange={(providerId, model) => {
                 const value = model === 'default' ? undefined : model
                 onChange({ providerId, model: value })

@@ -181,6 +181,8 @@ export interface Bot {
   description: string
   /** Instruções que especializam o bot (vão para o prompt de sistema). */
   instructions: string
+  /** Provider for this bot; legacy bots default to Claude Code. */
+  providerId?: string
   /** Modelo do bot (conversas com ele e consultas de outros bots). Ausente = padrão. */
   model?: string
   /** Projeto do bot; ausente = bot solto, disponível em qualquer lugar. */
@@ -219,6 +221,8 @@ export interface SendMessageRequest {
   bot?: Pick<Bot, 'id' | 'name' | 'description' | 'instructions'>
   /** Bot chamado diretamente com @menção: a mensagem vai para ele, não para o assistente da conversa. */
   targetBotId?: string
+  /** Internal delegation chain, preserving recursion guards across providers. */
+  botChain?: string[]
   /** Projeto da conversa (pasta de trabalho, instruções e bots visíveis). */
   projectId?: string
   /** Modelo da conversa (ignorado em @menções: o bot mencionado usa o modelo dele). */

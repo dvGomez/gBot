@@ -218,7 +218,6 @@ export function Composer({ autoFocus, placeholder = tr('Pergunte qualquer coisaâ
               <Paperclip size={15} />
             </button>
             <ModelSelect
-              providers={app.providers}
               providerId={app.providerId}
               value={app.activeModel}
               onChange={(providerId, model) => {

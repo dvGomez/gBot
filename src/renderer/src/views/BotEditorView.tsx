@@ -29,7 +29,8 @@ export function BotEditorView() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [projectId, setProjectId] = useState(editing ? editing.projectId : app.botDraftProjectId)
   // Bot novo já vem com o último modelo escolhido.
-  const [model, setModel] = useState(() => (editing ? editing.model : app.preferredModel('claude-code')))
+  const [providerId, setProviderId] = useState(editing ? (editing.providerId ?? 'claude-code') : app.providerId)
+  const [model, setModel] = useState(() => (editing ? editing.model : app.preferredModel()))
   const [pickingAvatar, setPickingAvatar] = useState(false)
 
   const suggest = async () => {
@@ -67,6 +68,7 @@ export function BotEditorView() {
       description: description.trim(),
       instructions: instructions.trim(),
       projectId,
+      providerId,
       model,
       createdAt: editing?.createdAt ?? now,
       updatedAt: now
@@ -182,8 +184,10 @@ export function BotEditorView() {
           </Field>
 
           <Field label={tr('Modelo')} hint={tr('Dá para trocar em cada conversa.')}>
-            <ModelSelect providers={app.providers.filter((p) => p.id === 'claude-code')} providerId="claude-code" value={model}
+            <ModelSelect providerId={providerId} value={model}
               onChange={(providerId, model) => {
+                setProviderId(providerId)
+                app.setProviderId(providerId)
                 const value = model === 'default' ? undefined : model
                 setModel(value)
                 app.rememberModel(value, providerId)

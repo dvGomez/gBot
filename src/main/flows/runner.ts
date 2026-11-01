@@ -204,7 +204,7 @@ async function execute(
     if (!bot) throw new Error('O bot desta caixinha não existe mais.')
     req = {
       ...base,
-      providerId: 'claude-code',
+      providerId: bot.providerId ?? 'claude-code',
       model: bot.model,
       projectId: bot.projectId ?? flow.projectId,
       bot: { id: bot.id, name: bot.name, description: bot.description, instructions: bot.instructions }

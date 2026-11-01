@@ -220,7 +220,7 @@ export const codexProvider: ChatProvider = {
 
   async send(req, emit, signal) {
     const text = withAttachments(req.text, req.attachments)
-    // @menção a um bot: os bots trabalham no Claude Code.
+    // Mentions dispatch through the provider configured for the target bot.
     if (req.targetBotId) {
       await sendToBot(req.conversationId, req.projectId, req.targetBotId, text, emit, signal, req.origin)
       return
@@ -236,6 +236,8 @@ export const codexProvider: ChatProvider = {
       entry = { ctx, mcp: await mcpEndpointFor(ctx) }
       contexts.set(req.conversationId, entry)
     }
+    entry.ctx.chain = req.botChain ?? (req.bot ? [req.bot.id] : [])
+    entry.ctx.depth = entry.ctx.chain.length
     entry.ctx.architect = req.architect
     entry.ctx.projectId = req.projectId
     entry.ctx.signal = signal

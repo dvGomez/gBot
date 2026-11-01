@@ -56,7 +56,7 @@ export function BotView() {
           <h1 className="mt-1 text-[36px] leading-tight font-medium tracking-[-0.03em]">{bot.name}</h1>
           {bot.description && <p className="mt-1 text-[15px] text-muted">{bot.description}</p>}
           {app.models.length > 0 && (
-            <p className="mt-2 text-[12px] text-muted">{tr('Modelo: ')}{modelLabel(app.models, bot.model)}</p>
+            <p className="mt-2 text-[12px] text-muted">{tr('Modelo: ')}{modelLabel(app.providers.find((p) => p.id === (bot.providerId ?? 'claude-code'))?.models ?? [], bot.model)}</p>
           )}
         </div>
         <div className="flex gap-2">

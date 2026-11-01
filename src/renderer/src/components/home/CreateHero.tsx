@@ -120,7 +120,7 @@ export function CreateHero() {
             />
             <div className="flex items-center justify-between gap-3 px-2 pt-1">
               <div className="flex min-w-0 items-center gap-3">
-                {models.length > 0 && <ModelSelect providers={app.providers} providerId={app.providerId} value={model} onChange={(provider, value) => changeModel(value, provider)} placement="up" />}
+                {models.length > 0 && <ModelSelect providerId={app.providerId} value={model} onChange={(provider, value) => changeModel(value, provider)} placement="up" />}
                 <p className="truncate text-[12px] text-muted">
                   {ready ? tr('Considera os bots, fluxos e projetos que você já tem.') : tr('Conectar conta')}
                 </p>

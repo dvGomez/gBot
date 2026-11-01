@@ -132,3 +132,17 @@ test('parar fluxos cancela trabalho e impede novas etapas', async (t) => {
     assert(recovered.steps.slice(1).every((s) => s.status === 'stopped'))
   })
 })
+
+
+test('workflow bot steps use the saved provider and model, including legacy defaults', async () => {
+  const requests = []
+  state.send = async (req, emit) => { requests.push(req); emit({ type: 'delta', text: 'done' }) }
+  state.bots.set('codex-bot', { id: 'codex-bot', name: 'Codex bot', instructions: 'test', providerId: 'codex', model: 'gpt-test' })
+  const f = flow('provider-routing', [node('a', 'bot', { botId: 'codex-bot' }), node('b', 'bot', { botId: 'legacy-bot' })], [['trigger', 'a'], ['a', 'b']])
+  await runFlow(f, 'manual')
+  await tick()
+  assert.deepEqual(requests.map(({ providerId, model }) => ({ providerId, model })), [
+    { providerId: 'codex', model: 'gpt-test' }, { providerId: 'claude-code', model: undefined }
+  ])
+  state.bots.clear()
+})

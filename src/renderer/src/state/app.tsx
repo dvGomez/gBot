@@ -695,6 +695,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setDraftBotId(botId)
         // Conversa com bot começa no modelo dele; sem bot, no último escolhido.
         const bot = getBot(botId)
+        if (bot) {
+          const provider = bot.providerId ?? 'claude-code'
+          setProviderIdState(provider)
+          save('providerId', provider)
+        }
         setDraftModel(bot ? (bot.model ?? 'default') : undefined)
         setDraftProjectId(projectId ?? getBot(botId)?.projectId)
         setView('chat')
