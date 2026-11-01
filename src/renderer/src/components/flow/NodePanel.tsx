@@ -1,4 +1,5 @@
 import { Plus, Trash2, X } from 'lucide-react'
+import { uid } from '@/lib/format'
 import type { FlowNodeData, FlowNodeType, FlowSchedule } from '@shared/types'
 import { Button, Chip, Field, inputClass } from '@/components/ui'
 import { cn } from '@/lib/cn'
@@ -128,7 +129,7 @@ export function NodePanel({
         <input
           value={data.label ?? ''}
           onChange={(e) => onChange({ label: e.target.value })}
-          placeholder={type === 'trigger' ? 'Gatilho' : type === 'bot' ? 'Nome do bot' : 'Prompt'}
+          placeholder={type === 'trigger' ? 'Gatilho' : type === 'bot' ? 'Nome do bot' : type === 'decision' ? 'Decisão' : 'Prompt'}
           className={inputClass}
         />
       </Field>
@@ -155,6 +156,81 @@ export function NodePanel({
               onChange={(e) => onChange({ message: e.target.value })}
               rows={7}
               placeholder="Ex.: Resuma as novidades de hoje em 5 tópicos."
+              className={`${inputClass} resize-y leading-relaxed`}
+            />
+          </Field>
+        </>
+      )}
+
+      {type === 'decision' && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="IA que decide">
+              <select
+                value={data.providerId ?? 'claude-code'}
+                onChange={(e) => onChange({ providerId: e.target.value, model: undefined })}
+                className={inputClass}
+              >
+                {app.providers.map((p) => (
+                  <option key={p.id} value={p.id} disabled={p.status !== 'ready'}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {!!provider?.models?.length && (
+              <Field label="Modelo">
+                <select
+                  value={data.model ?? 'default'}
+                  onChange={(e) => onChange({ model: e.target.value === 'default' ? undefined : e.target.value })}
+                  className={inputClass}
+                >
+                  {provider.models.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+          </div>
+          <Field
+            label="Opções"
+            hint="Cada opção tem sua bolinha de saída: ligue-a ao que deve acontecer nesse caso. Só o caminho escolhido roda."
+          >
+            <div className="space-y-2">
+              {(data.options ?? []).map((o, i) => (
+                <div key={o.id} className="flex items-center gap-2">
+                  <span className="w-5 shrink-0 text-right text-[12px] text-muted">{i + 1}.</span>
+                  <input
+                    value={o.label}
+                    onChange={(e) =>
+                      onChange({ options: (data.options ?? []).map((x) => (x.id === o.id ? { ...x, label: e.target.value } : x)) })
+                    }
+                    placeholder={i === (data.options ?? []).length - 1 ? 'Caso contrário' : 'Quando o resultado for…'}
+                    className={inputClass}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onChange({ options: (data.options ?? []).filter((x) => x.id !== o.id) })}
+                    aria-label="Remover opção"
+                    className="rounded-full p-2 text-muted hover:bg-hover hover:text-fg"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+              <Button type="button" onClick={() => onChange({ options: [...(data.options ?? []), { id: uid(), label: '' }] })}>
+                <Plus size={14} /> Opção
+              </Button>
+            </div>
+          </Field>
+          <Field label="Critério (opcional)" hint="Ajuda a IA a decidir. O resultado das caixinhas anteriores vai junto.">
+            <textarea
+              value={data.message ?? ''}
+              onChange={(e) => onChange({ message: e.target.value })}
+              rows={3}
+              placeholder="Ex.: Considere urgente se mencionar prazo de hoje."
               className={`${inputClass} resize-y leading-relaxed`}
             />
           </Field>

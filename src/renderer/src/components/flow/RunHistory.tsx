@@ -47,7 +47,10 @@ export function RunHistory({ runs }: { runs: FlowRun[] }) {
                   <p className="flex items-center gap-2 text-[13px] font-medium">
                     <StepIcon status={s.status} /> {s.label}
                   </p>
-                  {s.error && <p className="mt-1 pl-5 text-[12px] text-danger">{s.error}</p>}
+                  {s.chosen && <p className="mt-1 pl-5 text-[12px] text-warning">Escolheu: {s.chosen}</p>}
+                  {s.error && (
+                    <p className={`mt-1 pl-5 text-[12px] ${s.status === 'skipped' ? 'text-muted' : 'text-danger'}`}>{s.error}</p>
+                  )}
                   {s.notices?.map((n, j) => (
                     <p key={j} className="mt-1 pl-5 text-[12px] text-warning">
                       {n}

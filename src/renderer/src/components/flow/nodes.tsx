@@ -1,5 +1,5 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
-import { Clock, Sparkles } from 'lucide-react'
+import { Clock, Sparkles, Split } from 'lucide-react'
 import type { FlowNodeData, FlowStepStatus } from '@shared/types'
 import { PixelAvatar } from '@/components/PixelAvatar'
 import { modelLabel } from '@/components/ModelSelect'
@@ -115,4 +115,41 @@ export function PromptNode({ data, selected }: NodeProps<CanvasNode>) {
   )
 }
 
-export const nodeTypes = { trigger: TriggerNode, bot: BotNode, prompt: PromptNode }
+/** Decisão: uma bolinha de saída por opção; só o ramo da opção escolhida segue. */
+export function DecisionNode({ data, selected }: NodeProps<CanvasNode>) {
+  const app = useApp()
+  const provider = app.providers.find((p) => p.id === (data.providerId ?? 'claude-code'))
+  const options = data.options ?? []
+  return (
+    <Box selected={selected} status={data.status} source={false}>
+      <div className="flex items-center gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-tile bg-tile text-warning">
+          <Split size={17} />
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-[14px] font-semibold">{data.label || 'Decisão'}</p>
+          <p className="truncate text-[12px] text-muted">
+            {provider?.name ?? 'Provedor'}
+            {provider?.models?.length ? ` · ${modelLabel(provider.models, data.model)}` : ''}
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 space-y-1.5">
+        {options.map((o) => (
+          <div key={o.id} className="relative rounded-nav border border-line bg-sidebar py-1.5 pr-4 pl-2.5 text-[12px] text-fg-2">
+            <span className="line-clamp-2">{o.label || 'Opção sem texto'}</span>
+            <Handle
+              type="source"
+              id={o.id}
+              position={Position.Right}
+              className="!-right-[19px] !size-3 !border-2 !border-page !bg-warning"
+            />
+          </div>
+        ))}
+        {!options.length && <p className="text-[12px] text-muted italic">Adicione opções no painel</p>}
+      </div>
+    </Box>
+  )
+}
+
+export const nodeTypes = { trigger: TriggerNode, bot: BotNode, prompt: PromptNode, decision: DecisionNode }

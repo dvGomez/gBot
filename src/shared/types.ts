@@ -252,7 +252,13 @@ export type FlowSchedule =
   | { mode: 'times'; days: number[]; times: string[] }
   | { mode: 'interval'; everyMinutes: number }
 
-export type FlowNodeType = 'trigger' | 'bot' | 'prompt'
+export type FlowNodeType = 'trigger' | 'bot' | 'prompt' | 'decision'
+
+/** Uma saída da caixinha de decisão: "quando acontecer X" → segue pela ligação desta opção. */
+export interface FlowDecisionOption {
+  id: string
+  label: string
+}
 
 export interface FlowNodeData {
   /** Nome da caixinha no canvas (opcional; senão usa o padrão do tipo). */
@@ -263,9 +269,11 @@ export interface FlowNodeData {
   botId?: string
   // bot e prompt: texto enviado (o resultado das caixinhas anteriores vai junto; {{anterior}} posiciona)
   message?: string
-  // prompt
+  // prompt e decisão
   providerId?: string
   model?: string
+  // decisão: as opções (cada uma com sua bolinha de saída); `message` vira o critério extra
+  options?: FlowDecisionOption[]
 }
 
 export interface FlowNode {
@@ -279,6 +287,8 @@ export interface FlowEdge {
   id: string
   source: string
   target: string
+  /** Bolinha de saída usada (na decisão, o id da opção). */
+  sourceHandle?: string
 }
 
 export interface Flow {
@@ -304,6 +314,8 @@ export interface FlowRunStep {
   error?: string
   /** Avisos da execução (ex.: uma ferramenta precisou de permissão e foi negada). */
   notices?: string[]
+  /** Na decisão: a opção escolhida. */
+  chosen?: string
   startedAt?: number
   finishedAt?: number
 }

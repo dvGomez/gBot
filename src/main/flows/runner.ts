@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { BrowserWindow } from 'electron'
-import type { ChatEvent, Flow, FlowNode, FlowRun, FlowRunStep, SendMessageRequest } from '@shared/types'
+import type { ChatEvent, Flow, FlowEdge, FlowNode, FlowRun, FlowRunStep, SendMessageRequest } from '@shared/types'
 import { stableUuid } from '../providers/claude-code/sessions'
 import { getProvider } from '../providers/registry'
 import { getBot } from '../store'
@@ -23,14 +23,17 @@ export function nodeLabel(node: FlowNode): string {
   if (node.data.label?.trim()) return node.data.label.trim()
   if (node.type === 'bot') return getBot(node.data.botId ?? '')?.name ?? 'Bot'
   if (node.type === 'prompt') return 'Prompt'
+  if (node.type === 'decision') return 'Decisão'
   return 'Gatilho'
 }
 
 /** Caixinhas alcançáveis a partir do gatilho, em ordem; erro se houver ciclo. */
-function plan(flow: Flow): { order: FlowNode[]; parents: Map<string, string[]> } {
+function plan(flow: Flow): { order: FlowNode[]; incoming: Map<string, FlowEdge[]> } {
   const parents = new Map<string, string[]>()
+  const incoming = new Map<string, FlowEdge[]>()
   const children = new Map<string, string[]>()
   for (const e of flow.edges) {
+    incoming.set(e.target, [...(incoming.get(e.target) ?? []), e])
     parents.set(e.target, [...(parents.get(e.target) ?? []), e.source])
     children.set(e.source, [...(children.get(e.source) ?? []), e.target])
   }
@@ -60,7 +63,7 @@ function plan(flow: Flow): { order: FlowNode[]; parents: Map<string, string[]> }
     }
   }
   if (order.length !== reachable.size) throw new Error('O fluxo tem um ciclo entre caixinhas.')
-  return { order, parents }
+  return { order, incoming }
 }
 
 /** Monta o texto da caixinha: o que o usuário escreveu + o resultado das anteriores. */
@@ -82,9 +85,10 @@ async function execute(
   flow: Flow,
   node: FlowNode,
   inputs: string[],
-  onNotice: (text: string) => void
+  onNotice: (text: string) => void,
+  textOverride?: string
 ): Promise<string> {
-  const text = compose(flow, node, inputs)
+  const text = textOverride ?? compose(flow, node, inputs)
   const base = {
     requestId: randomUUID(),
     conversationId: stableUuid(`flow:${runId}:${node.id}`),
@@ -104,7 +108,7 @@ async function execute(
       bot: { id: bot.id, name: bot.name, description: bot.description, instructions: bot.instructions }
     }
   } else {
-    // Caixinha de prompt aprende na memória do próprio fluxo; caixinha de bot, na memória do bot.
+    // Caixinha de prompt (e de decisão) aprende na memória do próprio fluxo; caixinha de bot, na memória do bot.
     req = {
       ...base,
       providerId: node.data.providerId ?? 'claude-code',
@@ -130,6 +134,41 @@ async function execute(
   return out.trim()
 }
 
+/** Junta os resultados que chegam numa caixinha. */
+const joinInputs = (inputs: string[]) =>
+  inputs.length === 1 ? inputs[0] : inputs.map((t, i) => `Resultado ${i + 1}:\n${t}`).join('\n\n')
+
+/**
+ * Caixinha de decisão: um modelo lê o resultado anterior e escolhe uma das opções (responde só o número).
+ * O resultado anterior passa adiante sem mudar, para o ramo escolhido continuar dali.
+ */
+async function decide(
+  runId: string,
+  flow: Flow,
+  node: FlowNode,
+  inputs: string[],
+  onNotice: (text: string) => void
+): Promise<{ optionId: string; label: string }> {
+  const options = (node.data.options ?? []).filter((o) => o.label.trim())
+  if (options.length < 2) throw new Error('A decisão precisa de pelo menos duas opções.')
+  const prompt = [
+    `[Decisão no fluxo automático "${flow.name}" do gBot. Ninguém está acompanhando em tempo real.]`,
+    'Leia o resultado anterior e escolha a opção que melhor descreve a situação. Não use ferramentas.',
+    inputs.length ? `<resultado_anterior>\n${joinInputs(inputs)}\n</resultado_anterior>` : '(sem resultado anterior)',
+    node.data.message?.trim() ? `Critério: ${node.data.message.trim()}` : '',
+    'Opções:',
+    ...options.map((o, i) => `${i + 1}. ${o.label.trim()}`),
+    'Responda apenas com o número da opção escolhida.'
+  ]
+    .filter(Boolean)
+    .join('\n')
+  const answer = await execute(runId, flow, node, inputs, onNotice, prompt)
+  const n = Number(answer.match(/\d+/)?.[0])
+  const chosen = options[n - 1]
+  if (!chosen) throw new Error(`Não consegui entender a escolha ("${answer.slice(0, 60)}").`)
+  return { optionId: chosen.id, label: chosen.label.trim() }
+}
+
 /** Roda o fluxo: caixinhas em ordem, ramos em paralelo; cada uma espera todas as anteriores. */
 export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<string> {
   if (running.has(flow.id)) throw new Error('Este fluxo já está rodando.')
@@ -143,9 +182,9 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
   }
 
   let order: FlowNode[]
-  let parents: Map<string, string[]>
+  let incoming: Map<string, FlowEdge[]>
   try {
-    ;({ order, parents } = plan(flow))
+    ;({ order, incoming } = plan(flow))
   } catch (e) {
     publish({ ...run, status: 'error', finishedAt: Date.now(), steps: [{ nodeId: '', label: 'Fluxo', status: 'error', error: (e as Error).message }] })
     return run.id
@@ -160,34 +199,65 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
   publish(run)
 
   const step = (id: string) => run.steps.find((s) => s.nodeId === id)!
-  const results = new Map<string, Promise<string | undefined>>()
-  const exec = (node: FlowNode): Promise<string | undefined> => {
+  const byId = (id: string) => flow.nodes.find((n) => n.id === id)!
+
+  // Resultado de cada caixinha: ok (com saída e, na decisão, a opção escolhida), pulada ou falhou.
+  type Result = { kind: 'ok'; output: string; chosen?: string } | { kind: 'skip' } | { kind: 'fail' }
+  const results = new Map<string, Promise<Result>>()
+
+  const exec = (node: FlowNode): Promise<Result> => {
     if (!results.has(node.id)) {
       results.set(
         node.id,
-        (async () => {
-          const ps = (parents.get(node.id) ?? []).map((id) => flow.nodes.find((n) => n.id === id)!).filter((n) => n.type !== 'trigger')
-          const inputs = await Promise.all(ps.filter((p) => order.includes(p)).map(exec))
+        (async (): Promise<Result> => {
+          // Cada ligação que chega: do gatilho (sem saída), de uma caixinha ok, pulada ou que falhou.
+          // Ligação de decisão só conta se for a da opção escolhida.
+          const arriving = await Promise.all(
+            (incoming.get(node.id) ?? []).map(async (e): Promise<Result> => {
+              const parent = byId(e.source)
+              if (!parent) return { kind: 'skip' }
+              if (parent.type === 'trigger') return { kind: 'ok', output: '' }
+              if (!order.includes(parent)) return { kind: 'skip' }
+              const r = await exec(parent)
+              if (r.kind === 'ok' && parent.type === 'decision' && e.sourceHandle !== r.chosen) return { kind: 'skip' }
+              return r
+            })
+          )
           const s = step(node.id)
-          if (inputs.some((i) => i === undefined)) {
+          if (arriving.some((r) => r.kind === 'fail')) {
             Object.assign(s, { status: 'skipped', error: 'Uma caixinha anterior falhou.' })
             publish(run)
-            return undefined
+            return { kind: 'fail' }
           }
+          const ok = arriving.filter((r): r is Extract<Result, { kind: 'ok' }> => r.kind === 'ok')
+          if (!ok.length) {
+            Object.assign(s, { status: 'skipped', error: 'Caminho não escolhido pela decisão.' })
+            publish(run)
+            return { kind: 'skip' }
+          }
+          const inputs = ok.map((r) => r.output).filter(Boolean)
+
           Object.assign(s, { status: 'running', startedAt: Date.now() })
           publish(run)
+          const onNotice = (text: string) => {
+            s.notices = [...(s.notices ?? []), text]
+            publish(run)
+          }
           try {
-            const output = await execute(run.id, flow, node, inputs as string[], (text) => {
-              s.notices = [...(s.notices ?? []), text]
+            if (node.type === 'decision') {
+              const { optionId, label } = await decide(run.id, flow, node, inputs, onNotice)
+              Object.assign(s, { status: 'done', chosen: label, finishedAt: Date.now() })
               publish(run)
-            })
+              return { kind: 'ok', output: joinInputs(inputs), chosen: optionId }
+            }
+            const output = await execute(run.id, flow, node, inputs, onNotice)
             Object.assign(s, { status: 'done', output, finishedAt: Date.now() })
             publish(run)
-            return output
+            return { kind: 'ok', output }
           } catch (e) {
             Object.assign(s, { status: 'error', error: (e as Error).message, finishedAt: Date.now() })
             publish(run)
-            return undefined
+            return { kind: 'fail' }
           }
         })()
       )
@@ -197,7 +267,8 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
 
   void Promise.all(order.map(exec)).finally(() => {
     running.delete(flow.id)
-    run.status = run.steps.some((s) => s.status === 'error' || s.status === 'skipped') ? 'error' : 'done'
+    // Caixinha pulada porque a decisão escolheu outro caminho não é erro.
+    run.status = run.steps.some((s) => s.status === 'error') ? 'error' : 'done'
     run.finishedAt = Date.now()
     publish(run)
   })
