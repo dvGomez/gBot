@@ -67,8 +67,53 @@ function plan(flow: Flow): { order: FlowNode[]; incoming: Map<string, FlowEdge[]
   return { order, incoming }
 }
 
-/** Monta o texto da caixinha: o que o usuário escreveu + o resultado das anteriores. */
-function compose(flow: Flow, node: FlowNode, inputs: string[]): string {
+/** Uma etapa já feita nesta execução, para as próximas caixinhas não perderem o fio. */
+interface TrailStep {
+  nodeId: string
+  label: string
+  /** O que foi pedido à caixinha. */
+  ask?: string
+  output?: string
+  /** Na decisão: a opção escolhida. */
+  chosen?: string
+}
+
+const clip = (text: string, max: number) => {
+  const t = text.trim().replace(/\s+/g, ' ')
+  return t.length > max ? `${t.slice(0, max)}…` : t
+}
+
+/** Junta os caminhos que chegam numa caixinha, sem repetir etapas (ramos que se reencontram). */
+function mergeTrails(trails: TrailStep[][]): TrailStep[] {
+  const seen = new Set<string>()
+  return trails.flat().filter((t) => !seen.has(t.nodeId) && seen.add(t.nodeId))
+}
+
+/**
+ * Contexto da execução: o que cada etapa anterior do caminho recebeu de pedido e entregou, resumido. Assim uma
+ * caixinha lá no fim ainda sabe o objetivo e os detalhes ditos no começo (para quem é, qual contato…).
+ * Resultados que já chegam inteiros (das caixinhas imediatamente anteriores) não se repetem aqui.
+ */
+function runContext(trail: TrailStep[], parentIds: Set<string>): string {
+  if (!trail.length) return ''
+  // Em fluxos longos fica o começo (onde costuma estar o objetivo) e o fim (o mais recente).
+  const steps = trail.length > 12 ? [...trail.slice(0, 3), ...trail.slice(-9)] : trail
+  const lines = steps.map((t, i) => {
+    if (t.chosen) return `${i + 1}. ${t.label}: escolheu "${clip(t.chosen, 200)}"`
+    const ask = t.ask ? ` pediu "${clip(t.ask, 400)}"` : ''
+    const out = parentIds.has(t.nodeId) ? ' → (resultado logo abaixo)' : t.output ? ` → ${clip(t.output, 600)}` : ''
+    return `${i + 1}. ${t.label}:${ask}${out}`
+  })
+  return [
+    '<contexto_da_execucao>',
+    'O que já aconteceu nesta execução, em ordem. Use para manter o objetivo e os detalhes (para quem é, contatos, nomes, valores):',
+    ...lines,
+    '</contexto_da_execucao>'
+  ].join('\n')
+}
+
+/** Monta o texto da caixinha: o contexto da execução + o que o usuário escreveu + o resultado das anteriores. */
+function compose(flow: Flow, node: FlowNode, inputs: string[], context: string): string {
   const prev = inputs.length === 1 ? inputs[0] : inputs.map((t, i) => `Resultado ${i + 1}:\n${t}`).join('\n\n')
   let text = (node.data.message ?? '').trim()
   if (text.includes('{{anterior}}')) text = text.replaceAll('{{anterior}}', prev)
@@ -76,6 +121,7 @@ function compose(flow: Flow, node: FlowNode, inputs: string[]): string {
   if (!text) throw new Error('A caixinha está sem mensagem.')
   return [
     `[Etapa do fluxo automático "${flow.name}" no gBot. Ninguém está acompanhando em tempo real: entregue o resultado direto, sem fazer perguntas.]`,
+    ...(context ? [context] : []),
     '',
     text
   ].join('\n')
@@ -87,9 +133,10 @@ async function execute(
   node: FlowNode,
   inputs: string[],
   onNotice: (text: string) => void,
+  context: string,
   textOverride?: string
 ): Promise<string> {
-  const text = textOverride ?? compose(flow, node, inputs)
+  const text = textOverride ?? compose(flow, node, inputs, context)
   const base = {
     requestId: randomUUID(),
     conversationId: stableUuid(`flow:${runId}:${node.id}`),
@@ -164,13 +211,15 @@ async function decide(
   flow: Flow,
   node: FlowNode,
   inputs: string[],
-  onNotice: (text: string) => void
+  onNotice: (text: string) => void,
+  context: string
 ): Promise<{ optionId: string; label: string }> {
   const options = (node.data.options ?? []).filter((o) => o.label.trim())
   if (options.length < 2) throw new Error('A decisão precisa de pelo menos duas opções.')
   const prompt = [
     `[Decisão no fluxo automático "${flow.name}" do gBot. Ninguém está acompanhando em tempo real.]`,
     'Leia o resultado anterior e escolha a opção que melhor descreve a situação. Não use ferramentas.',
+    context,
     inputs.length ? `<resultado_anterior>\n${joinInputs(inputs)}\n</resultado_anterior>` : '(sem resultado anterior)',
     node.data.message?.trim() ? `Critério: ${node.data.message.trim()}` : '',
     'Opções:',
@@ -179,7 +228,7 @@ async function decide(
   ]
     .filter(Boolean)
     .join('\n')
-  const answer = await execute(runId, flow, node, inputs, onNotice, prompt)
+  const answer = await execute(runId, flow, node, inputs, onNotice, context, prompt)
   const n = Number(answer.match(/\d+/)?.[0])
   const chosen = options[n - 1]
   if (!chosen) throw new Error(`Não consegui entender a escolha ("${answer.slice(0, 60)}").`)
@@ -219,7 +268,8 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
   const byId = (id: string) => flow.nodes.find((n) => n.id === id)!
 
   // Resultado de cada caixinha: ok (com saída e, na decisão, a opção escolhida), pulada ou falhou.
-  type Result = { kind: 'ok'; output: string; chosen?: string } | { kind: 'skip' } | { kind: 'fail' }
+  // `trail`: as etapas do caminho até aqui (inclusive esta), para o contexto das próximas.
+  type Result = { kind: 'ok'; output: string; chosen?: string; trail: TrailStep[] } | { kind: 'skip' } | { kind: 'fail' }
   const results = new Map<string, Promise<Result>>()
 
   const exec = (node: FlowNode): Promise<Result> => {
@@ -233,7 +283,7 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
             (incoming.get(node.id) ?? []).map(async (e): Promise<Result> => {
               const parent = byId(e.source)
               if (!parent) return { kind: 'skip' }
-              if (parent.type === 'trigger') return { kind: 'ok', output: '' }
+              if (parent.type === 'trigger') return { kind: 'ok', output: '', trail: [] }
               if (!order.includes(parent)) return { kind: 'skip' }
               const r = await exec(parent)
               if (r.kind === 'ok' && parent.type === 'decision' && e.sourceHandle !== r.chosen) return { kind: 'skip' }
@@ -253,6 +303,10 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
             return { kind: 'skip' }
           }
           const inputs = ok.map((r) => r.output).filter(Boolean)
+          const trail = mergeTrails(ok.map((r) => r.trail))
+          const parentIds = new Set((incoming.get(node.id) ?? []).map((e) => e.source))
+          const context = runContext(trail, parentIds)
+          const label = nodeLabel(node)
 
           Object.assign(s, { status: 'running', startedAt: Date.now() })
           publish(run)
@@ -262,15 +316,17 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
           }
           try {
             if (node.type === 'decision') {
-              const { optionId, label } = await decide(run.id, flow, node, inputs, onNotice)
-              Object.assign(s, { status: 'done', chosen: label, finishedAt: Date.now() })
+              const choice = await decide(run.id, flow, node, inputs, onNotice, context)
+              Object.assign(s, { status: 'done', chosen: choice.label, finishedAt: Date.now() })
               publish(run)
-              return { kind: 'ok', output: joinInputs(inputs), chosen: optionId }
+              const own = { nodeId: node.id, label, chosen: choice.label }
+              return { kind: 'ok', output: joinInputs(inputs), chosen: choice.optionId, trail: [...trail, own] }
             }
-            const output = await execute(run.id, flow, node, inputs, onNotice)
+            const output = await execute(run.id, flow, node, inputs, onNotice, context)
             Object.assign(s, { status: 'done', output, finishedAt: Date.now() })
             publish(run)
-            return { kind: 'ok', output }
+            const own = { nodeId: node.id, label, ask: node.data.message, output }
+            return { kind: 'ok', output, trail: [...trail, own] }
           } catch (e) {
             Object.assign(s, { status: 'error', error: (e as Error).message, finishedAt: Date.now() })
             publish(run)

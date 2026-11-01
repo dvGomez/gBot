@@ -242,6 +242,10 @@ A workflow is a canvas (React Flow) with a **trigger** and boxes connected by ar
 - **Decision:** the chosen AI reads the previous result and picks one of the options; each option has its own
   output dot and only the chosen path runs (the others are marked "skipped"). An optional criterion helps it choose.
 - The result of earlier boxes is passed along automatically; `{{anterior}}` sets where it goes.
+- **Run context:** every box (decisions included) also gets a short trail of the run so far: what each earlier box on
+  its path was asked, a clipped version of what it returned and what each decision chose. A box at the end still knows
+  details said only at the start (who it's for, which contact…). It only lives for that run and is capped (400 chars
+  per instruction, 600 per result, the first 3 and last 9 steps in long flows).
 - Branches run in parallel and a box waits for everything that leads into it. Cycles are rejected.
 - Dropping a line on empty canvas opens a menu to create the next box already connected; ⌘C/⌘V (Ctrl on Windows)
   duplicates boxes. The side panel opens when you click a box and closes when you click the canvas.
