@@ -191,6 +191,13 @@ Claude Code runs with `--permission-mode acceptEdits` and `--permission-prompt-t
   The list lives in Settings → Commands and files, where it can be cleared.
 - Settings also has **Allow commands without asking** (off by default) for people who prefer no prompts at all.
 
+### Generated files
+
+When a reply ends, gBot looks for files created or changed in the working folder during it (up to two subfolders
+deep, at most 12, skipping `node_modules`, `dist`, `.git`…) and attaches them to the message as cards. That includes
+files made by commands, like a PDF converted from HTML. Clicking a card opens the file in its default app (scripts
+and executables are only revealed in the folder, never run); the folder button reveals it in Finder/Explorer.
+
 ### Plain chats and bots
 
 A plain chat has no character: no name, avatar or persona in the prompt. Bots only show up in chats with a bot or

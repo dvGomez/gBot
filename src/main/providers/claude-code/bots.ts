@@ -3,6 +3,7 @@ import type { Lesson } from '@shared/types'
 import { botFilesAccess, botFilesPrompt } from '../../botFiles'
 import { runAsBot } from '../../botQueue'
 import { memoryPrompt } from '../../memory'
+import { withOutputFiles } from './outputs'
 import { reflectIfNeeded } from './reflect'
 import { listBots } from '../../store'
 import { GBOT_TOOLS, mcpConfigFor, setBotHandlers, type CallerContext } from './mcp'
@@ -172,10 +173,11 @@ export async function sendToBot(
     return
   }
   const { key, session, ctx } = await botSession(conversationId, projectId, bot, origin)
+  const cwd = workContext(projectId).cwd
   await enqueue(key, () => {
     ctx.chain = [bot.id]
     ctx.depth = 1
-    return session.send(text, emit, signal).then(() => reflectIfNeeded(session, ctx.memory))
+    return session.send(text, withOutputFiles(cwd, emit), signal).then(() => reflectIfNeeded(session, ctx.memory))
   })
 }
 

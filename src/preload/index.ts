@@ -50,6 +50,10 @@ const api: GbotApi = {
     get: () => ipcRenderer.invoke('settings:get'),
     set: (patch) => ipcRenderer.invoke('settings:set', patch)
   },
+  files: {
+    open: (path) => ipcRenderer.invoke('files:open', path),
+    reveal: (path) => ipcRenderer.invoke('files:reveal', path)
+  },
   browser: {
     list: () => ipcRenderer.invoke('browser:list'),
     open: () => ipcRenderer.invoke('browser:open')

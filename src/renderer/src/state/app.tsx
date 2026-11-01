@@ -265,6 +265,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             return { ...m, tools: i < 0 ? [...tools, event.tool] : tools.map((t, j) => (j === i ? event.tool : t)) }
           })
           break
+        case 'files':
+          patchMessage(p.conversationId, p.messageId, (m) => {
+            const known = new Set(event.files.map((f) => f.path))
+            return { ...m, files: [...(m.files ?? []).filter((f) => !known.has(f.path)), ...event.files] }
+          })
+          break
         case 'notice':
           noticed.current = true
           patchMessage(p.conversationId, p.messageId, (m) => ({ ...m, notices: [...(m.notices ?? []), event.text] }))

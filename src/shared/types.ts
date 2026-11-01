@@ -97,6 +97,15 @@ export interface ChatMessage {
   tools?: ToolActivity[]
   /** Avisos curtos sobre a resposta (permissão negada, nova tentativa...). */
   notices?: string[]
+  /** Arquivos criados ou alterados na pasta de trabalho durante a resposta. */
+  files?: ChatFile[]
+}
+
+/** Arquivo gerado numa resposta (mostrado como anexo no chat). */
+export interface ChatFile {
+  path: string
+  name: string
+  size: number
 }
 
 /** Agrupa bots e conversas. Pasta e instruções são opcionais e podem ser definidas depois. */
@@ -175,6 +184,7 @@ export type ChatEvent =
   | { type: 'delta'; text: string }
   | { type: 'tool'; tool: ToolActivity }
   | { type: 'notice'; text: string }
+  | { type: 'files'; files: ChatFile[] }
   | { type: 'done' }
   | { type: 'error'; message: string }
 
@@ -409,6 +419,11 @@ export interface GbotApi {
   settings: {
     get(): Promise<AppSettings>
     set(patch: Partial<AppSettings>): Promise<AppSettings>
+  }
+  files: {
+    /** Abre um arquivo gerado no app padrão (executáveis só são mostrados na pasta). */
+    open(path: string): Promise<void>
+    reveal(path: string): Promise<void>
   }
   browser: {
     list(): Promise<BrowserInfo[]>

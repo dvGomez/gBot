@@ -10,6 +10,7 @@ import { modelLabel } from '@/components/ModelSelect'
 import { ProjectIcon } from '@/components/ProjectBadge'
 import { ItemMenu } from '@/components/ItemMenu'
 import { ApprovalCard } from '@/components/ApprovalCard'
+import { FileCards } from '@/components/FileCards'
 import { useApp } from '@/state/app'
 
 function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
@@ -43,6 +44,7 @@ function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
         ) : (
           live && !msg.tools?.length && <span className="text-muted">Pensando…</span>
         )}
+        {msg.files && msg.files.length > 0 && <FileCards files={msg.files} />}
         {msg.notices?.map((n, i) => (
           <p key={i} className="mt-2 text-[13px] text-muted">
             {n}

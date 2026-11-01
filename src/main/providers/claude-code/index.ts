@@ -5,6 +5,7 @@ import type { MemoryOwner } from '@shared/types'
 import { memoryPrompt } from '../../memory'
 import { botFilesAccess, botFilesPrompt } from '../../botFiles'
 import { PERMISSIONS_HINT, sendToBot, TOOLS_HINT } from './bots'
+import { withOutputFiles } from './outputs'
 import { reflectIfNeeded } from './reflect'
 import { resolveClaudeEnv, runClaude } from './env'
 import { GBOT_TOOLS, mcpConfigFor, type CallerContext } from './mcp'
@@ -171,7 +172,7 @@ export const claudeCodeProvider: ChatProvider = {
       addDirs: files?.addDirs,
       model: req.model
     })
-    await session.send(req.text, emit, signal)
+    await session.send(req.text, withOutputFiles(work.cwd, emit), signal)
     reflectIfNeeded(session, entry.ctx.memory)
   }
 }

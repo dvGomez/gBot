@@ -1,3 +1,4 @@
+import { existsSync, statSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { BrowserWindow, dialog, ipcMain, shell, type WebContents } from 'electron'
 import type {
@@ -77,6 +78,16 @@ export function registerIpc() {
   ipcMain.handle('bots:tasks', () => listBotTasks())
   ipcMain.handle('bots:cancel-task', (_e, id: string) => cancelBotTask(id))
   ipcMain.handle('bots:files', (_e, botId: string) => listBotFiles(botId))
+  // Arquivos gerados nas respostas. Executáveis e scripts nunca são abertos direto: só mostrados na pasta.
+  ipcMain.handle('files:open', async (_e, path: string) => {
+    if (!existsSync(path) || !statSync(path).isFile()) throw new Error('O arquivo não existe mais.')
+    if (/\.(app|command|sh|bash|zsh|exe|bat|cmd|ps1|msi|pkg|dmg|jar|scpt|workflow)$/i.test(path)) shell.showItemInFolder(path)
+    else {
+      const error = await shell.openPath(path)
+      if (error) throw new Error(error)
+    }
+  })
+  ipcMain.handle('files:reveal', (_e, path: string) => shell.showItemInFolder(path))
   ipcMain.handle('bots:add-files', async (e, botId: string, paths?: string[]) => {
     if (!paths) {
       const win = BrowserWindow.fromWebContents(e.sender)
