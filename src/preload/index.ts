@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { ApprovalRequest, ChatEvent, FlowRun, GbotApi, MemoryOwner, ProviderActionProgress } from '@shared/types'
+import type { ApprovalRequest, BotTask, ChatEvent, FlowRun, GbotApi, MemoryOwner, ProviderActionProgress } from '@shared/types'
 
 declare const __APP_VERSION__: string
 
@@ -25,7 +25,14 @@ const api: GbotApi = {
     list: () => ipcRenderer.invoke('bots:list'),
     save: (bot) => ipcRenderer.invoke('bots:save', bot),
     remove: (id) => ipcRenderer.invoke('bots:remove', id),
-    suggest: (instructions) => ipcRenderer.invoke('bots:suggest', instructions)
+    suggest: (instructions) => ipcRenderer.invoke('bots:suggest', instructions),
+    tasks: () => ipcRenderer.invoke('bots:tasks'),
+    cancelTask: (id) => ipcRenderer.invoke('bots:cancel-task', id),
+    onTasks: (cb) => {
+      const handler = (_e: Electron.IpcRendererEvent, tasks: BotTask[]) => cb(tasks)
+      ipcRenderer.on('bots:tasks', handler)
+      return () => ipcRenderer.removeListener('bots:tasks', handler)
+    }
   },
   conversations: {
     list: () => ipcRenderer.invoke('conversations:list'),

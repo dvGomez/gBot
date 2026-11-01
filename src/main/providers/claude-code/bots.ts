@@ -1,5 +1,6 @@
 import type { Bot, ChatEvent } from '@shared/types'
 import type { Lesson } from '@shared/types'
+import { runAsBot } from '../../botQueue'
 import { memoryPrompt } from '../../memory'
 import { reflectIfNeeded } from './reflect'
 import { listBots } from '../../store'
@@ -124,23 +125,26 @@ async function askBot(caller: CallerContext, ref: string, message: string, signa
   }
 
   const { key, session, ctx } = await botSession(caller.conversationId, caller.projectId, bot, caller.memorySource)
-  return enqueue(key, async () => {
-    ctx.chain = [...caller.chain, bot.id]
-    ctx.depth = caller.depth + 1
-    let text = ''
-    let error: string | undefined
-    const collect = (ev: ChatEvent) => {
-      if (ev.type === 'delta') text += ev.text
-      if (ev.type === 'error') error = ev.message
-    }
-    const timeout = AbortSignal.timeout(ASK_TIMEOUT_MS)
-    const from = caller.callerName || 'o assistente da conversa'
-    await session.send(`Mensagem de ${from}:\n\n${message}`, collect, AbortSignal.any([signal, timeout]))
-    reflectIfNeeded(session, ctx.memory)
-    if (error) throw new Error(`${bot.name} não conseguiu responder: ${error}`)
-    if (timeout.aborted) throw new Error(`${bot.name} demorou demais para responder.`)
-    return text.trim() || `${bot.name} não respondeu nada.`
-  })
+  const from = caller.callerName || 'o assistente da conversa'
+  // Consultas também entram na fila do bot consultado: ele faz uma tarefa por vez.
+  return runAsBot(bot.id, { label: `Consulta de ${from}`, origin: 'consult', originId: caller.conversationId }, signal, (stop) =>
+    enqueue(key, async () => {
+      ctx.chain = [...caller.chain, bot.id]
+      ctx.depth = caller.depth + 1
+      let text = ''
+      let error: string | undefined
+      const collect = (ev: ChatEvent) => {
+        if (ev.type === 'delta') text += ev.text
+        if (ev.type === 'error') error = ev.message
+      }
+      const timeout = AbortSignal.timeout(ASK_TIMEOUT_MS)
+      await session.send(`Mensagem de ${from}:\n\n${message}`, collect, AbortSignal.any([stop, timeout]))
+      reflectIfNeeded(session, ctx.memory)
+      if (error) throw new Error(`${bot.name} não conseguiu responder: ${error}`)
+      if (timeout.aborted) throw new Error(`${bot.name} demorou demais para responder.`)
+      return text.trim() || `${bot.name} não respondeu nada.`
+    })
+  )
 }
 
 /** Mensagem enviada pelo usuário direto a um bot com @menção: a resposta vai para o chat. */

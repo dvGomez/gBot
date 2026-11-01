@@ -261,6 +261,10 @@ depth).
 - Safeguards: at most 3 chained consultations, no cycles (A → B → A) and 10 min per consultation.
 - `@Name` in the chat sends the message straight to the bot; the reply shows its avatar, and the chat's assistant
   gets that exchange as context in the next message.
+- **One task at a time:** each bot has a work queue (`src/main/botQueue.ts`). Workflow steps, chat messages and
+  consultations from other bots wait their turn, so two workflows never drive the same bot (and its browser) at once.
+  The bot page lists what it's doing and what's waiting, with buttons to cancel or interrupt. A workflow step's
+  15-minute limit only starts when the bot actually picks it up.
 
 ### Adding a provider
 

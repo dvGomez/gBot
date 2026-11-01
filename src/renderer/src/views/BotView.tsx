@@ -1,4 +1,5 @@
 import { ArrowLeft, MessageSquarePlus, Pencil, Trash2 } from 'lucide-react'
+import { BotTasks } from '@/components/BotTasks'
 import { ItemMenu } from '@/components/ItemMenu'
 import { ConversationList } from '@/components/ConversationList'
 import { MemoryPanel } from '@/components/MemoryPanel'
@@ -67,6 +68,8 @@ export function BotView() {
           />
         </div>
       </div>
+
+      <BotTasks botId={bot.id} botName={bot.name} />
 
       <div className="mt-8 grid grid-cols-[1fr_360px] gap-4">
         <Card className="p-5">

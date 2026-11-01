@@ -11,6 +11,7 @@ import type {
   Project,
   SendMessageRequest
 } from '@shared/types'
+import { cancelBotTask, listBotTasks, runAsBot, waitNotice } from './botQueue'
 import { runFlow } from './flows/runner'
 import { listLessons, removeLesson, saveLesson } from './memory'
 import * as flows from './flows/store'
@@ -71,6 +72,8 @@ export function registerIpc() {
   ipcMain.handle('bots:save', (_e, bot: Bot) => store.saveBot(bot))
   ipcMain.handle('bots:remove', (_e, id: string) => store.removeBot(id))
   ipcMain.handle('bots:suggest', (_e, instructions: string) => suggestBotIdentity(instructions))
+  ipcMain.handle('bots:tasks', () => listBotTasks())
+  ipcMain.handle('bots:cancel-task', (_e, id: string) => cancelBotTask(id))
 
   ipcMain.handle('conversations:list', () => store.listConversations())
   ipcMain.handle('conversations:get', (_e, id: string) => store.getConversation(id))
@@ -96,8 +99,22 @@ export function registerIpc() {
 
     const controller = new AbortController()
     running.set(req.requestId, controller)
+    const emit = (ev: ChatEvent) => emitTo(e.sender, req.requestId, ev)
+    // Mensagem para um bot (conversa com ele ou @menção) entra na fila dele: um bot faz uma tarefa por vez.
+    const bot = store.getBot(req.targetBotId ?? req.bot?.id ?? '')
     try {
-      await provider.send(req, (ev) => emitTo(e.sender, req.requestId, ev), controller.signal)
+      if (bot) {
+        const title = store.getConversation(req.conversationId)?.title
+        await runAsBot(
+          bot.id,
+          { label: title ? `Conversa "${title}"` : 'Conversa', origin: 'chat', originId: req.conversationId },
+          controller.signal,
+          (signal) => provider.send(req, emit, signal),
+          (ahead) => emit({ type: 'notice', text: waitNotice(bot.name, ahead) })
+        )
+      } else {
+        await provider.send(req, emit, controller.signal)
+      }
     } catch (err) {
       if (controller.signal.aborted) emitTo(e.sender, req.requestId, { type: 'done' })
       else emitTo(e.sender, req.requestId, { type: 'error', message: (err as Error).message })

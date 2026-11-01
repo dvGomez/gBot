@@ -252,6 +252,20 @@ export type FlowSchedule =
   | { mode: 'times'; days: number[]; times: string[] }
   | { mode: 'interval'; everyMinutes: number }
 
+/** Tarefa de um bot: ele faz uma por vez (fluxos, conversas e consultas de outros bots); as outras esperam na fila. */
+export interface BotTask {
+  id: string
+  botId: string
+  /** Ex.: 'Fluxo "Resumo" · Escrever post' ou 'Conversa "Ideias"'. */
+  label: string
+  origin: 'flow' | 'chat' | 'consult'
+  /** Fluxo ou conversa de onde veio. */
+  originId?: string
+  status: 'running' | 'waiting'
+  queuedAt: number
+  startedAt?: number
+}
+
 export type FlowNodeType = 'trigger' | 'bot' | 'prompt' | 'decision'
 
 /** Uma saída da caixinha de decisão: "quando acontecer X" → segue pela ligação desta opção. */
@@ -354,6 +368,10 @@ export interface GbotApi {
     remove(id: string): Promise<void>
     /** Sugere nome e descrição a partir das instruções (usa o Claude Code se estiver conectado). */
     suggest(instructions: string): Promise<{ name: string; description: string }>
+    /** Tarefas rodando e na fila de todos os bots. */
+    tasks(): Promise<BotTask[]>
+    cancelTask(id: string): Promise<void>
+    onTasks(cb: (tasks: BotTask[]) => void): () => void
   }
   conversations: {
     list(): Promise<ConversationMeta[]>

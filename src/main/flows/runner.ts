@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { BrowserWindow } from 'electron'
 import type { ChatEvent, Flow, FlowEdge, FlowNode, FlowRun, FlowRunStep, SendMessageRequest } from '@shared/types'
 import { stableUuid } from '../providers/claude-code/sessions'
+import { runAsBot, waitNotice } from '../botQueue'
 import { getProvider } from '../providers/registry'
 import { getBot } from '../store'
 import { saveRun } from './store'
@@ -127,10 +128,26 @@ async function execute(
     if (ev.type === 'error') error = ev.message
     if (ev.type === 'notice') onNotice(ev.text)
   }
-  const signal = AbortSignal.timeout(STEP_TIMEOUT_MS)
-  await provider.send(req, collect, signal)
-  if (error) throw new Error(error)
-  if (signal.aborted) throw new Error('A caixinha demorou demais e foi interrompida.')
+  // O limite de tempo só começa quando a caixinha começa de fato (depois da fila do bot, se houver).
+  const run = async (stop: AbortSignal) => {
+    const timeout = AbortSignal.timeout(STEP_TIMEOUT_MS)
+    await provider.send(req, collect, AbortSignal.any([stop, timeout]))
+    if (error) throw new Error(error)
+    if (timeout.aborted) throw new Error('A caixinha demorou demais e foi interrompida.')
+    if (stop.aborted) throw new Error('A tarefa foi cancelada na página do bot.')
+  }
+  const bot = req.bot
+  if (bot) {
+    await runAsBot(
+      bot.id,
+      { label: `Fluxo "${flow.name}" · ${nodeLabel(node)}`, origin: 'flow', originId: flow.id },
+      new AbortController().signal,
+      run,
+      (ahead) => onNotice(waitNotice(bot.name, ahead))
+    )
+  } else {
+    await run(new AbortController().signal)
+  }
   return out.trim()
 }
 
