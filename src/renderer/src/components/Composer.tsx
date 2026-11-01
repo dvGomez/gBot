@@ -218,11 +218,11 @@ export function Composer({ autoFocus, placeholder = tr('Pergunte qualquer coisaâ
               <Paperclip size={15} />
             </button>
             <ModelSelect
-              providers={app.activeConversation?.mode === 'architect' ? app.providers.filter((p) => p.id === 'claude-code') : app.providers}
-              providerId={app.activeConversation?.mode === 'architect' ? 'claude-code' : app.providerId}
+              providers={app.providers}
+              providerId={app.providerId}
               value={app.activeModel}
               onChange={(providerId, model) => {
-                if (app.activeConversation?.mode !== 'architect') app.setProviderId(providerId)
+                app.setProviderId(providerId)
                 app.setActiveModel(model, providerId)
               }}
               disabled={app.busy}

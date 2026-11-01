@@ -44,9 +44,9 @@ export function CreateHero() {
   const [text, setText] = useState('')
   const ref = useRef<HTMLTextAreaElement>(null)
   // Modelo do arquiteto: começa no último escolhido e a escolha daqui também passa a ser o padrão.
-  const [model, setModel] = useState(() => app.preferredModel('claude-code'))
-  const models = app.providers.find((p) => p.id === 'claude-code')?.models ?? []
-  const ready = app.providers.some((p) => p.id === 'claude-code' && p.status === 'ready')
+  const [model, setModel] = useState(() => app.preferredModel())
+  const models = app.providers.find((p) => p.id === app.providerId)?.models ?? []
+  const ready = app.providers.some((p) => p.id === app.providerId && p.status === 'ready')
 
   // Time do balão: quatro avatares prontos, sempre os mesmos durante a visita.
   const crew = useMemo(() => [...AVATARS].sort(() => Math.random() - 0.5).slice(0, 4), [])
@@ -68,10 +68,11 @@ export function CreateHero() {
     setText('')
   }
 
-  const changeModel = (m: string) => {
+  const changeModel = (m: string, provider: string) => {
+    app.setProviderId(provider)
     const value = m === 'default' ? undefined : m
     setModel(value)
-    app.rememberModel(value, 'claude-code')
+    app.rememberModel(value, provider)
   }
 
   const pick = (example: string) => {
@@ -119,9 +120,9 @@ export function CreateHero() {
             />
             <div className="flex items-center justify-between gap-3 px-2 pt-1">
               <div className="flex min-w-0 items-center gap-3">
-                {models.length > 0 && <ModelSelect providers={app.providers.filter((p) => p.id === 'claude-code')} providerId="claude-code" value={model} onChange={(_provider, value) => changeModel(value)} placement="up" />}
+                {models.length > 0 && <ModelSelect providers={app.providers} providerId={app.providerId} value={model} onChange={(provider, value) => changeModel(value, provider)} placement="up" />}
                 <p className="truncate text-[12px] text-muted">
-                  {ready ? tr('Considera os bots, fluxos e projetos que você já tem.') : tr('Conecte sua conta Claude em Provedores para usar.')}
+                  {ready ? tr('Considera os bots, fluxos e projetos que você já tem.') : tr('Conectar conta')}
                 </p>
               </div>
               <Button variant="primary" onClick={start} disabled={!text.trim() || !ready || app.busy}>

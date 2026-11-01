@@ -8,7 +8,7 @@ import { botFilesPrompt } from '../../botFiles'
 import { memoryPrompt } from '../../memory'
 import { languageInstructions } from '../../localization'
 import { getSettings } from '../../settings'
-import { GBOT_EDIT_HINT } from '../claude-code/architect'
+import { architectPrompt, GBOT_EDIT_HINT } from '../claude-code/architect'
 import { sendToBot, TOOLS_HINT } from '../claude-code/bots'
 import { mcpEndpointFor, type CallerContext } from '../claude-code/mcp'
 import { withOutputFiles } from '../claude-code/outputs'
@@ -54,6 +54,7 @@ const memoryOf = (req: SendMessageRequest): MemoryOwner | undefined =>
   req.memory ?? (req.bot ? { kind: 'bot', id: req.bot.id } : undefined)
 
 function instructions(req: SendMessageRequest, work: WorkContext, fullAccess: boolean): string {
+  if (req.architect) return [...architectPrompt(), ...work.promptLines, TOOLS_HINT, languageInstructions()].join('\n')
   const { bot } = req
   const lines = ['Você está conversando com o usuário pelo gBot, um aplicativo de chat para desktop.']
   if (bot) {
@@ -235,6 +236,7 @@ export const codexProvider: ChatProvider = {
       entry = { ctx, mcp: await mcpEndpointFor(ctx) }
       contexts.set(req.conversationId, entry)
     }
+    entry.ctx.architect = req.architect
     entry.ctx.projectId = req.projectId
     entry.ctx.signal = signal
     entry.ctx.memory = memoryOf(req)

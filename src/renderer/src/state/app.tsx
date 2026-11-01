@@ -258,7 +258,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const activeProject = getProject(activeConversation ? activeConversation.projectId : draftProjectId)
   // Na conversa com o arquiteto o provedor é sempre o Claude Code.
   const models =
-    providers.find((p) => p.id === (activeConversation?.mode === 'architect' ? 'claude-code' : activeProviderId))?.models ?? []
+    providers.find((p) => p.id === activeProviderId)?.models ?? []
   const preferredModel = useCallback(
     (provider = activeProviderId) => {
       const model = preferredModels[provider]
@@ -455,8 +455,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               messageCount: 0,
               messages: []
             })
-      // O arquiteto trabalha no Claude Code (ferramentas do gBot e o plano).
-      const providerId = conversation.mode === 'architect' ? 'claude-code' : activeProviderId
+      const providerId = activeProviderId
       const bot = getBot(conversation.botId)
       // @menção a outro bot: a mensagem vai direto para ele, e a resposta aparece com o avatar dele.
       const mentioned = conversation.mode === 'architect' ? undefined : findMention(text, visibleBots)
@@ -532,7 +531,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setActiveModel = useCallback(
     (model?: string, providerId?: string) => {
       const value = model === 'default' ? undefined : model
-      rememberModel(value, providerId ?? (activeConversation?.mode === 'architect' ? 'claude-code' : undefined))
+      rememberModel(value, providerId)
       if (!activeConversation) {
         setDraftModel(value ?? 'default')
         return

@@ -67,7 +67,7 @@ every lesson. And when a bot needs help, it **calls another bot**, or you can ca
 
 - **Bots with personality:** name, pixel-art avatar (20 built in + a generator), their own instructions and model.
 - **Chats:** with or without a bot, with one searchable provider/model tree picker. Your latest model choice becomes the default for future creations.
-- **Connected accounts:** add multiple Claude accounts, switch between them and inspect available usage limits. Connect Codex for supported chats and workflow steps. Bots and the home architect currently use Claude Code.
+- **Connected accounts:** add multiple Claude accounts, switch between them and inspect available usage limits. Connect Codex for supported chats and workflow steps. The home architect supports both providers; bot model configuration currently uses Claude Code.
 - **Home architect:** describe what you want to automate; AI proposes bots and workflows while considering existing resources, then creates the accepted plan.
 - **Languages:** English and Brazilian Portuguese, following the operating system by default or your choice in Settings.
 - **Optional updates:** GitHub release notifications, configurable background downloads and explicit restart to install. Skip any version and keep using the app.
