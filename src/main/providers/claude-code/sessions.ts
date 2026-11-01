@@ -90,6 +90,8 @@ export interface SessionSpec {
   allowedTools: string[]
   /** Alias ou nome do modelo; ausente/`default` = padrão da conta. */
   model?: string
+  /** Pastas extras que a sessão pode ler. */
+  addDirs?: string[]
 }
 
 /**
@@ -98,7 +100,7 @@ export interface SessionSpec {
  */
 export async function getSession(spec: SessionSpec): Promise<ClaudeSession> {
   const model = spec.model && spec.model !== 'default' ? spec.model : undefined
-  const signature = JSON.stringify([spec.cwd, spec.systemPrompt, spec.mcpConfig, spec.allowedTools, model])
+  const signature = JSON.stringify([spec.cwd, spec.systemPrompt, spec.mcpConfig, spec.allowedTools, model, spec.addDirs])
   const existing = sessions.get(spec.key)
   if (existing && !existing.session.exited) {
     if (existing.signature === signature || existing.session.busy) return existing.session
@@ -113,6 +115,7 @@ export async function getSession(spec: SessionSpec): Promise<ClaudeSession> {
     appendSystemPrompt: spec.systemPrompt,
     mcpConfig: spec.mcpConfig,
     allowedTools: spec.allowedTools,
+    addDirs: spec.addDirs,
     model
   })
   sessions.set(spec.key, { session, signature })

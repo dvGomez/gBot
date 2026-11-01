@@ -3,6 +3,7 @@ import type { SendMessageRequest } from '@shared/types'
 import type { ChatProvider } from '../types'
 import type { MemoryOwner } from '@shared/types'
 import { memoryPrompt } from '../../memory'
+import { botFilesAccess, botFilesPrompt } from '../../botFiles'
 import { sendToBot, TOOLS_HINT } from './bots'
 import { reflectIfNeeded } from './reflect'
 import { resolveClaudeEnv, runClaude } from './env'
@@ -28,7 +29,8 @@ function systemPrompt(req: SendMessageRequest, work: WorkContext): string {
       'Siga estas instruções definidas pelo usuário para este bot:',
       '<instrucoes_do_bot>',
       bot.instructions.trim(),
-      '</instrucoes_do_bot>'
+      '</instrucoes_do_bot>',
+      ...botFilesPrompt(bot.id)
     )
   }
   lines.push(
@@ -158,13 +160,15 @@ export const claudeCodeProvider: ChatProvider = {
     entry.ctx.memory = memoryOf(req)
     entry.ctx.memorySource = req.origin ?? { kind: 'conversation', id: req.conversationId }
     const work = workContext(req.projectId)
+    const files = req.bot ? botFilesAccess(req.bot.id) : undefined
     const session = await getSession({
       key: req.conversationId,
       sessionId: req.conversationId,
       cwd: work.cwd,
       systemPrompt: systemPrompt(req, work),
       mcpConfig: entry.config,
-      allowedTools: GBOT_TOOLS,
+      allowedTools: [...GBOT_TOOLS, ...(files?.allowedTools ?? [])],
+      addDirs: files?.addDirs,
       model: req.model
     })
     await session.send(req.text, emit, signal)

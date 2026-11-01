@@ -1,5 +1,6 @@
 import type { Bot, ChatEvent } from '@shared/types'
 import type { Lesson } from '@shared/types'
+import { botFilesAccess, botFilesPrompt } from '../../botFiles'
 import { runAsBot } from '../../botQueue'
 import { memoryPrompt } from '../../memory'
 import { reflectIfNeeded } from './reflect'
@@ -60,6 +61,7 @@ function botSystemPrompt(bot: Bot, work: WorkContext): string {
     '<instrucoes_do_bot>',
     bot.instructions.trim(),
     '</instrucoes_do_bot>',
+    ...botFilesPrompt(bot.id),
     'Nesta sessão você recebe mensagens de duas origens: do usuário, que chama você com @menção numa conversa, e de outros ' +
       'assistentes do gBot, que consultam você em nome do usuário (essas começam com "Mensagem de <nome>:"). ' +
       'Para consultas de outros assistentes, responda de forma completa e objetiva: sua resposta será repassada.',
@@ -98,13 +100,15 @@ async function botSession(conversationId: string, projectId: string | undefined,
   entry.ctx.projectId = projectId
   entry.ctx.memorySource = source ?? { kind: 'conversation', id: conversationId }
   const work = workContext(projectId)
+  const files = botFilesAccess(bot.id)
   const session = await getSession({
     key,
     sessionId: stableUuid(key),
     cwd: work.cwd,
     systemPrompt: botSystemPrompt(bot, work),
     mcpConfig: entry.config,
-    allowedTools: GBOT_TOOLS,
+    allowedTools: [...GBOT_TOOLS, ...files.allowedTools],
+    addDirs: files.addDirs,
     model: bot.model
   })
   return { key, session, ctx: entry.ctx }

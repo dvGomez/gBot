@@ -73,6 +73,8 @@ every lesson. And when a bot needs help, it **calls another bot**, or you can ca
   with the window closed, from the menu bar icon.
 - **gBot's browser:** your installed Edge, Chrome or Brave, with its own profile and logins that stay saved.
 - **A memory that learns:** short, token-cheap lessons per bot and per workflow, with a screen to view and edit them.
+- **Reference files:** drop contracts, manuals, price lists or screenshots on a bot's page; it reads them only when a
+  request needs them.
 - **Team panel:** on the home screen, who is working, who is asleep and what's coming up next.
 
 ## Download
@@ -195,6 +197,19 @@ short steps and why.
   30. The screen shows roughly how many tokens that takes.
 - Where to view and edit them: the bot page (**Memory** card) and the workflow's **Memory** tab. You can add them by
   hand, edit, turn off (kept out of the prompt) and delete.
+
+### Reference files
+
+Each bot has a folder of reference files (`data/bot-files/<bot>/`), managed on the bot page: drag files in or use
+**Add**, write an optional note per file, reveal or delete them.
+
+- The bot's system prompt only lists the files (`name | size | note`, at most 50); the content is read with Claude
+  Code's `Read` tool when a request needs it, so files cost no tokens until they're used.
+- Every session that runs as the bot (its chats, workflow steps, consultations and @mentions) gets the folder through
+  `--add-dir` plus a `Read(//<folder>/**)` allow rule.
+- `Read` handles text (txt, md, csv, json…), PDFs and images. Word, Excel and PowerPoint files show a warning on the
+  page: export them as PDF or CSV.
+- Deleting a bot deletes its files.
 
 ### Workflows (automation canvas)
 

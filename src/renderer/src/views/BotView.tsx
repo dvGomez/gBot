@@ -1,4 +1,5 @@
 import { ArrowLeft, MessageSquarePlus, Pencil, Trash2 } from 'lucide-react'
+import { BotFiles } from '@/components/BotFiles'
 import { BotTasks } from '@/components/BotTasks'
 import { ItemMenu } from '@/components/ItemMenu'
 import { ConversationList } from '@/components/ConversationList'
@@ -80,6 +81,9 @@ export function BotView() {
           <Card className="p-5">
             <p className="pb-2 text-[13px] font-medium text-muted">Instruções</p>
             <p className="selectable text-[13px] leading-relaxed whitespace-pre-wrap text-fg-2">{bot.instructions}</p>
+          </Card>
+          <Card className="p-5">
+            <BotFiles key={bot.id} botId={bot.id} botName={bot.name} />
           </Card>
           <Card className="p-5">
             <MemoryPanel owner={{ kind: 'bot', id: bot.id }} />

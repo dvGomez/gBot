@@ -252,6 +252,15 @@ export type FlowSchedule =
   | { mode: 'times'; days: number[]; times: string[] }
   | { mode: 'interval'; everyMinutes: number }
 
+/** Arquivo de referência de um bot: ele vê a lista no prompt e lê o conteúdo quando precisar. */
+export interface BotFile {
+  name: string
+  size: number
+  addedAt: number
+  /** Nota curta do usuário sobre o arquivo (vai no prompt junto com o nome). */
+  note?: string
+}
+
 /** Tarefa de um bot: ele faz uma por vez (fluxos, conversas e consultas de outros bots); as outras esperam na fila. */
 export interface BotTask {
   id: string
@@ -372,6 +381,13 @@ export interface GbotApi {
     tasks(): Promise<BotTask[]>
     cancelTask(id: string): Promise<void>
     onTasks(cb: (tasks: BotTask[]) => void): () => void
+    files(botId: string): Promise<BotFile[]>
+    /** Copia os arquivos para a pasta do bot; sem `files`, abre o seletor do sistema. */
+    addFiles(botId: string, files?: File[]): Promise<BotFile[]>
+    removeFile(botId: string, name: string): Promise<void>
+    setFileNote(botId: string, name: string, note: string): Promise<void>
+    /** Mostra o arquivo no Finder/Explorer. */
+    revealFile(botId: string, name: string): Promise<void>
   }
   conversations: {
     list(): Promise<ConversationMeta[]>

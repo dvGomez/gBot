@@ -1,4 +1,5 @@
-import { BrowserWindow, dialog, ipcMain, type WebContents } from 'electron'
+import { basename, join } from 'node:path'
+import { BrowserWindow, dialog, ipcMain, shell, type WebContents } from 'electron'
 import type {
   AppSettings,
   ApprovalDecision,
@@ -11,6 +12,7 @@ import type {
   Project,
   SendMessageRequest
 } from '@shared/types'
+import { addBotFiles, botFilesDir, listBotFiles, removeBotFile, setBotFileNote } from './botFiles'
 import { cancelBotTask, listBotTasks, runAsBot, waitNotice } from './botQueue'
 import { runFlow } from './flows/runner'
 import { listLessons, removeLesson, saveLesson } from './memory'
@@ -74,6 +76,24 @@ export function registerIpc() {
   ipcMain.handle('bots:suggest', (_e, instructions: string) => suggestBotIdentity(instructions))
   ipcMain.handle('bots:tasks', () => listBotTasks())
   ipcMain.handle('bots:cancel-task', (_e, id: string) => cancelBotTask(id))
+  ipcMain.handle('bots:files', (_e, botId: string) => listBotFiles(botId))
+  ipcMain.handle('bots:add-files', async (e, botId: string, paths?: string[]) => {
+    if (!paths) {
+      const win = BrowserWindow.fromWebContents(e.sender)
+      const options: Electron.OpenDialogOptions = {
+        title: 'Arquivos de referência do bot',
+        buttonLabel: 'Adicionar',
+        properties: ['openFile', 'multiSelections']
+      }
+      const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+      if (result.canceled) return listBotFiles(botId)
+      paths = result.filePaths
+    }
+    return addBotFiles(botId, paths)
+  })
+  ipcMain.handle('bots:remove-file', (_e, botId: string, name: string) => removeBotFile(botId, name))
+  ipcMain.handle('bots:file-note', (_e, botId: string, name: string, note: string) => setBotFileNote(botId, name, note))
+  ipcMain.handle('bots:reveal-file', (_e, botId: string, name: string) => shell.showItemInFolder(join(botFilesDir(botId), basename(name))))
 
   ipcMain.handle('conversations:list', () => store.listConversations())
   ipcMain.handle('conversations:get', (_e, id: string) => store.getConversation(id))

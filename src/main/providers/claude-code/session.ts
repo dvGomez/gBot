@@ -16,6 +16,8 @@ export interface SessionOptions {
   mcpConfig?: string
   /** Ferramentas liberadas sem pedir permissão (as do gBot). */
   allowedTools?: string[]
+  /** Pastas extras que a sessão pode ler (ex.: os arquivos de referência do bot). */
+  addDirs?: string[]
 }
 
 interface Turn {
@@ -81,6 +83,7 @@ export class ClaudeSession {
       ...(opts.appendSystemPrompt ? ['--append-system-prompt', opts.appendSystemPrompt] : []),
       ...(opts.model ? ['--model', opts.model] : []),
       ...(opts.mcpConfig ? ['--mcp-config', opts.mcpConfig] : []),
+      ...(opts.addDirs ?? []).flatMap((dir) => ['--add-dir', dir]),
       ...(opts.allowedTools?.length ? ['--allowedTools', opts.allowedTools.join(',')] : [])
     ]
     // Consultar outro bot pode levar minutos: o limite de tempo de ferramentas MCP precisa acompanhar.

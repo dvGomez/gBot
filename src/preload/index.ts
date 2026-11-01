@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { ApprovalRequest, BotTask, ChatEvent, FlowRun, GbotApi, MemoryOwner, ProviderActionProgress } from '@shared/types'
 
 declare const __APP_VERSION__: string
@@ -28,6 +28,12 @@ const api: GbotApi = {
     suggest: (instructions) => ipcRenderer.invoke('bots:suggest', instructions),
     tasks: () => ipcRenderer.invoke('bots:tasks'),
     cancelTask: (id) => ipcRenderer.invoke('bots:cancel-task', id),
+    files: (botId) => ipcRenderer.invoke('bots:files', botId),
+    // Arquivos arrastados chegam como File: o caminho real só é acessível aqui no preload.
+    addFiles: (botId, files) => ipcRenderer.invoke('bots:add-files', botId, files?.map((f) => webUtils.getPathForFile(f))),
+    removeFile: (botId, name) => ipcRenderer.invoke('bots:remove-file', botId, name),
+    setFileNote: (botId, name, note) => ipcRenderer.invoke('bots:file-note', botId, name, note),
+    revealFile: (botId, name) => ipcRenderer.invoke('bots:reveal-file', botId, name),
     onTasks: (cb) => {
       const handler = (_e: Electron.IpcRendererEvent, tasks: BotTask[]) => cb(tasks)
       ipcRenderer.on('bots:tasks', handler)
