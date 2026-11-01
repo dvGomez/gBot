@@ -7,7 +7,7 @@
 <p align="center">
   <b>Build an AI team that works while you sleep.</b><br>
   Bots with personality, workflows that run on their own, a real browser and a memory that learns.<br>
-  All on your own computer, running on the Claude subscription you already pay for.
+  All on your own computer, with Claude Code and Codex connected to your own accounts.
 </p>
 
 <p align="center">
@@ -29,11 +29,10 @@
 ![gBot: build an AI team that works while you sleep](docs/marketing/hero.png)
 
 You already pay for an amazing AI. But it just sits in a browser tab waiting for you to type. **gBot** turns your
-Claude subscription into a **team**: every bot with a name, a face and a specialty; jobs that run on their own
+AI subscriptions into a **team**: every bot with a name, a face and a specialty; jobs that run on their own
 schedule; a browser they drive for you; and a memory that makes each of them a little better every day.
 
-No API keys, no per-token bill: gBot runs the **official Claude Code** with **your own login**, within your plan's
-limits.
+Connect **Claude Code** or **Codex (ChatGPT)** using your own login and your plan's limits. Subscription-based providers do not require an API key; availability and usage limits depend on your account.
 
 ## Why gBot
 
@@ -67,12 +66,17 @@ every lesson. And when a bot needs help, it **calls another bot**, or you can ca
 ![Bots with a face, workflows, a real browser and a memory that learns](docs/marketing/features.png)
 
 - **Bots with personality:** name, pixel-art avatar (20 built in + a generator), their own instructions and model.
-- **Chats:** with or without a bot, with a model picker (Opus, Sonnet, Haiku…) per chat.
+- **Chats:** with or without a bot, with one searchable provider/model tree picker. Your latest model choice becomes the default for future creations.
+- **Connected accounts:** add multiple Claude accounts, switch between them and inspect available usage limits. Connect Codex for supported chats and workflow steps. Bots and the home architect currently use Claude Code.
+- **Home architect:** describe what you want to automate; AI proposes bots and workflows while considering existing resources, then creates the accepted plan.
+- **Languages:** English and Brazilian Portuguese, following the operating system by default or your choice in Settings.
+- **Optional updates:** GitHub release notifications, configurable background downloads and explicit restart to install. Skip any version and keep using the app.
 - **Projects:** group bots and chats, with an optional working folder and instructions.
 - **Workflows:** a canvas with a time or interval trigger and bot, prompt and **decision** boxes. They keep running
-  with the window closed, from the menu bar icon.
+  with the window closed, from the tray/menu bar icon. Manual confirmation nodes pause for your decision; running workflows are locked against editing, and **Stop everything** cancels their work and processes.
 - **gBot's browser:** your installed Edge, Chrome or Brave, with its own profile and logins that stay saved.
 - **A memory that learns:** short, token-cheap lessons per bot and per workflow, with a screen to view and edit them.
+- **File panel:** quickly access files used or generated in chats, bots and workflows from the side panel.
 - **Reference files:** drop contracts, manuals, price lists or screenshots on a bot's page; it reads them only when a
   request needs them.
 - **Team panel:** on the home screen, who is working, who is asleep and what's coming up next.
@@ -86,7 +90,7 @@ Installers are on the **[Releases](https://github.com/dvGomez/gBot/releases)** p
   The app isn't signed yet, so the first time, right-click gBot → **Open**.
 - **Windows** (beta): `gBot-<version>-windows-setup.exe`. If SmartScreen warns you, click **More info → Run anyway**.
 
-You also need **Claude Code** installed and a Claude subscription (Pro or Max):
+For Claude features, install **Claude Code** and use an eligible Claude account:
 
 ```bash
 # macOS
@@ -99,7 +103,15 @@ irm https://claude.ai/install.ps1 | iex
 ```
 
 Then open gBot and click **Sign in with Claude Code**: it's the official login, done in your browser, in a profile
-kept separate from your terminal.
+kept separate from your terminal. Add more accounts and view usage in **Providers**.
+
+For OpenAI, install the official **Codex CLI**, then connect **Codex (ChatGPT)** in Providers using its official sign-in. An eligible ChatGPT plan is required for subscription usage.
+
+### Language and updates
+
+Open **Settings** to choose **Follow system**, **English** or **Português (Brasil)**. Changes apply immediately.
+
+Updates never block access to the app. You can disable background downloads, skip a release or download it later. Installation only happens after you explicitly choose to restart; closing the app does not silently install updates. Unsigned macOS builds offer manual downloads instead of automatic installation. See [release and update details](docs/releases.md).
 
 ## Contributing
 
@@ -122,11 +134,14 @@ gBot is **open source under the MIT license** ([LICENSE](LICENSE)), the same mod
 
 ## For developers
 
-A desktop app (Electron + React) that talks to Claude Code using your subscription, ready for other providers.
+A desktop app (Electron + React) with Claude Code and Codex providers, local data, English/pt-BR localization and optional GitHub release updates.
 
 ### Commands
 
 ```bash
+npm ci             # install dependencies
+npm test           # run automated tests
+npm run build      # production build
 npm run dev        # run the app in development mode (hot reload)
 npm run typecheck  # type-check everything
 npm run dist:mac   # Mac installers in dist/ (arm64 and Intel)
@@ -163,8 +178,7 @@ src/
 
 gBot runs the official, unmodified `claude` executable in
 `-p --input-format stream-json --output-format stream-json` mode. Each chat is a Claude Code session
-(`--session-id` = chat id) that stays open while in use and is picked back up with `--resume`. The app never reads
-or stores credentials.
+(`--session-id` = chat id) that stays open while in use and is picked back up with `--resume`. Authentication is managed by the official CLI in isolated account profiles.
 
 **Separate profile:** Claude Code runs with `CLAUDE_CONFIG_DIR=<userData>/claude-profile` and without any inherited
 `ANTHROPIC_*`/`CLAUDE*` variables. That way gBot doesn't use your terminal's `~/.claude` (which might point to
@@ -249,6 +263,8 @@ A workflow is a canvas (React Flow) with a **trigger** and boxes connected by ar
   workflows fire; "Run now" always works.
 - **Bot:** sends a message to a bot (using its model and instructions).
 - **Prompt:** a standalone prompt, with the AI (provider) and model picked in the box.
+- **Manual confirmation:** pauses the run with configurable choices and supporting files; pending decisions remain accessible in the app and can trigger system notifications.
+- **Stop everything:** immediately cancels the run, queued work and spawned processes. Editing stays disabled while a run is active.
 - **Decision:** the chosen AI reads the previous result and picks one of the options; each option has its own
   output dot and only the chosen path runs (the others are marked "skipped"). An optional criterion helps it choose.
 - The result of earlier boxes is passed along automatically; `{{anterior}}` sets where it goes.
@@ -327,11 +343,11 @@ The UI lists the provider automatically; `send` emits `mood`, `delta`, `done` or
 
 ### Builds (GitHub Actions)
 
-`.github/workflows/build.yml` type-checks and builds the macOS (`.dmg`, arm64 and Intel) and Windows (`setup.exe`)
-installers on every push to `main` and on pull requests; they show up under **Actions → Build → Artifacts**. A `v*`
-tag (`git tag v0.3.0 && git push --tags`) also creates a **Release** with the installers attached.
+`.github/workflows/build.yml` runs checks and packages installers on pushes to `main`, pull requests and manual builds. Test installers appear under **Actions → Build → Artifacts**; these builds do not publish releases.
 
-The installers aren't signed yet (no Apple or Microsoft certificate), so the first launch shows the system warning.
+`.github/workflows/release.yml` runs only when an explicitly requested version tag (such as `v1.0.0`) is pushed. It derives the version from that tag, validates and builds both platforms, then publishes installers and update metadata to GitHub Releases. Ordinary commits and pushes never create a release.
+
+macOS automatic installation requires Developer ID signing; unsigned builds use the manual download fallback. Signing/notarization secrets and update behavior are documented in [docs/releases.md](docs/releases.md).
 
 ### Roadmap
 
