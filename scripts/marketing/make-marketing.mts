@@ -191,102 +191,61 @@ function problem(n: string, accent: string, pain: string, painText: string, fix:
       <div style="font-size:20px;line-height:1.5;color:#e4e4e4;margin-top:12px">${fix}</div>
     </div>
   </div>
-  <div style="position:absolute;right:72px;top:70px;width:900px;height:680px">${mock}</div>${EDGES_SCRIPT}
+  <div style="position:absolute;right:72px;top:70px;width:900px;height:680px">${mock}</div>
 `
   )
 }
 
-/** Caixinha do canvas de fluxo. */
-function node(
-  id: string,
-  x: number,
-  y: number,
-  o: { icon: string; title: string; sub: string; body?: string; state?: 'ok' | 'warn' | 'skip'; extra?: string; w?: number }
-) {
-  const border = o.state === 'warn' ? '#e3a02b' : o.state === 'ok' ? '#2fae6b88' : '#333'
-  const glow = o.state === 'warn' ? 'box-shadow:0 0 0 4px #e3a02b22, 0 20px 40px rgba(0,0,0,.5);' : 'box-shadow:0 20px 40px rgba(0,0,0,.45);'
-  return `
-  <div data-node="${id}" style="position:absolute;left:${x}px;top:${y}px;width:${o.w ?? 200}px;padding:14px 16px;border-radius:16px;background:#161616;border:2px solid ${border};${glow}${o.state === 'skip' ? 'opacity:.38;' : ''}">
-    <div style="display:flex;gap:10px;align-items:center">
-      <div style="width:34px;height:34px;border-radius:10px;background:#242424;display:flex;align-items:center;justify-content:center;flex:none">${o.icon}</div>
-      <div style="min-width:0"><div style="font-size:15px;font-weight:600">${o.title}</div><div style="font-size:12px;color:#8e9196">${o.sub}</div></div>
-    </div>
-    ${o.body ? `<div style="font-size:13px;color:#c9cacc;margin-top:10px;line-height:1.4">${o.body}</div>` : ''}
-    ${o.extra ?? ''}
-  </div>`
-}
-
-/**
- * Desenha as ligações depois do layout: cada \`data-edge="de>para|cor|tracejado"\` liga a bolinha \`data-h\` (ou a
- * borda direita da caixinha \`data-node\`) à borda esquerda da caixinha de destino.
- */
-const EDGES_SCRIPT = `<script>
-document.fonts.ready.then(() => {
-  for (const svg of document.querySelectorAll('svg[data-edges]')) {
-    const box = svg.getBoundingClientRect()
-    const at = (el, side) => { const r = el.getBoundingClientRect(); return [ (side === 'r' ? r.right : r.left) - box.left, r.top + r.height / 2 - box.top ] }
-    for (const spec of svg.dataset.edges.split(';')) {
-      const [route, color, dash] = spec.split('|')
-      const [from, to] = route.split('>')
-      const h = document.querySelector('[data-h="' + from + '"]')
-      const [x1, y1] = h ? at(h, 'l').map((v, i) => v + (i ? 0 : 6)) : at(document.querySelector('[data-node="' + from + '"]'), 'r')
-      const [x2, y2] = at(document.querySelector('[data-node="' + to + '"]'), 'l')
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-      const dx = Math.max(40, (x2 - x1) / 2)
-      path.setAttribute('d', 'M' + x1 + ' ' + y1 + ' C ' + (x1 + dx) + ' ' + y1 + ', ' + (x2 - dx) + ' ' + y2 + ', ' + x2 + ' ' + y2)
-      path.setAttribute('stroke', color)
-      path.setAttribute('stroke-width', '2.5')
-      path.setAttribute('fill', 'none')
-      if (dash) path.setAttribute('stroke-dasharray', '6 6')
-      svg.appendChild(path)
-    }
-  }
-})
-</script>`
-
-const ICON = {
-  clock: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f2f2f2" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`,
-  split: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e3a02b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M8 3H3v5M12 22v-8.3a4 4 0 0 0-1.17-2.83L3 3M15 9l6-6"/></svg>`,
-  spark: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f2f2f2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg>`
-}
-
 function problem1() {
-  const opt = (id: string, label: string, chosen: boolean) =>
-    `<div style="position:relative;margin-top:8px;padding:7px 10px;border-radius:9px;background:${chosen ? '#e3a02b1f' : '#1f1f1f'};border:1px solid ${chosen ? '#e3a02b66' : '#2a2a2a'};font-size:12.5px;color:${chosen ? '#e3a02b' : '#8e9196'}">${label}
-      <span data-h="${id}" style="position:absolute;right:-25px;top:50%;margin-top:-6px;width:12px;height:12px;border-radius:50%;background:#e3a02b;border:2px solid #161616"></span></div>`
-  const edges = ['t>n|#2fae6b', 'n>d|#2fae6b', 'yes>a|#e3a02b', 'no>b|#3a3a3a|1'].join(';')
+  type Row = { at: string; id: string; name: string; role: string; task: string; note?: string; state: 'ok' | 'run' | 'next' | 'sleep'; pct?: number }
+  const rows: Row[] = [
+    { at: '06:30', id: 'brasa', name: 'Brasa', role: 'Pesquisa', task: 'Varreu Reddit, X e Hacker News: 3 tendências do seu nicho', state: 'ok' },
+    { at: '08:00', id: 'nuvem', name: 'Nuvem', role: 'Textos', task: 'Escreveu 3 posts para o LinkedIn', note: 'usou a pesquisa da Brasa', state: 'ok' },
+    { at: '10:00', id: 'eco', name: 'Eco', role: 'Prospecção', task: 'Achou 47 de 100 empresas com o perfil do seu cliente', state: 'run', pct: 47 },
+    { at: '14:00', id: 'rubi', name: 'Rubi', role: 'Revisão', task: 'Revisa os posts e separa os melhores', state: 'next' },
+    { at: 'Sex 17:00', id: 'bit', name: 'Bit', role: 'Newsletter', task: 'Monta a newsletter da semana com o melhor de tudo', state: 'sleep' }
+  ]
+  const badge = (r: Row) =>
+    r.state === 'ok'
+      ? `<span class="chip ok" style="border-color:#2fae6b44"><span class="dot bg-ok"></span>Pronto</span>`
+      : r.state === 'run'
+        ? `<span class="chip warn" style="border-color:#e3a02b55"><span class="dot bg-warn"></span>Trabalhando</span>`
+        : r.state === 'next'
+          ? `<span class="chip">Agendado</span>`
+          : `<span class="chip muted">Dormindo</span>`
+  const mood = (r: Row): AvatarMood => (r.state === 'ok' ? 'happy' : r.state === 'run' ? 'thinking' : r.state === 'sleep' ? 'sleeping' : 'idle')
+  const row = (r: Row) => `
+    <div style="display:flex;align-items:center;gap:18px;padding:16px 0;border-bottom:1px solid #222;${r.state === 'sleep' ? 'opacity:.6' : ''}">
+      <div style="width:78px;font-family:GeistMono;font-size:14px;color:${r.state === 'run' ? '#e3a02b' : '#8e9196'}">${r.at}</div>
+      ${avatar(r.id, 44, mood(r))}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:16px;font-weight:600">${r.name} <span class="muted" style="font-weight:400;font-size:14px">· ${r.role}</span></div>
+        <div style="font-size:15px;color:#c9cacc;margin-top:3px;line-height:1.4">${r.task}</div>
+        ${r.note ? `<div style="font-size:13px;margin-top:4px;color:#9B7BF0">↳ ${r.note}</div>` : ''}
+        ${r.pct ? `<div style="height:5px;border-radius:3px;background:#262626;margin-top:9px;overflow:hidden"><div style="height:100%;width:${r.pct}%;background:#e3a02b"></div></div>` : ''}
+      </div>
+      ${badge(r)}
+    </div>`
   const mock = `
-  <div class="card" style="position:absolute;inset:0;overflow:hidden;background:#121212">
-    <div class="dots" style="opacity:.8"></div>
-    <div style="position:absolute;left:24px;top:22px;display:flex;gap:10px;align-items:center">
-      <span style="font-size:17px;font-weight:600">Radar da manhã</span>
-      <span class="chip" style="padding:4px 11px;font-size:13px"><span class="dot bg-ok"></span>Ativo</span>
+  <div class="card" style="position:absolute;inset:0;padding:30px 34px;background:#121212;overflow:hidden">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;padding-bottom:6px">
+      <div>
+        <div style="font-size:20px;font-weight:600">Rotina do time · hoje</div>
+        <div class="muted" style="font-size:14px;margin-top:4px">5 bots, cada um com o seu horário</div>
+      </div>
+      <div class="ok" style="font-size:15px;display:flex;align-items:center;gap:8px"><span class="dot bg-ok"></span>2 entregas esperando você</div>
     </div>
-    <svg data-edges="${edges}" style="position:absolute;inset:0;overflow:visible" width="900" height="680"></svg>
-    ${node('t', 16, 296, { icon: ICON.clock, title: 'Gatilho', sub: 'Seg a sex, 07:00', state: 'ok', w: 168 })}
-    ${node('n', 222, 276, { icon: avatar('nuvem', 26, 'happy'), title: 'Nuvem', sub: 'Bot · Sonnet', body: 'Pesquise as notícias do meu setor das últimas 24 h.', state: 'ok', w: 204 })}
-    ${node('d', 466, 262, {
-      icon: ICON.split,
-      title: 'Tem algo urgente?',
-      sub: 'Decisão · Haiku',
-      state: 'ok',
-      w: 200,
-      extra: opt('yes', 'Sim, é urgente', true) + opt('no', 'Não, só o resumo', false)
-    })}
-    ${node('a', 708, 110, { icon: ICON.spark, title: 'Me avise agora', sub: 'Prompt · Haiku', body: 'Mande no WhatsApp o que aconteceu e o que fazer.', state: 'warn', w: 180 })}
-    ${node('b', 708, 480, { icon: ICON.spark, title: 'Resumo do dia', sub: 'Prompt · Sonnet', state: 'skip', w: 180 })}
-    <div style="position:absolute;left:466px;top:440px;font-size:13px" class="warn">Escolheu: Sim, é urgente</div>
-    <div style="position:absolute;left:24px;bottom:22px;right:24px;display:flex;justify-content:space-between;align-items:center">
-      <span class="chip"><span class="dot bg-warn"></span>Rodando · 07:00:41</span>
-      <span class="muted" style="font-size:14px">Só o caminho escolhido roda</span>
+    ${rows.map(row).join('')}
+    <div style="display:flex;align-items:center;gap:12px;margin-top:20px;padding:14px 18px;border-radius:14px;border:1px dashed #333;font-size:15px;color:#c9cacc">
+      ${avatar('brasa', 24, 'happy')} Você só revisa o que chega pronto. O resto o time faz sozinho.
     </div>
   </div>`
   return problem(
     '01',
-    '#e3a02b',
-    'Você perde a primeira hora do dia caçando notícia.',
-    'Dez abas abertas, metade lida, o resto esquecido. Amanhã, tudo de novo.',
-    'Um fluxo agendado pesquisa, filtra e <b>decide por você</b>. Às 7h o resumo já está pronto, e se algo for urgente, você recebe o alerta na hora.',
+    ORANGE,
+    'Você faz sozinho o trabalho de um time inteiro.',
+    'Pesquisar, escrever, prospectar, revisar, mandar a newsletter. Todo dia a lista é maior que o dia.',
+    'Monte o seu time: cada bot com nome, cara e <b>rotina própria</b>. Um pesquisa de madrugada, outro escreve com o que foi achado, outro prospecta à tarde. Você só aprova.',
     mock
   )
 }
@@ -381,7 +340,7 @@ function problem3() {
 const pages = {
   'hero.png': [hero(), 1600, 860],
   'recursos.png': [features(), 1600, 720],
-  'problema-1-noticias.png': [problem1(), 1600, 820],
+  'problema-1-time.png': [problem1(), 1600, 820],
   'problema-2-navegador.png': [problem2(), 1600, 820],
   'problema-3-memoria.png': [problem3(), 1600, 820]
 } as const

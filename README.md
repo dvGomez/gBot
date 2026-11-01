@@ -29,13 +29,14 @@ limites do seu plano.
 
 ## Por que o gBot
 
-### 1. Chega de perder a primeira hora do dia caçando notícia
+### 1. Chega de fazer sozinho o trabalho de um time inteiro
 
-![Problema 1: um fluxo agendado pesquisa, decide se é urgente e te avisa](docs/marketing/problema-1-noticias.png)
+![Problema 1: cada bot com a sua rotina, um usando o trabalho do outro](docs/marketing/problema-1-time.png)
 
-Monte um **fluxo** no canvas: às 7h um bot pesquisa o que importa para você, uma caixinha de **decisão** avalia
-se tem algo urgente e só o caminho certo roda. Você acorda com o resumo pronto, ou com um alerta, se precisar agir
-agora.
+Pesquisar, escrever, prospectar, revisar, mandar a newsletter… a lista nunca acaba. No gBot você monta o seu
+**time**: cada bot com nome, cara e **rotina própria** em fluxos agendados. Um varre as redes de madrugada, outro
+escreve os posts com o que foi encontrado, outro prospecta à tarde, e uma **decisão** no meio do caminho escolhe o
+que segue. Você acorda com as entregas prontas e só aprova.
 
 ### 2. Chega de copiar e colar entre sistemas
 
