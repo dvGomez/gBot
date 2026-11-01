@@ -61,6 +61,9 @@ interface DropMenu {
   from: ConnectFrom
 }
 
+/** Caixinhas copiadas com Cmd/Ctrl+C; valem entre fluxos enquanto o app estiver aberto. */
+let clipboard: { nodes: CanvasNode[]; edges: Edge[] } | undefined
+
 function Editor({ flow }: { flow: Flow }) {
   const app = useApp()
   const rf = useReactFlow()
@@ -226,6 +229,70 @@ function Editor({ flow }: { flow: Flow }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [menu])
 
+  // Copiar e colar caixinhas: as cópias ganham ids novos (inclusive as opções das decisões) e as ligações
+  // entre as caixinhas copiadas vêm junto. Cada colagem seguida desloca um pouco mais.
+  const pasteCount = useRef(0)
+  const paste = () => {
+    if (!clipboard) return
+    const shift = 40 * ++pasteCount.current
+    const ids = new Map<string, string>()
+    const handles = new Map<string, string>()
+    const fresh: CanvasNode[] = clipboard.nodes.map((n) => {
+      const id = uid()
+      ids.set(n.id, id)
+      const { status: _status, ...data } = n.data
+      const options = data.options?.map((o) => {
+        const optionId = uid()
+        handles.set(o.id, optionId)
+        return { ...o, id: optionId }
+      })
+      return {
+        ...n,
+        id,
+        position: { x: n.position.x + shift, y: n.position.y + shift },
+        data: { ...data, ...(options ? { options } : {}) } as CanvasNode['data'],
+        selected: true
+      }
+    })
+    const freshEdges: Edge[] = clipboard.edges.map((e) => ({
+      ...e,
+      id: uid(),
+      source: ids.get(e.source)!,
+      target: ids.get(e.target)!,
+      sourceHandle: e.sourceHandle ? (handles.get(e.sourceHandle) ?? e.sourceHandle) : e.sourceHandle,
+      selected: false
+    }))
+    setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), ...fresh])
+    setEdges((es) => [...es, ...freshEdges])
+    if (fresh.length === 1) {
+      setSelectedId(fresh[0].id)
+      openPanel('node')
+    }
+  }
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return
+      // Em campos de texto (ou com texto selecionado) o copiar/colar normal continua valendo.
+      if ((e.target as HTMLElement).closest('input, textarea, select, [contenteditable="true"]')) return
+      if (window.getSelection()?.toString()) return
+      const key = e.key.toLowerCase()
+      if (key === 'c') {
+        const picked = nodes.filter((n) => n.type !== 'trigger' && (n.selected || n.id === selectedId))
+        if (!picked.length) return
+        const picks = new Set(picked.map((n) => n.id))
+        clipboard = { nodes: picked, edges: edges.filter((ed) => picks.has(ed.source) && picks.has(ed.target)) }
+        pasteCount.current = 0
+        e.preventDefault()
+      } else if (key === 'v' && clipboard) {
+        e.preventDefault()
+        paste()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
   const selected = nodes.find((n) => n.id === selectedId)
   const patchSelected = (patch: Partial<FlowNodeData>) => {
     setNodes((ns) => ns.map((n) => (n.id === selectedId ? { ...n, data: { ...n.data, ...patch } } : n)))
@@ -328,11 +395,14 @@ function Editor({ flow }: { flow: Flow }) {
             onConnectEnd={onConnectEnd}
             isValidConnection={isValidConnection}
             onNodeClick={(_, n) => {
+              // Tira o foco do painel: senão Cmd+C/Cmd+V continuariam indo para o campo de texto.
+              ;(document.activeElement as HTMLElement | null)?.blur()
               setSelectedId(n.id)
               setMenu(undefined)
               openPanel('node')
             }}
             onPaneClick={() => {
+              ;(document.activeElement as HTMLElement | null)?.blur()
               setSelectedId(undefined)
               setMenu(undefined)
               setPanelOpen(false)
@@ -389,7 +459,7 @@ function Editor({ flow }: { flow: Flow }) {
             </div>
           )}
           <p className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 text-[12px] text-muted">
-            Arraste de uma bolinha até outra caixinha para ligar, ou solte no vazio para criar · Backspace remove
+            Arraste de uma bolinha até outra caixinha para ligar, ou solte no vazio para criar · ⌘C ⌘V duplica · Backspace remove
           </p>
         </div>
 

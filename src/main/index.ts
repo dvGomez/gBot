@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, nativeTheme, shell } from 'electron'
 import { startScheduler } from './flows/scheduler'
@@ -52,7 +53,8 @@ app.whenReady().then(() => {
   // O gBot só tem tema escuro: menus e diálogos nativos acompanham.
   nativeTheme.themeSource = 'dark'
   // No app instalado o ícone vem do pacote; em dev, o Dock mostraria o ícone do Electron.
-  if (!app.isPackaged) app.dock?.setIcon(join(app.getAppPath(), 'build/icon.png'))
+  const devIcon = join(app.getAppPath(), 'build/icon.png')
+  if (!app.isPackaged && existsSync(devIcon)) app.dock?.setIcon(devIcon)
   registerIpc()
   createWindow()
   createTray(openWindow)
