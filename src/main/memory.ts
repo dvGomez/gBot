@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow } from 'electron'
 import type { Lesson, MemoryOwner } from '@shared/types'
@@ -11,10 +11,28 @@ import type { Lesson, MemoryOwner } from '@shared/types'
 const MAX_IN_PROMPT = 30
 const LIMITS = { title: 70, when: 140, steps: 500, why: 200 }
 
-function file(owner: MemoryOwner) {
+function memoryDir() {
   const dir = join(app.getPath('userData'), 'data', 'memory')
   mkdirSync(dir, { recursive: true })
-  return join(dir, `${owner.kind}-${owner.id.replace(/[^a-zA-Z0-9-]/g, '')}.json`)
+  return dir
+}
+
+function file(owner: MemoryOwner) {
+  return join(memoryDir(), `${owner.kind}-${owner.id.replace(/[^a-zA-Z0-9-]/g, '')}.json`)
+}
+
+/** Todas as lições de todos os bots e fluxos (para procurar de onde vem uma regra). */
+export function listAllLessons(): Lesson[] {
+  const out: Lesson[] = []
+  for (const f of readdirSync(memoryDir())) {
+    if (!f.endsWith('.json')) continue
+    try {
+      out.push(...(JSON.parse(readFileSync(join(memoryDir(), f), 'utf8')) as Lesson[]))
+    } catch {
+      // arquivo corrompido: ignora
+    }
+  }
+  return out.sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
 export function listLessons(owner: MemoryOwner): Lesson[] {
@@ -99,7 +117,7 @@ export function memoryPrompt(owner?: MemoryOwner): string[] {
   if (!lessons.length) return [intro]
   return [
     intro,
-    'Procedimentos que você já aprendeu (siga-os quando a situação combinar):',
+    'Procedimentos que você já aprendeu (siga-os quando a situação combinar; ao seguir um, cite o título entre aspas para o usuário saber de onde veio):',
     '<memoria>',
     ...lessons.map((l) => `- ${l.title} | quando: ${l.when} | passos: ${l.steps.replace(/\n+/g, ' / ')}`),
     '</memoria>'

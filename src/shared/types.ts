@@ -97,16 +97,28 @@ export interface ChatMessage {
   tools?: ToolActivity[]
   /** Avisos curtos sobre a resposta (permissão negada, nova tentativa...). */
   notices?: string[]
-  /** Arquivos criados ou alterados na pasta de trabalho durante a resposta. */
+  /** Tokens que esta resposta gastou (sem as consultas a outros bots, que têm sessão própria). */
+  usage?: TokenUsage
+  /**
+   * Na resposta: arquivos criados ou alterados na pasta de trabalho durante ela.
+   * Na mensagem do usuário: os anexos que ele mandou.
+   */
   files?: ChatFile[]
+  /** Ordem em que texto e ferramentas aconteceram na resposta (mensagens antigas não têm). */
+  steps?: MessageStep[]
 }
 
-/** Arquivo gerado numa resposta (mostrado como anexo no chat). */
+/** Arquivo gerado numa resposta ou anexado pelo usuário (mostrado como anexo no chat). */
 export interface ChatFile {
   path: string
   name: string
   size: number
+  /** Miniatura (data URL) quando é uma imagem anexada. */
+  thumb?: string
 }
+
+/** Um trecho da resposta, na ordem em que aconteceu: texto escrito ou uma ferramenta usada. */
+export type MessageStep = { kind: 'text'; text: string } | { kind: 'tool'; id: string }
 
 /** Agrupa bots e conversas. Pasta e instruções são opcionais e podem ser definidas depois. */
 export interface Project {
@@ -176,6 +188,46 @@ export interface SendMessageRequest {
   memory?: MemoryOwner
   /** Mensagem disparada por um fluxo (para a memória registrar a origem). */
   origin?: { kind: 'flow'; id: string }
+  /** Arquivos que o usuário anexou nesta mensagem (já copiados para a pasta de anexos da conversa). */
+  attachments?: ChatFile[]
+}
+
+// ── Consumo de tokens ───────────────────────────────────────────────
+
+/**
+ * Tokens gastos numa resposta (ou a soma de várias). `cost` é o preço equivalente na API, em US$: na assinatura
+ * nada é cobrado, mas é a melhor medida do peso no limite (ler do cache custa bem menos que tokens novos).
+ */
+export interface TokenUsage {
+  /** Tokens novos de entrada (fora do cache). */
+  input: number
+  output: number
+  cacheRead: number
+  cacheWrite: number
+  cost: number
+}
+
+/** Um gasto registrado, com quem gastou. */
+export interface UsageRecord extends TokenUsage {
+  at: number
+  /**
+   * `conversation`: resposta numa conversa · `mention`: bot chamado com @ · `consult`: bot consultado por outro ·
+   * `flow`: caixinha de fluxo · `reflection`: registro automático de lição · `suggest`: sugestão de nome do bot
+   */
+  kind: 'conversation' | 'mention' | 'consult' | 'flow' | 'reflection' | 'suggest'
+  conversationId?: string
+  botId?: string
+  flowId?: string
+  /** Modelo que gastou (ex.: claude-sonnet-4-5-20250929). */
+  model?: string
+}
+
+export interface UsageSummary {
+  today: TokenUsage
+  /** Últimos 7 dias. */
+  week: TokenUsage
+  /** O que mais gastou nos últimos 7 dias (fluxo, senão bot, senão conversa), do maior para o menor. */
+  top: { kind: 'flow' | 'bot' | 'conversation'; id: string; usage: TokenUsage }[]
 }
 
 /** Eventos que um provedor emite enquanto responde. */
@@ -185,6 +237,7 @@ export type ChatEvent =
   | { type: 'tool'; tool: ToolActivity }
   | { type: 'notice'; text: string }
   | { type: 'files'; files: ChatFile[] }
+  | { type: 'usage'; usage: TokenUsage }
   | { type: 'done' }
   | { type: 'error'; message: string }
 
@@ -260,6 +313,16 @@ export interface Lesson {
   enabled: boolean
   createdAt: number
   updatedAt: number
+}
+
+/** Nota da memória automática do Claude Code (desligada no gBot; mostrada para apagar ou trazer para um bot). */
+export interface AutoMemoryNote {
+  path: string
+  name: string
+  description: string
+  body: string
+  /** Pasta de trabalho em que foi criada, como o Claude Code codifica (tudo que não é letra ou número vira "-"). */
+  folder: string
 }
 
 // ── Fluxos (canvas de automações) ───────────────────────────────────
@@ -360,6 +423,8 @@ export interface FlowRunStep {
   notices?: string[]
   /** Na decisão: a opção escolhida. */
   chosen?: string
+  /** Tokens que a caixinha gastou. */
+  usage?: TokenUsage
   startedAt?: number
   finishedAt?: number
 }
@@ -425,6 +490,14 @@ export interface GbotApi {
     open(path: string): Promise<void>
     reveal(path: string): Promise<void>
   }
+  attachments: {
+    /** Copia arquivos (arrastados, colados ou escolhidos) para a pasta de anexos da conversa. */
+    add(conversationId: string, files: File[]): Promise<ChatFile[]>
+    /** Grava dados colados sem arquivo de origem (ex.: print copiado). */
+    addData(conversationId: string, name: string, data: Uint8Array): Promise<ChatFile[]>
+    /** Abre o seletor do sistema e copia o que for escolhido. */
+    pick(conversationId: string): Promise<ChatFile[]>
+  }
   browser: {
     list(): Promise<BrowserInfo[]>
     /** Abre (ou traz para frente) a janela do navegador do gBot. */
@@ -438,10 +511,24 @@ export interface GbotApi {
   }
   memory: {
     list(owner: MemoryOwner): Promise<Lesson[]>
+    /** Lições de todos os bots e fluxos. */
+    all(): Promise<Lesson[]>
+    /** Notas antigas da memória automática do Claude Code. */
+    autoNotes(): Promise<AutoMemoryNote[]>
+    removeAutoNote(path: string): Promise<void>
     save(lesson: Lesson): Promise<void>
     remove(owner: MemoryOwner, id: string): Promise<void>
     /** Avisa quando a memória de alguém mudou (ex.: um bot aprendeu algo durante uma conversa). */
     onChanged(listener: (owner: MemoryOwner) => void): () => void
+  }
+  usage: {
+    summary(): Promise<UsageSummary>
+    /** Total de uma conversa, incluindo bots consultados e chamados com @ nela. */
+    conversation(id: string): Promise<TokenUsage>
+    /** Registros desde `since` (ms), para a página de consumo. */
+    records(since: number): Promise<UsageRecord[]>
+    /** Avisa quando um gasto novo foi registrado. */
+    onChanged(listener: () => void): () => void
   }
   flows: {
     list(): Promise<Flow[]>

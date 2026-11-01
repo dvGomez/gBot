@@ -3,12 +3,15 @@ import type { SendMessageRequest } from '@shared/types'
 import type { ChatProvider } from '../types'
 import type { MemoryOwner } from '@shared/types'
 import { memoryPrompt } from '../../memory'
+import { attachmentsAccess, withAttachments } from '../../attachments'
 import { botFilesAccess, botFilesPrompt } from '../../botFiles'
 import { PERMISSIONS_HINT, sendToBot, TOOLS_HINT } from './bots'
 import { withOutputFiles } from './outputs'
 import { reflectIfNeeded } from './reflect'
 import { resolveClaudeEnv, runClaude } from './env'
 import { GBOT_TOOLS, mcpConfigFor, type CallerContext } from './mcp'
+import { askOnce } from './oneShot'
+import type { UsageTag } from './session'
 import { closeAllSessions, getSession, workContext, type WorkContext } from './sessions'
 
 interface AuthStatus {
@@ -57,8 +60,8 @@ export async function suggestBotIdentity(instructions: string): Promise<{ name: 
     '</instrucoes>',
     'Responda apenas com JSON no formato {"name": "...", "description": "..."}.'
   ].join('\n')
-  const out = await runClaude(['-p', prompt, '--model', 'haiku', '--tools', '', '--no-session-persistence'], 60_000)
-  const json = out.match(/\{[\s\S]*\}/)?.[0]
+  const { text } = await askOnce(prompt, 'haiku', { kind: 'suggest' }, 60_000)
+  const json = text.match(/\{[\s\S]*\}/)?.[0]
   if (!json) throw new Error('Não consegui sugerir agora.')
   const parsed = JSON.parse(json) as { name?: string; description?: string }
   return { name: String(parsed.name ?? '').slice(0, 40), description: String(parsed.description ?? '').slice(0, 140) }
@@ -141,8 +144,9 @@ export const claudeCodeProvider: ChatProvider = {
   },
 
   async send(req, emit, signal) {
+    const text = withAttachments(req.text, req.attachments)
     if (req.targetBotId) {
-      await sendToBot(req.conversationId, req.projectId, req.targetBotId, req.text, emit, signal, req.origin)
+      await sendToBot(req.conversationId, req.projectId, req.targetBotId, text, emit, signal, req.origin)
       return
     }
     let entry = mainContexts.get(req.conversationId)
@@ -161,18 +165,24 @@ export const claudeCodeProvider: ChatProvider = {
     entry.ctx.memory = memoryOf(req)
     entry.ctx.memorySource = req.origin ?? { kind: 'conversation', id: req.conversationId }
     const work = workContext(req.projectId)
-    const files = req.bot ? botFilesAccess(req.bot.id) : undefined
+    // Pastas extras que a sessão pode ler: arquivos de referência do bot e anexos da conversa.
+    const files = req.bot ? botFilesAccess(req.bot.id) : { addDirs: [], allowedTools: [] }
+    const attached = attachmentsAccess(req.conversationId)
     const session = await getSession({
       key: req.conversationId,
       sessionId: req.conversationId,
       cwd: work.cwd,
       systemPrompt: systemPrompt(req, work),
       mcpConfig: entry.config,
-      allowedTools: [...GBOT_TOOLS, ...(files?.allowedTools ?? [])],
-      addDirs: files?.addDirs,
+      allowedTools: [...GBOT_TOOLS, ...files.allowedTools, ...attached.allowedTools],
+      addDirs: [...files.addDirs, ...attached.addDirs],
       model: req.model
     })
-    await session.send(req.text, withOutputFiles(work.cwd, emit), signal)
+    const tag: UsageTag =
+      req.origin?.kind === 'flow'
+        ? { kind: 'flow', flowId: req.origin.id, botId: req.bot?.id }
+        : { kind: 'conversation', conversationId: req.conversationId, botId: req.bot?.id }
+    await session.send(text, withOutputFiles(work.cwd, emit), signal, tag)
     reflectIfNeeded(session, entry.ctx.memory)
   }
 }

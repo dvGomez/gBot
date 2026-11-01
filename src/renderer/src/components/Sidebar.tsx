@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from 'react'
-import { Bot as BotIcon, FolderPlus, House, MessageSquarePlus, Pencil, Plug, Plus, Settings, Trash2, Workflow } from 'lucide-react'
+import { Bot as BotIcon, Brain, ChartColumn, FolderPlus, House, MessageSquarePlus, Pencil, Plug, Plus, Settings, Trash2, Workflow } from 'lucide-react'
 import type { Project } from '@shared/types'
 import { cn } from '@/lib/cn'
 import { draggable, useDrop, type ItemRef } from '@/lib/dnd'
@@ -229,6 +229,8 @@ export function Sidebar() {
         </Section>
 
         <Section title="Sistema">
+          <NavItem icon={Brain} label="Regras e memória" active={app.view === 'memory'} onClick={() => app.openMemory()} />
+          <NavItem icon={ChartColumn} label="Consumo" active={app.view === 'usage'} onClick={go('usage')} />
           <NavItem icon={Plug} label="Provedores" active={app.view === 'providers'} onClick={go('providers')} />
           <NavItem icon={Settings} label="Configurações" active={app.view === 'settings'} onClick={go('settings')} />
         </Section>

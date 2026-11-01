@@ -1,8 +1,11 @@
 import { useState } from 'react'
-import { Check, ChevronDown, CircleSlash, LoaderCircle, X } from 'lucide-react'
-import type { FlowRun, FlowStepStatus } from '@shared/types'
+import { Check, ChevronDown, CircleSlash, LoaderCircle, Search, X } from 'lucide-react'
+import type { FlowRun, FlowStepStatus, TokenUsage } from '@shared/types'
+import { addUsage, totalTokens } from '@shared/usage'
 import { Markdown } from '@/components/Markdown'
 import { cn } from '@/lib/cn'
+import { formatTokens, usageDetail } from '@/lib/format'
+import { useApp } from '@/state/app'
 
 function StepIcon({ status }: { status: FlowStepStatus | FlowRun['status'] }) {
   if (status === 'running') return <LoaderCircle size={14} className="shrink-0 animate-spin text-warning" />
@@ -16,6 +19,15 @@ function when(ts: number) {
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(ts)
 }
 
+function Tokens({ usage, className }: { usage?: TokenUsage; className?: string }) {
+  if (!usage || !totalTokens(usage)) return null
+  return (
+    <span className={cn('shrink-0 text-[11.5px] font-normal text-muted', className)} title={usageDetail(usage)}>
+      {formatTokens(totalTokens(usage))} tokens
+    </span>
+  )
+}
+
 function duration(run: FlowRun) {
   const ms = (run.finishedAt ?? Date.now()) - run.startedAt
   return ms < 60_000 ? `${Math.round(ms / 1000)} s` : `${Math.round(ms / 60_000)} min`
@@ -23,6 +35,7 @@ function duration(run: FlowRun) {
 
 /** Execuções do fluxo, mais recentes primeiro; cada uma abre com o resultado de cada caixinha. */
 export function RunHistory({ runs }: { runs: FlowRun[] }) {
+  const app = useApp()
   const [open, setOpen] = useState<string | undefined>(runs[0]?.id)
   if (!runs.length) return <p className="text-[13px] text-muted">Nenhuma execução ainda. Use "Rodar agora" para testar.</p>
 
@@ -38,14 +51,23 @@ export function RunHistory({ runs }: { runs: FlowRun[] }) {
                 {run.trigger === 'manual' ? 'Manual' : 'Agendada'} · {duration(run)}
               </span>
             </span>
+            <Tokens usage={run.steps.reduce<TokenUsage | undefined>((sum, s) => (s.usage ? addUsage(sum, s.usage) : sum), undefined)} />
             <ChevronDown size={14} className={cn('text-muted transition-transform', open === run.id && 'rotate-180')} />
           </button>
           {open === run.id && (
             <div className="space-y-3 border-t border-line px-3 py-3">
+              <button
+                onClick={() => app.openMemory({ flowId: run.flowId })}
+                className="flex items-center gap-1.5 text-[12px] text-muted hover:text-fg"
+                title="Lições aprendidas e instruções do fluxo e dos bots dele"
+              >
+                <Search size={12} /> Alguma resposta citou uma regra? Ver de onde ela vem
+              </button>
               {run.steps.map((s, i) => (
                 <div key={`${s.nodeId}-${i}`}>
                   <p className="flex items-center gap-2 text-[13px] font-medium">
-                    <StepIcon status={s.status} /> {s.label}
+                    <StepIcon status={s.status} /> <span className="min-w-0 flex-1 truncate">{s.label}</span>
+                    <Tokens usage={s.usage} />
                   </p>
                   {s.chosen && <p className="mt-1 pl-5 text-[12px] text-warning">Escolheu: {s.chosen}</p>}
                   {s.error && (

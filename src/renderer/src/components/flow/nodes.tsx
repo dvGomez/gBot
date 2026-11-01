@@ -130,7 +130,9 @@ export function DecisionNode({ data, selected }: NodeProps<CanvasNode>) {
           <p className="truncate text-[14px] font-semibold">{data.label || 'Decisão'}</p>
           <p className="truncate text-[12px] text-muted">
             {provider?.name ?? 'Provedor'}
-            {provider?.models?.length ? ` · ${modelLabel(provider.models, data.model)}` : ''}
+            {provider?.models?.length
+              ? ` · ${!data.model && provider.id === 'claude-code' ? 'Haiku' : modelLabel(provider.models, data.model)}`
+              : ''}
           </p>
         </div>
       </div>

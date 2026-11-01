@@ -1,6 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import type { ChatEvent } from '@shared/types'
+import type { ChatEvent, TokenUsage, UsageRecord } from '@shared/types'
+import { addUsage, emptyUsage, totalTokens } from '@shared/usage'
+import { recordUsage } from '../../usage'
 import { APPROVE_TOOL } from './permissions'
 import { ASK_BOT_TOOL, describeTool, HIDDEN_TOOLS } from './tools'
 
@@ -21,8 +23,12 @@ export interface SessionOptions {
   addDirs?: string[]
 }
 
+/** Quem está gastando num turno (para o registro de consumo). */
+export type UsageTag = Omit<UsageRecord, keyof TokenUsage | 'at' | 'model'>
+
 interface Turn {
   emit(event: ChatEvent): void
+  tag?: UsageTag
   done(): void
   interrupted: boolean
   hasText: boolean
@@ -54,6 +60,62 @@ type Line = {
   attempt?: number
   max_retries?: number
   permission_denials?: { tool_name: string }[]
+  modelUsage?: Record<
+    string,
+    {
+      inputTokens?: number
+      outputTokens?: number
+      cacheReadInputTokens?: number
+      cacheCreationInputTokens?: number
+      costUSD?: number
+    }
+  >
+}
+
+/**
+ * Consumo acumulado do processo até aqui, por modelo. No modo stream-json o `modelUsage` do resultado soma todos os
+ * turnos do processo (e todos os modelos, inclusive subagentes); o gasto do turno é a diferença entre dois resultados.
+ */
+export function usageByModel(line: Pick<Line, 'modelUsage'>): Map<string, TokenUsage> {
+  const out = new Map<string, TokenUsage>()
+  for (const [model, m] of Object.entries(line.modelUsage ?? {})) {
+    out.set(model, {
+      input: m.inputTokens ?? 0,
+      output: m.outputTokens ?? 0,
+      cacheRead: m.cacheReadInputTokens ?? 0,
+      cacheWrite: m.cacheCreationInputTokens ?? 0,
+      cost: m.costUSD ?? 0
+    })
+  }
+  return out
+}
+
+/** Diferença entre dois acumulados por modelo (só os modelos que gastaram algo). */
+function usageDelta(now: Map<string, TokenUsage>, before: Map<string, TokenUsage>): Map<string, TokenUsage> {
+  const out = new Map<string, TokenUsage>()
+  for (const [model, u] of now) {
+    const b = before.get(model) ?? emptyUsage()
+    const d = {
+      input: u.input - b.input,
+      output: u.output - b.output,
+      cacheRead: u.cacheRead - b.cacheRead,
+      cacheWrite: u.cacheWrite - b.cacheWrite,
+      cost: Math.max(0, u.cost - b.cost)
+    }
+    if (totalTokens(d) > 0) out.set(model, d)
+  }
+  return out
+}
+
+/** Registra o gasto de um turno, um registro por modelo, e devolve o total. */
+export function recordTurn(byModel: Map<string, TokenUsage>, tag?: UsageTag): TokenUsage {
+  let total = emptyUsage()
+  const at = Date.now()
+  for (const [model, u] of byModel) {
+    total = addUsage(total, u)
+    if (tag) recordUsage({ ...tag, ...u, model, at })
+  }
+  return total
 }
 
 /**
@@ -71,6 +133,8 @@ export class ClaudeSession {
   lastTurnFailed = false
   /** Turnos entram em fila: uma mensagem nova espera a anterior (inclusive a reflexão automática). */
   private queue: Promise<unknown> = Promise.resolve()
+  /** Consumo acumulado do processo no último resultado, por modelo. */
+  private spent = new Map<string, TokenUsage>()
 
   constructor(private opts: SessionOptions) {
     const args = [
@@ -107,8 +171,8 @@ export class ClaudeSession {
     return !!this.turn
   }
 
-  /** Envia uma mensagem (depois da anterior, se houver) e resolve quando o turno termina. */
-  send(text: string, emit: (event: ChatEvent) => void, signal: AbortSignal): Promise<void> {
+  /** Envia uma mensagem (depois da anterior, se houver) e resolve quando o turno termina; `tag` registra o consumo. */
+  send(text: string, emit: (event: ChatEvent) => void, signal: AbortSignal, tag?: UsageTag): Promise<void> {
     const run = () =>
       new Promise<void>((resolve) => {
         if (this.exited || signal.aborted) {
@@ -117,7 +181,7 @@ export class ClaudeSession {
         }
         this.lastUsed = Date.now()
         this.lastTurnFailed = false
-        this.turn = { emit, done: resolve, interrupted: false, hasText: false, tools: new Map() }
+        this.turn = { emit, tag, done: resolve, interrupted: false, hasText: false, tools: new Map() }
         signal.addEventListener('abort', () => this.interrupt(), { once: true })
         emit({ type: 'mood', mood: 'thinking' })
         this.write({ type: 'user', message: { role: 'user', content: text } })
@@ -239,6 +303,10 @@ export class ClaudeSession {
         break
 
       case 'result': {
+        const now = usageByModel(line)
+        const usage = recordTurn(usageDelta(now, this.spent), turn.tag)
+        this.spent = now
+        if (totalTokens(usage) > 0) emit({ type: 'usage', usage })
         const denied = [...new Set((line.permission_denials ?? []).map((d) => d.tool_name))]
         if (denied.length) this.lastTurnFailed = true
         if (denied.length) {

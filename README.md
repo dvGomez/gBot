@@ -191,6 +191,16 @@ Claude Code runs with `--permission-mode acceptEdits` and `--permission-prompt-t
   The list lives in Settings → Commands and files, where it can be cleared.
 - Settings also has **Allow commands without asking** (off by default) for people who prefer no prompts at all.
 
+### Chat attachments and live steps
+
+- **Attachments:** the paperclip button, drag and drop or ⌘V (pasted screenshots too) copy files into
+  `data/attachments/<chat>/`. The chat's session, and any bot called in it, gets read access to that folder
+  (`--add-dir` + a `Read` allow rule) and the message lists the files, so Claude reads text, PDFs and images as needed.
+  Images get a small thumbnail (made with `nativeImage`) saved with the message. Deleting the chat deletes them.
+- **Live steps:** replies keep the order in which things happened (`ChatMessage.steps`: text, tools, more text), so
+  tool calls show up in the flow of the conversation instead of grouped at the top. While a reply is running, a status
+  line says what's going on: "Pensando…", "Trabalhando: <tool>…", "Escrevendo…" or "Esperando sua aprovação…".
+
 ### Generated files
 
 When a reply ends, gBot looks for files created or changed in the working folder during it (up to two subfolders

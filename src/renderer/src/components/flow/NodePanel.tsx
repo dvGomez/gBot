@@ -187,7 +187,8 @@ export function NodePanel({
                 >
                   {provider.models.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.label}
+                      {/* No Claude Code a decisão usa o Haiku por padrão: é só escolher um número. */}
+                      {m.id === 'default' && provider.id === 'claude-code' ? 'Padrão (Haiku)' : m.label}
                     </option>
                   ))}
                 </select>

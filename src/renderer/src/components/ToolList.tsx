@@ -8,7 +8,7 @@ import { Markdown } from './Markdown'
 import { PixelAvatar } from './PixelAvatar'
 
 /** Ferramentas internas do Claude Code (mensagens antigas ainda podem tê-las salvas). */
-const HIDDEN = new Set(['ToolSearch'])
+export const HIDDEN_TOOLS = new Set(['ToolSearch'])
 
 function StatusIcon({ status }: { status: ToolActivity['status'] }) {
   if (status === 'running') return <LoaderCircle size={12} className="shrink-0 animate-spin text-muted" />
@@ -16,17 +16,20 @@ function StatusIcon({ status }: { status: ToolActivity['status'] }) {
   return <X size={12} strokeWidth={2.5} className="shrink-0 text-danger" />
 }
 
-/** Ferramentas usadas na resposta. Consultas a bots mostram o avatar e abrem a resposta do bot ao clicar. */
-export function ToolList({ tools }: { tools: ToolActivity[] }) {
+/**
+ * Ferramentas usadas na resposta. Consultas a bots mostram o avatar e abrem a resposta do bot ao clicar.
+ * `stacked`: uma embaixo da outra, como passos no meio da conversa.
+ */
+export function ToolList({ tools, stacked }: { tools: ToolActivity[]; stacked?: boolean }) {
   const app = useApp()
   const [open, setOpen] = useState<string>()
   const opened = tools.find((t) => t.id === open && t.detail)
-  const visible = tools.filter((t) => !HIDDEN.has(t.name))
+  const visible = tools.filter((t) => !HIDDEN_TOOLS.has(t.name))
   if (!visible.length) return null
 
   return (
-    <div className="mb-3">
-      <div className="flex flex-wrap gap-1.5">
+    <div className={stacked ? 'my-2' : 'mb-3'}>
+      <div className={stacked ? 'flex flex-col items-start gap-1.5' : 'flex flex-wrap gap-1.5'}>
         {visible.map((t) => {
           const bot = t.botName ? botByName(app.bots, t.botName) : undefined
           const expandable = !!t.detail

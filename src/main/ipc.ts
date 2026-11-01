@@ -13,10 +13,13 @@ import type {
   Project,
   SendMessageRequest
 } from '@shared/types'
+import { saveAttachments } from './attachments'
 import { addBotFiles, botFilesDir, listBotFiles, removeBotFile, setBotFileNote } from './botFiles'
 import { cancelBotTask, listBotTasks, runAsBot, waitNotice } from './botQueue'
 import { runFlow } from './flows/runner'
-import { listLessons, removeLesson, saveLesson } from './memory'
+import { listAllLessons, listLessons, removeLesson, saveLesson } from './memory'
+import { listAutoMemory, removeAutoMemory } from './providers/claude-code/autoMemory'
+import { conversationUsage, pruneUsage, usageRecords, usageSummary } from './usage'
 import * as flows from './flows/store'
 import { respondApproval } from './approvals'
 import { listBrowsers } from './browser/browsers'
@@ -34,6 +37,9 @@ function emitTo(sender: WebContents, requestId: string, event: ChatEvent) {
 
 export function registerIpc() {
   ipcMain.handle('memory:list', (_e, owner: MemoryOwner) => listLessons(owner))
+  ipcMain.handle('memory:all', () => listAllLessons())
+  ipcMain.handle('memory:autoNotes', () => listAutoMemory())
+  ipcMain.handle('memory:removeAutoNote', (_e, path: string) => removeAutoMemory(path))
   ipcMain.handle('memory:save', (_e, lesson: Lesson) => saveLesson(lesson))
   ipcMain.handle('memory:remove', (_e, owner: MemoryOwner, id: string) => removeLesson(owner, id))
 
@@ -41,6 +47,10 @@ export function registerIpc() {
   ipcMain.handle('flows:save', (_e, flow: Flow) => flows.saveFlow(flow))
   ipcMain.handle('flows:remove', (_e, id: string) => flows.removeFlow(id))
   ipcMain.handle('flows:runs', (_e, flowId: string) => flows.listRuns(flowId))
+  pruneUsage()
+  ipcMain.handle('usage:summary', () => usageSummary())
+  ipcMain.handle('usage:conversation', (_e, id: string) => conversationUsage(id))
+  ipcMain.handle('usage:records', (_e, since: number) => usageRecords(since))
   ipcMain.handle('flows:run', (_e, id: string) => {
     const flow = flows.getFlow(id)
     if (!flow) throw new Error('Fluxo não encontrado.')
@@ -88,6 +98,16 @@ export function registerIpc() {
     }
   })
   ipcMain.handle('files:reveal', (_e, path: string) => shell.showItemInFolder(path))
+  ipcMain.handle('attachments:add', (_e, conversationId: string, items: { name: string; path?: string; data?: Uint8Array }[]) =>
+    saveAttachments(conversationId, items.filter((i) => i.path || i.data))
+  )
+  ipcMain.handle('attachments:pick', async (e, conversationId: string) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    const options: Electron.OpenDialogOptions = { title: 'Anexar arquivos', buttonLabel: 'Anexar', properties: ['openFile', 'multiSelections'] }
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+    if (result.canceled) return []
+    return saveAttachments(conversationId, result.filePaths.map((path) => ({ name: basename(path), path })))
+  })
   ipcMain.handle('bots:add-files', async (e, botId: string, paths?: string[]) => {
     if (!paths) {
       const win = BrowserWindow.fromWebContents(e.sender)

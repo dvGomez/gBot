@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { BrowserWindow } from 'electron'
-import type { ChatEvent, Flow, FlowEdge, FlowNode, FlowRun, FlowRunStep, SendMessageRequest } from '@shared/types'
+import type { ChatEvent, Flow, FlowEdge, FlowNode, FlowRun, FlowRunStep, SendMessageRequest, TokenUsage } from '@shared/types'
+import { addUsage } from '@shared/usage'
+import { askOnce } from '../providers/claude-code/oneShot'
 import { stableUuid } from '../providers/claude-code/sessions'
 import { runAsBot, waitNotice } from '../botQueue'
 import { getProvider } from '../providers/registry'
@@ -133,6 +135,7 @@ async function execute(
   node: FlowNode,
   inputs: string[],
   onNotice: (text: string) => void,
+  onUsage: (usage: TokenUsage) => void,
   context: string,
   textOverride?: string
 ): Promise<string> {
@@ -174,6 +177,7 @@ async function execute(
     if (ev.type === 'delta') out += ev.text
     if (ev.type === 'error') error = ev.message
     if (ev.type === 'notice') onNotice(ev.text)
+    if (ev.type === 'usage') onUsage(ev.usage)
   }
   // O limite de tempo só começa quando a caixinha começa de fato (depois da fila do bot, se houver).
   const run = async (stop: AbortSignal) => {
@@ -205,6 +209,8 @@ const joinInputs = (inputs: string[]) =>
 /**
  * Caixinha de decisão: um modelo lê o resultado anterior e escolhe uma das opções (responde só o número).
  * O resultado anterior passa adiante sem mudar, para o ramo escolhido continuar dali.
+ * No Claude Code a escolha é uma pergunta avulsa, sem ferramentas e no Haiku (se outro modelo não for escolhido):
+ * responder um número não precisa de uma sessão inteira.
  */
 async function decide(
   runId: string,
@@ -212,6 +218,7 @@ async function decide(
   node: FlowNode,
   inputs: string[],
   onNotice: (text: string) => void,
+  onUsage: (usage: TokenUsage) => void,
   context: string
 ): Promise<{ optionId: string; label: string }> {
   const options = (node.data.options ?? []).filter((o) => o.label.trim())
@@ -228,7 +235,15 @@ async function decide(
   ]
     .filter(Boolean)
     .join('\n')
-  const answer = await execute(runId, flow, node, inputs, onNotice, context, prompt)
+  const providerId = node.data.providerId ?? 'claude-code'
+  let answer: string
+  if (providerId === 'claude-code') {
+    const res = await askOnce(prompt, node.data.model ?? 'haiku', { kind: 'flow', flowId: flow.id }, STEP_TIMEOUT_MS)
+    onUsage(res.usage)
+    answer = res.text
+  } else {
+    answer = await execute(runId, flow, node, inputs, onNotice, onUsage, context, prompt)
+  }
   const n = Number(answer.match(/\d+/)?.[0])
   const chosen = options[n - 1]
   if (!chosen) throw new Error(`Não consegui entender a escolha ("${answer.slice(0, 60)}").`)
@@ -314,15 +329,18 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
             s.notices = [...(s.notices ?? []), text]
             publish(run)
           }
+          const onUsage = (usage: TokenUsage) => {
+            s.usage = addUsage(s.usage, usage)
+          }
           try {
             if (node.type === 'decision') {
-              const choice = await decide(run.id, flow, node, inputs, onNotice, context)
+              const choice = await decide(run.id, flow, node, inputs, onNotice, onUsage, context)
               Object.assign(s, { status: 'done', chosen: choice.label, finishedAt: Date.now() })
               publish(run)
               const own = { nodeId: node.id, label, chosen: choice.label }
               return { kind: 'ok', output: joinInputs(inputs), chosen: choice.optionId, trail: [...trail, own] }
             }
-            const output = await execute(run.id, flow, node, inputs, onNotice, context)
+            const output = await execute(run.id, flow, node, inputs, onNotice, onUsage, context)
             Object.assign(s, { status: 'done', output, finishedAt: Date.now() })
             publish(run)
             const own = { nodeId: node.id, label, ask: node.data.message, output }

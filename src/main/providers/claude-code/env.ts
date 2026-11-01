@@ -22,6 +22,12 @@ export function profileDir(): string {
   return dir
 }
 
+/*
+ * `CLAUDE_CODE_DISABLE_AUTO_MEMORY`: a memória automática do Claude Code fica numa pasta por diretório de trabalho e
+ * vale para TODOS os bots que trabalham ali, sem aparecer no gBot. O gBot tem a própria memória, por bot e por fluxo,
+ * visível e editável; por isso a do Claude Code fica desligada.
+ */
+
 /**
  * Variáveis herdadas que mudariam a conta usada (`ANTHROPIC_*`) ou que sessões do Claude Code injetam
  * nos processos filhos (`CLAUDE*`). O gBot nunca as repassa.
@@ -51,6 +57,7 @@ export function resolveClaudeEnv(): Promise<ClaudeEnv> {
       const env: NodeJS.ProcessEnv = {}
       for (const [k, v] of Object.entries(process.env)) if (!INHERITED_AUTH.test(k)) env[k] = v
       env.CLAUDE_CONFIG_DIR = profileDir()
+      env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = '1'
       return { bin, env }
     }
     let bin = ''
@@ -67,6 +74,7 @@ export function resolveClaudeEnv(): Promise<ClaudeEnv> {
     for (const [k, v] of Object.entries(process.env)) if (!INHERITED_AUTH.test(k)) env[k] = v
     env.PATH = path || [join(homedir(), '.local/bin'), ...FALLBACK_PATH].join(':')
     env.CLAUDE_CONFIG_DIR = profileDir()
+    env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = '1'
     return { bin, env }
   })()
   cached.catch(() => (cached = undefined))
@@ -74,10 +82,10 @@ export function resolveClaudeEnv(): Promise<ClaudeEnv> {
 }
 
 /** Roda um subcomando curto do Claude Code (ex.: `--version`, `auth status`) no perfil do gBot. */
-export async function runClaude(args: string[], timeoutMs = 15_000): Promise<string> {
+export async function runClaude(args: string[], timeoutMs = 15_000, cwd?: string): Promise<string> {
   const { bin, env } = await resolveClaudeEnv()
   return new Promise((resolve, reject) => {
-    execFile(bin, args, { env, timeout: timeoutMs }, (error, stdout, stderr) => {
+    execFile(bin, args, { env, cwd, timeout: timeoutMs }, (error, stdout, stderr) => {
       if (error && !stdout) reject(new Error(stderr.trim() || error.message))
       else resolve(stdout.trim())
     })

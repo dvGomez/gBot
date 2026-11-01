@@ -5,6 +5,7 @@ import type {
   AvatarDef,
   AvatarMood,
   Bot,
+  ChatFile,
   ChatMessage,
   Conversation,
   ConversationMeta,
@@ -13,6 +14,7 @@ import type {
   ProviderInfo,
   ProviderModel
 } from '@shared/types'
+import { addUsage } from '@shared/usage'
 import type { ItemRef } from '@/lib/dnd'
 import { uid } from '@/lib/format'
 import { findMention } from '@/lib/mentions'
@@ -27,7 +29,15 @@ export type View =
   | 'project-editor'
   | 'flow-editor'
   | 'providers'
+  | 'usage'
+  | 'memory'
   | 'settings'
+
+/** Recorte da página de regras e memória: um fluxo (com os bots dele) ou um bot. */
+export interface MemoryScope {
+  flowId?: string
+  botId?: string
+}
 
 interface Pending {
   requestId: string
@@ -38,6 +48,9 @@ interface Pending {
 interface AppState {
   view: View
   setView(v: View): void
+  /** Abre a página de regras e memória, já recortada num fluxo ou bot se informado. */
+  openMemory(scope?: MemoryScope): void
+  memoryScope: MemoryScope
   /** Provedor em uso (o escolhido, ou o primeiro pronto se o escolhido não estiver). */
   providerId: string
   /** Provedor que o usuário escolheu, mesmo que ainda não esteja pronto. */
@@ -109,7 +122,9 @@ interface AppState {
   respondApproval(id: string, decision: ApprovalDecision): void
   mood: AvatarMood
   busy: boolean
-  send(text: string): void
+  /** Conversa que vai receber a próxima mensagem (a aberta ou a nova, que ganha este id ao enviar). */
+  composeConversationId: string
+  send(text: string, attachments?: ChatFile[]): void
   cancel(): void
 }
 
@@ -137,6 +152,7 @@ function withMentionContext(conversation: Conversation, text: string, bots: Bot[
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [view, setView] = useState<View>('home')
+  const [memoryScope, setMemoryScope] = useState<MemoryScope>({})
   const [providerId, setProviderIdState] = useState(() => load('providerId', 'claude-code'))
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [providersLoaded, setProvidersLoaded] = useState(false)
@@ -156,6 +172,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [draftBotId, setDraftBotId] = useState<string>()
   const [draftProjectId, setDraftProjectId] = useState<string>()
   const [draftModel, setDraftModel] = useState<string>()
+  // Id da próxima conversa nova: os anexos escolhidos antes da primeira mensagem já vão para a pasta dela.
+  const [draftConversationId, setDraftConversationId] = useState(uid)
 
   const [mood, setMood] = useState<AvatarMood>('idle')
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([])
@@ -256,13 +274,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setMood(event.mood)
           break
         case 'delta':
-          patchMessage(p.conversationId, p.messageId, (m) => ({ ...m, text: m.text + event.text }))
+          patchMessage(p.conversationId, p.messageId, (m) => {
+            // Texto e ferramentas ficam na ordem em que acontecem (steps); o texto inteiro continua em `text`.
+            const steps = m.steps ?? []
+            const last = steps.at(-1)
+            return {
+              ...m,
+              text: m.text + event.text,
+              steps: last?.kind === 'text' ? [...steps.slice(0, -1), { kind: 'text', text: last.text + event.text }] : [...steps, { kind: 'text', text: event.text }]
+            }
+          })
           break
         case 'tool':
           patchMessage(p.conversationId, p.messageId, (m) => {
             const tools = m.tools ?? []
             const i = tools.findIndex((t) => t.id === event.tool.id)
-            return { ...m, tools: i < 0 ? [...tools, event.tool] : tools.map((t, j) => (j === i ? event.tool : t)) }
+            if (i >= 0) return { ...m, tools: tools.map((t, j) => (j === i ? event.tool : t)) }
+            return { ...m, tools: [...tools, event.tool], steps: [...(m.steps ?? []), { kind: 'tool', id: event.tool.id }] }
           })
           break
         case 'files':
@@ -270,6 +298,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
             const known = new Set(event.files.map((f) => f.path))
             return { ...m, files: [...(m.files ?? []).filter((f) => !known.has(f.path)), ...event.files] }
           })
+          break
+        case 'usage':
+          patchMessage(p.conversationId, p.messageId, (m) => ({ ...m, usage: addUsage(m.usage, event.usage) }))
           break
         case 'notice':
           noticed.current = true
@@ -303,13 +334,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [patchMessage, settleMood])
 
   const send = useCallback(
-    (raw: string) => {
-      const text = raw.trim()
-      if (!text || pendingRef.current) return
+    (raw: string, attachments?: ChatFile[]) => {
+      const typed = raw.trim()
+      if ((!typed && !attachments?.length) || pendingRef.current) return
+      const text = typed || (attachments!.length === 1 ? `Veja o anexo ${attachments![0].name}.` : 'Veja os anexos.')
 
       const now = Date.now()
       const conversation: Conversation = activeConversation ?? {
-        id: uid(),
+        id: draftConversationId,
         title: text.slice(0, 48),
         botId: draftBotId,
         projectId: draftProjectId,
@@ -324,7 +356,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const mentioned = findMention(text, visibleBots)
       const target = mentioned && mentioned.id !== conversation.botId ? mentioned : undefined
       const history = conversation.messages.filter((m) => !m.error).map(({ role, text }) => ({ role, text }))
-      const userMsg: ChatMessage = { id: uid(), role: 'user', text, createdAt: now }
+      const userMsg: ChatMessage = { id: uid(), role: 'user', text: typed, createdAt: now, ...(attachments?.length ? { files: attachments } : {}) }
       const botMsg: ChatMessage = {
         id: uid(),
         role: 'assistant',
@@ -342,6 +374,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setDraftBotId(undefined)
       setDraftProjectId(undefined)
       setDraftModel(undefined)
+      if (!activeConversation) setDraftConversationId(uid())
       setView('chat')
 
       const p: Pending = { requestId: uid(), conversationId: updated.id, messageId: botMsg.id }
@@ -360,10 +393,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         targetBotId: target?.id,
         projectId: updated.projectId,
         model: updated.model,
-        bot: bot && { id: bot.id, name: bot.name, description: bot.description, instructions: bot.instructions }
+        bot: bot && { id: bot.id, name: bot.name, description: bot.description, instructions: bot.instructions },
+        attachments
       })
     },
-    [activeConversation, draftBotId, draftProjectId, draftModel, getBot, bots, visibleBots, activeProviderId]
+    [activeConversation, draftConversationId, draftBotId, draftProjectId, draftModel, getBot, bots, visibleBots, activeProviderId]
   )
 
   const cancel = useCallback(() => {
@@ -415,6 +449,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => ({
       view,
       setView,
+      openMemory: (scope) => {
+        setMemoryScope(scope ?? {})
+        setView('memory')
+      },
+      memoryScope,
       providerId: activeProviderId,
       preferredProviderId: providerId,
       setProviderId: (id) => {
@@ -585,11 +624,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
       mood,
       busy: !!pending,
+      composeConversationId: activeConversation?.id ?? draftConversationId,
       send,
       cancel
     }),
     [
       view,
+      memoryScope,
       activeProviderId,
       providerId,
       providers,
@@ -620,6 +661,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       approvals,
       mood,
       pending,
+      draftConversationId,
       send,
       cancel
     ]

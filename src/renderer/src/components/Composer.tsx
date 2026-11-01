@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowUp, ChevronDown, Square } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from 'react'
+import { ArrowUp, ChevronDown, FileText, LoaderCircle, Paperclip, Square, X } from 'lucide-react'
+import type { ChatFile } from '@shared/types'
 import { useApp } from '@/state/app'
 import { cn } from '@/lib/cn'
 import { mentionQuery, normalize } from '@/lib/mentions'
@@ -10,6 +11,10 @@ import { ProviderNotice } from './ProviderNotice'
 export function Composer({ autoFocus, placeholder = 'Pergunte qualquer coisa…' }: { autoFocus?: boolean; placeholder?: string }) {
   const app = useApp()
   const [text, setText] = useState('')
+  const [attachments, setAttachments] = useState<ChatFile[]>([])
+  const [attaching, setAttaching] = useState(false)
+  const [attachError, setAttachError] = useState<string>()
+  const [dragging, setDragging] = useState(false)
   const [caret, setCaret] = useState(0)
   const [highlight, setHighlight] = useState(0)
   const [dismissed, setDismissed] = useState(false)
@@ -49,17 +54,96 @@ export function Composer({ autoFocus, placeholder = 'Pergunte qualquer coisa…'
     })
   }
 
+  // Anexos: arrastados, colados (prints vêm sem arquivo de origem) ou escolhidos no seletor.
+  const attach = async (files: File[]) => {
+    if (!files.length) return
+    setAttaching(true)
+    setAttachError(undefined)
+    try {
+      const cid = app.composeConversationId
+      for (const file of files) {
+        let [saved] = await window.gbot.attachments.add(cid, [file])
+        if (!saved) {
+          const name = file.name || `imagem-colada-${Date.now()}.${file.type.split('/')[1] || 'png'}`
+          ;[saved] = await window.gbot.attachments.addData(cid, name, new Uint8Array(await file.arrayBuffer()))
+        }
+        if (saved) setAttachments((list) => [...list, saved])
+      }
+    } catch (e) {
+      setAttachError((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
+    } finally {
+      setAttaching(false)
+    }
+  }
+  const pickFiles = async () => {
+    setAttachError(undefined)
+    const saved = await window.gbot.attachments.pick(app.composeConversationId)
+    setAttachments((list) => [...list, ...saved])
+  }
+  const onDrop = (e: DragEvent) => {
+    e.preventDefault()
+    setDragging(false)
+    void attach([...e.dataTransfer.files])
+  }
+  const onPaste = (e: ClipboardEvent) => {
+    const files = [...e.clipboardData.files]
+    if (!files.length) return
+    e.preventDefault()
+    void attach(files)
+  }
+
+  const canSend = (!!text.trim() || attachments.length > 0) && !attaching
   const submit = () => {
-    if (!text.trim() || app.busy) return
-    app.send(text)
+    if (!canSend || app.busy) return
+    app.send(text, attachments)
     setText('')
     setCaret(0)
+    setAttachments([])
   }
 
   return (
     <>
       <ProviderNotice />
-      <div className="relative rounded-card border border-line bg-card p-3 transition-colors focus-within:border-muted/50">
+      <div
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes('Files')) return
+          e.preventDefault()
+          setDragging(true)
+        }}
+        onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setDragging(false)}
+        onDrop={onDrop}
+        className={cn(
+          'relative rounded-card border bg-card p-3 transition-colors focus-within:border-muted/50',
+          dragging ? 'border-dashed border-muted' : 'border-line'
+        )}
+      >
+        {(attachments.length > 0 || attaching || attachError) && (
+          <div className="flex flex-wrap items-center gap-2 px-1 pb-2">
+            {attachments.map((f) => (
+              <span key={f.path} className="group relative flex items-center gap-2 rounded-tile border border-line bg-sidebar py-1.5 pr-2 pl-1.5">
+                {f.thumb ? (
+                  <img src={f.thumb} alt="" className="size-9 rounded-nav object-cover" />
+                ) : (
+                  <span className="flex size-9 items-center justify-center rounded-nav bg-tile">
+                    <FileText size={16} className="text-muted" />
+                  </span>
+                )}
+                <span className="max-w-[160px] truncate text-[12px] text-fg-2" title={f.name}>
+                  {f.name}
+                </span>
+                <button
+                  onClick={() => setAttachments((list) => list.filter((x) => x.path !== f.path))}
+                  aria-label={`Tirar ${f.name}`}
+                  className="rounded-full p-0.5 text-muted hover:bg-hover hover:text-fg"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
+            {attaching && <LoaderCircle size={16} className="animate-spin text-muted" />}
+            {attachError && <span className="text-[12px] text-danger">{attachError}</span>}
+          </div>
+        )}
         {showSuggestions && (
           <div className="absolute bottom-full left-3 mb-2 w-[300px] overflow-hidden rounded-tile border border-line bg-sidebar py-1 shadow-lg">
             <p className="px-3 pt-1.5 pb-1 text-[11px] font-medium text-muted">Chamar um bot</p>
@@ -92,6 +176,7 @@ export function Composer({ autoFocus, placeholder = 'Pergunte qualquer coisa…'
             setDismissed(false)
           }}
           onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
+          onPaste={onPaste}
           onKeyDown={(e) => {
             if (showSuggestions) {
               if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -120,6 +205,15 @@ export function Composer({ autoFocus, placeholder = 'Pergunte qualquer coisa…'
         />
         <div className="mt-2 flex items-center justify-between">
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => void pickFiles()}
+              disabled={app.busy}
+              className="flex size-8 items-center justify-center rounded-full border border-line text-fg-2 hover:bg-hover disabled:opacity-40"
+              aria-label="Anexar arquivos"
+              title="Anexar arquivos ou fotos (também dá para arrastar ou colar)"
+            >
+              <Paperclip size={15} />
+            </button>
             <label className="relative inline-flex items-center">
               <select
                 value={app.providerId}
@@ -152,10 +246,10 @@ export function Composer({ autoFocus, placeholder = 'Pergunte qualquer coisa…'
           ) : (
             <button
               onClick={submit}
-              disabled={!text.trim()}
+              disabled={!canSend}
               className={cn(
                 'flex size-9 items-center justify-center rounded-full bg-primary text-on-primary transition-opacity',
-                !text.trim() && 'opacity-30'
+                !canSend && 'opacity-30'
               )}
               aria-label="Enviar"
             >

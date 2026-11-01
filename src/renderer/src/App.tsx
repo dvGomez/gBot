@@ -9,7 +9,9 @@ import { FlowEditorView } from '@/views/FlowEditorView'
 import { ProjectEditorView } from '@/views/ProjectEditorView'
 import { ProjectView } from '@/views/ProjectView'
 import { ProvidersView } from '@/views/ProvidersView'
+import { MemoryView } from '@/views/MemoryView'
 import { SettingsView } from '@/views/SettingsView'
+import { UsageView } from '@/views/UsageView'
 import { useApp } from '@/state/app'
 
 /**
@@ -66,6 +68,8 @@ export function App() {
           {view === 'flow-editor' && <FlowEditorView />}
           {view === 'project-editor' && <ProjectEditorView key={app.selectedProject?.id ?? 'new'} />}
           {view === 'providers' && <ProvidersView />}
+          {view === 'usage' && <UsageView />}
+          {view === 'memory' && <MemoryView />}
           {view === 'settings' && <SettingsView />}
         </div>
       </main>

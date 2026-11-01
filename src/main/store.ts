@@ -2,6 +2,7 @@ import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync
 import { join } from 'node:path'
 import { app } from 'electron'
 import type { Bot, Conversation, ConversationMeta, Project } from '@shared/types'
+import { removeAttachments } from './attachments'
 import { removeAllBotFiles } from './botFiles'
 import { removeMemory } from './memory'
 
@@ -120,4 +121,5 @@ export function saveConversation(conversation: Conversation) {
 
 export function removeConversation(id: string) {
   rmSync(conversationFile(id), { force: true })
+  removeAttachments(id)
 }

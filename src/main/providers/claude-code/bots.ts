@@ -1,5 +1,6 @@
 import type { Bot, ChatEvent } from '@shared/types'
 import type { Lesson } from '@shared/types'
+import { attachmentsAccess } from '../../attachments'
 import { botFilesAccess, botFilesPrompt } from '../../botFiles'
 import { runAsBot } from '../../botQueue'
 import { memoryPrompt } from '../../memory'
@@ -107,15 +108,17 @@ async function botSession(conversationId: string, projectId: string | undefined,
   entry.ctx.projectId = projectId
   entry.ctx.memorySource = source ?? { kind: 'conversation', id: conversationId }
   const work = workContext(projectId)
+  // Arquivos de referência do bot e anexos da conversa onde ele foi chamado.
   const files = botFilesAccess(bot.id)
+  const attached = attachmentsAccess(conversationId)
   const session = await getSession({
     key,
     sessionId: stableUuid(key),
     cwd: work.cwd,
     systemPrompt: botSystemPrompt(bot, work),
     mcpConfig: entry.config,
-    allowedTools: [...GBOT_TOOLS, ...files.allowedTools],
-    addDirs: files.addDirs,
+    allowedTools: [...GBOT_TOOLS, ...files.allowedTools, ...attached.allowedTools],
+    addDirs: [...files.addDirs, ...attached.addDirs],
     model: bot.model
   })
   return { key, session, ctx: entry.ctx }
@@ -149,7 +152,12 @@ async function askBot(caller: CallerContext, ref: string, message: string, signa
         if (ev.type === 'error') error = ev.message
       }
       const timeout = AbortSignal.timeout(ASK_TIMEOUT_MS)
-      await session.send(`Mensagem de ${from}:\n\n${message}`, collect, AbortSignal.any([stop, timeout]))
+      const source = caller.memorySource
+      await session.send(`Mensagem de ${from}:\n\n${message}`, collect, AbortSignal.any([stop, timeout]), {
+        kind: 'consult',
+        botId: bot.id,
+        ...(source?.kind === 'flow' ? { flowId: source.id } : { conversationId: caller.conversationId })
+      })
       reflectIfNeeded(session, ctx.memory)
       if (error) throw new Error(`${bot.name} não conseguiu responder: ${error}`)
       if (timeout.aborted) throw new Error(`${bot.name} demorou demais para responder.`)
@@ -178,7 +186,9 @@ export async function sendToBot(
   await enqueue(key, () => {
     ctx.chain = [bot.id]
     ctx.depth = 1
-    return session.send(text, withOutputFiles(cwd, emit), signal).then(() => reflectIfNeeded(session, ctx.memory))
+    return session
+      .send(text, withOutputFiles(cwd, emit), signal, { kind: 'mention', conversationId, botId: bot.id })
+      .then(() => reflectIfNeeded(session, ctx.memory))
   })
 }
 

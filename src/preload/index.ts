@@ -54,6 +54,12 @@ const api: GbotApi = {
     open: (path) => ipcRenderer.invoke('files:open', path),
     reveal: (path) => ipcRenderer.invoke('files:reveal', path)
   },
+  attachments: {
+    add: (conversationId, files) =>
+      ipcRenderer.invoke('attachments:add', conversationId, files.map((f) => ({ name: f.name, path: webUtils.getPathForFile(f) }))),
+    addData: (conversationId, name, data) => ipcRenderer.invoke('attachments:add', conversationId, [{ name, data }]),
+    pick: (conversationId) => ipcRenderer.invoke('attachments:pick', conversationId)
+  },
   browser: {
     list: () => ipcRenderer.invoke('browser:list'),
     open: () => ipcRenderer.invoke('browser:open')
@@ -73,12 +79,25 @@ const api: GbotApi = {
   },
   memory: {
     list: (owner) => ipcRenderer.invoke('memory:list', owner),
+    all: () => ipcRenderer.invoke('memory:all'),
+    autoNotes: () => ipcRenderer.invoke('memory:autoNotes'),
+    removeAutoNote: (path) => ipcRenderer.invoke('memory:removeAutoNote', path),
     save: (lesson) => ipcRenderer.invoke('memory:save', lesson),
     remove: (owner, id) => ipcRenderer.invoke('memory:remove', owner, id),
     onChanged: (listener) => {
       const handler = (_: unknown, owner: MemoryOwner) => listener(owner)
       ipcRenderer.on('memory:changed', handler)
       return () => ipcRenderer.removeListener('memory:changed', handler)
+    }
+  },
+  usage: {
+    summary: () => ipcRenderer.invoke('usage:summary'),
+    conversation: (id) => ipcRenderer.invoke('usage:conversation', id),
+    records: (since) => ipcRenderer.invoke('usage:records', since),
+    onChanged: (listener) => {
+      const handler = () => listener()
+      ipcRenderer.on('usage:changed', handler)
+      return () => ipcRenderer.removeListener('usage:changed', handler)
     }
   },
   flows: {

@@ -16,6 +16,7 @@ import { AgentAvatar } from '@/components/AgentAvatar'
 import { approvalTitle } from '@/components/ApprovalCard'
 import { ProviderNotice } from '@/components/ProviderNotice'
 import { TeamPanel } from '@/components/TeamPanel'
+import { UsageCard } from '@/components/UsageCard'
 import { Button, Card } from '@/components/ui'
 import { greeting, longDate, timeAgo } from '@/lib/format'
 import { describeSchedule, formatWhen, nextRun } from '@/lib/schedule'
@@ -261,6 +262,7 @@ export function HomeView() {
         </div>
 
         <div className="space-y-4">
+          <UsageCard />
           <Section title="Próximas execuções">
             {upcoming.length ? (
               upcoming.map(({ flow, at }) => (
