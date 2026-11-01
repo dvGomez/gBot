@@ -1,81 +1,90 @@
 <p align="center">
-  <img src="brand/gbot-icon-256.png" width="128" alt="Ícone do gBot: o Brasa, uma chaminha laranja em pixel art">
+  <img src="brand/gbot-icon-256.png" width="128" alt="gBot icon: Brasa, a little orange pixel-art flame">
 </p>
 
 <h1 align="center">gBot</h1>
 
 <p align="center">
-  <b>Monte um time de IA que trabalha enquanto você dorme.</b><br>
-  Bots com personalidade, fluxos que rodam sozinhos, um navegador de verdade e memória que aprende.<br>
-  Tudo no seu computador, usando a assinatura do Claude que você já paga.
+  <b>Build an AI team that works while you sleep.</b><br>
+  Bots with personality, workflows that run on their own, a real browser and a memory that learns.<br>
+  All on your own computer, running on the Claude subscription you already pay for.
 </p>
 
 <p align="center">
-  <a href="#baixar">Baixar</a> ·
-  <a href="#por-que-o-gbot">Por que o gBot</a> ·
-  <a href="#o-que-vem-na-caixa">O que vem na caixa</a> ·
-  <a href="#licença">Licença</a> ·
-  <a href="#para-desenvolvedores">Para desenvolvedores</a>
+  <a href="https://github.com/dvGomez/gBot/actions/workflows/build.yml"><img src="https://github.com/dvGomez/gBot/actions/workflows/build.yml/badge.svg" alt="Build"></a>
+  <a href="https://github.com/dvGomez/gBot/releases"><img src="https://img.shields.io/github/v/release/dvGomez/gBot?include_prereleases&label=download" alt="Download"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-orange" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey" alt="macOS and Windows">
 </p>
 
-![gBot: monte um time de IA que trabalha enquanto você dorme](docs/marketing/hero.png)
+<p align="center">
+  <a href="#download">Download</a> ·
+  <a href="#why-gbot">Why gBot</a> ·
+  <a href="#whats-in-the-box">What's in the box</a> ·
+  <a href="#contributing">Contributing</a> ·
+  <a href="#license">License</a> ·
+  <a href="#for-developers">For developers</a>
+</p>
 
-Você já paga por uma IA incrível. Só que ela fica parada numa aba esperando você digitar. O **gBot** transforma a
-sua assinatura do Claude num **time**: cada bot com nome, cara e especialidade; tarefas que rodam sozinhas no
-horário; um navegador que eles usam por você; e uma memória que faz cada um errar menos a cada dia.
+![gBot: build an AI team that works while you sleep](docs/marketing/hero.png)
 
-Sem chave de API, sem cobrança por token: o gBot usa o **Claude Code oficial** com o **seu login**, dentro dos
-limites do seu plano.
+You already pay for an amazing AI. But it just sits in a browser tab waiting for you to type. **gBot** turns your
+Claude subscription into a **team**: every bot with a name, a face and a specialty; jobs that run on their own
+schedule; a browser they drive for you; and a memory that makes each of them a little better every day.
 
-## Por que o gBot
+No API keys, no per-token bill: gBot runs the **official Claude Code** with **your own login**, within your plan's
+limits.
 
-### 1. Chega de fazer sozinho o trabalho de um time inteiro
+## Why gBot
 
-![Problema 1: cada bot com a sua rotina, um usando o trabalho do outro](docs/marketing/problema-1-time.png)
+### 1. Stop doing a whole team's job by yourself
 
-Pesquisar, escrever, prospectar, revisar, mandar a newsletter… a lista nunca acaba. No gBot você monta o seu
-**time**: cada bot com nome, cara e **rotina própria** em fluxos agendados. Um varre as redes de madrugada, outro
-escreve os posts com o que foi encontrado, outro prospecta à tarde, e uma **decisão** no meio do caminho escolhe o
-que segue. Você acorda com as entregas prontas e só aprova.
+![Problem 1: every bot with its own routine, one building on the other's work](docs/marketing/problem-1-team.png)
 
-### 2. Chega de copiar e colar entre sistemas
+Research, write, prospect, review, send the newsletter… the list never ends. In gBot you build your **team**: every
+bot with a name, a face and **its own routine** in scheduled workflows. One scans the web before dawn, another
+writes posts from what was found, another prospects in the afternoon, and a **decision** box in the middle picks
+what happens next. You wake up to finished work and just approve it.
 
-![Problema 2: o bot usa o navegador com os seus logins e entrega só a resposta](docs/marketing/problema-2-navegador.png)
+### 2. Stop copy-pasting between systems
 
-O gBot abre **o seu Chrome ou Edge**, com os logins que você já fez, e faz a parte chata: entra no portal, procura,
-confere, cruza os dados e te devolve só a resposta. Logins, códigos e CAPTCHAs continuam com você.
+![Problem 2: the bot uses your browser with your logins and hands you just the answer](docs/marketing/problem-2-browser.png)
 
-### 3. Chega de IA que esquece tudo e repete o mesmo erro
+gBot opens **your own Chrome or Edge**, with the logins you already have, and does the boring part: signs in to the
+portal, searches, checks, cross-references and hands you just the answer. Passwords, 2FA codes and CAPTCHAs stay
+with you.
 
-![Problema 3: o bot anota lições e consulta outros bots](docs/marketing/problema-3-memoria.png)
+### 3. Stop using an AI that forgets everything
 
-Cada bot e cada fluxo tem uma **memória de lições**: quando algo dá errado e ele descobre o jeito certo, anota um
-procedimento curto e acerta de primeira na próxima vez. Você vê, edita ou desliga cada lição. E quando um bot
-precisa de ajuda, ele **chama outro bot** especialista, ou você chama qualquer um com `@Nome`.
+![Problem 3: the bot writes down lessons and asks other bots for help](docs/marketing/problem-3-memory.png)
 
-## O que vem na caixa
+Every bot and every workflow has a **memory of lessons**: when something goes wrong and it figures out the right
+way, it writes down a short procedure and gets it right the first time next time. You can see, edit or turn off
+every lesson. And when a bot needs help, it **calls another bot**, or you can call any of them with `@Name`.
 
-![Bots com cara própria, fluxos, navegador de verdade e memória que aprende](docs/marketing/recursos.png)
+## What's in the box
 
-- **Bots com personalidade:** nome, avatar em pixel art (20 prontos + gerador), instruções e modelo próprios.
-- **Conversas:** com ou sem bot, com seleção de modelo (Opus, Sonnet, Haiku…) por conversa.
-- **Projetos:** agrupam bots e conversas, com pasta de trabalho e instruções opcionais.
-- **Fluxos:** canvas com gatilho por horário ou intervalo e caixinhas de bot, prompt e **decisão**. Rodam até
-  com a janela fechada, pelo ícone na barra de menu.
-- **Navegador do gBot:** Edge, Chrome ou Brave instalados, com perfil próprio e logins que ficam salvos.
-- **Memória que aprende:** lições curtas e baratas em tokens, por bot e por fluxo, com tela para ver e editar.
-- **Painel do time:** na tela inicial, quem está trabalhando, quem está dormindo e o que vem a seguir.
+![Bots with a face, workflows, a real browser and a memory that learns](docs/marketing/features.png)
 
-## Baixar
+- **Bots with personality:** name, pixel-art avatar (20 built in + a generator), their own instructions and model.
+- **Chats:** with or without a bot, with a model picker (Opus, Sonnet, Haiku…) per chat.
+- **Projects:** group bots and chats, with an optional working folder and instructions.
+- **Workflows:** a canvas with a time or interval trigger and bot, prompt and **decision** boxes. They keep running
+  with the window closed, from the menu bar icon.
+- **gBot's browser:** your installed Edge, Chrome or Brave, with its own profile and logins that stay saved.
+- **A memory that learns:** short, token-cheap lessons per bot and per workflow, with a screen to view and edit them.
+- **Team panel:** on the home screen, who is working, who is asleep and what's coming up next.
 
-Os instaladores ficam na página de **Releases** do repositório (e em **Actions → Build** para versões de teste):
+## Download
 
-- **macOS:** `gBot-<versão>-mac-arm64.dmg` (Apple Silicon) ou `-mac-x64.dmg` (Intel).
-  Como o app ainda não é assinado, na primeira vez clique com o botão direito no gBot → **Abrir**.
-- **Windows** (beta): `gBot-<versão>-windows-setup.exe`. Se o SmartScreen avisar, **Mais informações →
-  Executar assim mesmo**.
+Installers are on the **[Releases](https://github.com/dvGomez/gBot/releases)** page (and under
+**[Actions → Build](https://github.com/dvGomez/gBot/actions/workflows/build.yml)** for test builds):
 
-Você também precisa do **Claude Code** instalado e de uma assinatura do Claude (Pro ou Max):
+- **macOS:** `gBot-<version>-mac-arm64.dmg` (Apple Silicon) or `-mac-x64.dmg` (Intel).
+  The app isn't signed yet, so the first time, right-click gBot → **Open**.
+- **Windows** (beta): `gBot-<version>-windows-setup.exe`. If SmartScreen warns you, click **More info → Run anyway**.
+
+You also need **Claude Code** installed and a Claude subscription (Pro or Max):
 
 ```bash
 # macOS
@@ -87,186 +96,195 @@ curl -fsSL https://claude.ai/install.sh | bash
 irm https://claude.ai/install.ps1 | iex
 ```
 
-Depois é só abrir o gBot e clicar em **Entrar com Claude Code**: o login é o oficial, feito no navegador, num
-perfil separado do seu terminal.
+Then open gBot and click **Sign in with Claude Code**: it's the official login, done in your browser, in a profile
+kept separate from your terminal.
 
-## Licença
+## Contributing
 
-O gBot é **código aberto sob a licença MIT** ([LICENSE](LICENSE)), o mesmo modelo do VS Code:
+Pull requests are very welcome, from typo fixes to whole new features. Read [CONTRIBUTING.md](CONTRIBUTING.md) to
+get started, look for issues labeled
+[`good first issue`](https://github.com/dvGomez/gBot/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22),
+and share ideas in [Discussions](https://github.com/dvGomez/gBot/discussions).
 
-- Qualquer pessoa pode usar, estudar, fazer **fork** e modificar o código.
-- Melhorias voltam para o projeto principal por **pull request**: ao enviar uma contribuição, ela fica licenciada
-  sob a mesma MIT e pode ser incorporada ao gBot (detalhes em [CONTRIBUTING.md](CONTRIBUTING.md)).
-- O nome **gBot** e o mascote **Brasa** identificam o projeto oficial: forks publicados são bem-vindos, só que com
-  outro nome e outro ícone.
+## License
+
+gBot is **open source under the MIT license** ([LICENSE](LICENSE)), the same model as VS Code:
+
+- Anyone can use, study, **fork** and modify the code.
+- Improvements come back to the main project through **pull requests**: by sending a contribution you license it
+  under the same MIT license, so it can be merged into gBot (details in [CONTRIBUTING.md](CONTRIBUTING.md)).
+- The **gBot** name and the **Brasa** mascot identify the official project: published forks are welcome, just with
+  a different name and icon.
 
 ---
 
-## Para desenvolvedores
+## For developers
 
-Chat desktop (Electron + React) que conversa com o Claude Code usando a sua assinatura, já preparado para outros
-provedores.
+A desktop app (Electron + React) that talks to Claude Code using your subscription, ready for other providers.
 
-### Comandos
+### Commands
 
 ```bash
-npm run dev        # abre o app em modo desenvolvimento (hot reload)
-npm run typecheck  # checa os tipos
-npm run dist:mac   # instaladores do Mac em dist/ (arm64 e Intel)
-npm run dist:win   # instalador do Windows em dist/ (rode no Windows)
-npm run icon       # regenera build/icon.png e as imagens de brand/ a partir do avatar em pixel art
-npm run marketing  # regenera as imagens do README (docs/marketing/)
+npm run dev        # run the app in development mode (hot reload)
+npm run typecheck  # type-check everything
+npm run dist:mac   # Mac installers in dist/ (arm64 and Intel)
+npm run dist:win   # Windows installer in dist/ (run it on Windows)
+npm run icon       # regenerate build/icon.png and brand/ from the pixel-art avatar
+npm run marketing  # regenerate the README images (docs/marketing/)
 ```
 
-### Estrutura
+### Layout
 
 ```
 src/
-├─ main/                 processo principal (Node)
-│  ├─ index.ts           janela
-│  ├─ store.ts           bots e conversas em JSON (~/Library/Application Support/gBot/data)
-│  ├─ ipc.ts             ponte main ⇄ interface
-│  └─ providers/         um provedor por arquivo/pasta + registry.ts
-│     └─ claude-code/    sessões `claude -p` em stream-json (uma por conversa)
-├─ preload/              expõe `window.gbot` para a interface
-├─ shared/types.ts       tipos usados dos dois lados
-└─ renderer/src/         interface React
-   ├─ avatars/           sprites em pixel art, partes e gerador de avatares
-   ├─ components/        PixelAvatar, Sidebar, Composer, ui
-   ├─ views/             Início, Chat, Bot, Editor de bot, Login, Avatares, Provedores, Configurações
-   └─ state/app.tsx      estado do app (tema, avatar, provedor, conversas)
+├─ main/                 main process (Node)
+│  ├─ index.ts           window, tray and scheduler
+│  ├─ store.ts           bots and chats as JSON (<userData>/data)
+│  ├─ ipc.ts             main ⇄ UI bridge
+│  ├─ flows/             workflow store, runner and scheduler
+│  ├─ browser/           gBot's browser (CDP) and its MCP tools
+│  ├─ memory.ts          per-bot and per-workflow lessons
+│  └─ providers/         one provider per file/folder + registry.ts
+│     └─ claude-code/    `claude -p` sessions over stream-json (one per chat)
+├─ preload/              exposes `window.gbot` to the UI
+├─ shared/types.ts       types shared by both sides
+└─ renderer/src/         React UI
+   ├─ avatars/           pixel-art sprites, parts and the avatar generator
+   ├─ components/        sidebar, composer, flow canvas nodes, team panel, memory panel…
+   ├─ views/             Home, Chat, Bot, Projects, Flow editor, Login, Providers, Settings
+   └─ state/app.tsx      app state
 ```
 
-### Como o Claude Code é usado
+`<userData>` is `~/Library/Application Support/gBot` on macOS and `%APPDATA%\gBot` on Windows.
 
-O gBot abre o executável oficial `claude` (sem modificações) em modo
-`-p --input-format stream-json --output-format stream-json`. Cada conversa é uma sessão do Claude Code
-(`--session-id` = id da conversa), que fica aberta enquanto é usada e é retomada com `--resume`.
-O app nunca lê nem guarda credenciais.
+### How Claude Code is used
 
-**Perfil separado:** o Claude Code roda com `CLAUDE_CONFIG_DIR=~/Library/Application Support/gBot/claude-profile`
-e sem as variáveis `ANTHROPIC_*`/`CLAUDE*` herdadas. Assim o gBot não usa o `~/.claude` do terminal (que pode
-apontar para outra conta ou um gateway corporativo). O login é feito em Provedores → "Entrar com conta Claude",
-que roda o `claude auth login` oficial (abre o navegador). Equivalente no terminal:
+gBot runs the official, unmodified `claude` executable in
+`-p --input-format stream-json --output-format stream-json` mode. Each chat is a Claude Code session
+(`--session-id` = chat id) that stays open while in use and is picked back up with `--resume`. The app never reads
+or stores credentials.
+
+**Separate profile:** Claude Code runs with `CLAUDE_CONFIG_DIR=<userData>/claude-profile` and without any inherited
+`ANTHROPIC_*`/`CLAUDE*` variables. That way gBot doesn't use your terminal's `~/.claude` (which might point to
+another account or a corporate gateway). Sign-in happens under Providers → "Sign in with Claude", which runs the
+official `claude auth login` (it opens the browser). Terminal equivalent on macOS:
 
 ```bash
 CLAUDE_CONFIG_DIR="$HOME/Library/Application Support/gBot/claude-profile" claude auth login
 ```
 
-A pasta de trabalho é `~/Library/Application Support/gBot/workspace`.
+The default working folder is `<userData>/workspace`. On Windows, gBot looks for the native installer's
+`claude.exe` (`~/.local/bin`) or the first one on the `PATH`.
 
-Ações que pedem permissão são negadas por enquanto (modo `manual`); aprovar pelo app é a Etapa 3.
+### Plain chats and bots
 
-### Conversas normais e bots
+A plain chat has no character: no name, avatar or persona in the prompt. Bots only show up in chats with a bot or
+when mentioned with `@`. Chats and bots can be deleted from the "⋯" menu (sidebar, chat header and bot page), always
+with a confirmation.
 
-Conversa normal não tem personagem: sem nome, avatar ou persona no prompt. Bots aparecem só em conversas
-com um bot ou quando mencionados com `@`. Conversas e bots podem ser excluídos pelo "⋯" (menu lateral, cabeçalho
-do chat e página do bot), sempre com confirmação.
+### Memory (bots and workflows learn)
 
-### Memória (bots e fluxos aprendem)
+Each bot and each workflow has a memory of **lessons** (`data/memory/<bot|flow>-<id>.json`): title, when to use it,
+short steps and why.
 
-Cada bot e cada fluxo tem uma memória de **lições** (`data/memory/<bot|flow>-<id>.json`): título, quando usar,
-passos curtos e por quê.
+- Claude records them itself with the `save_lesson` tool (only in bot or workflow sessions; plain chats have no
+  memory). The same title updates the lesson instead of duplicating it.
+- **Automatic reflection:** if a tool failed or was denied during a turn, gBot sends a short hidden prompt asking to
+  record a lesson, if there is one. Turns are queued per session, so the next message waits.
+- Active lessons go into the system prompt as a compact block (`title | when | steps`, without the "why"), at most
+  30. The screen shows roughly how many tokens that takes.
+- Where to view and edit them: the bot page (**Memory** card) and the workflow's **Memory** tab. You can add them by
+  hand, edit, turn off (kept out of the prompt) and delete.
 
-- O próprio Claude registra com a ferramenta `save_lesson` (só existe em sessões de bot ou de fluxo; conversa normal
-  não tem memória). Mesmo título atualiza a lição em vez de duplicar.
-- **Reflexão automática:** se num turno alguma ferramenta falhou ou foi negada, o gBot manda (sem aparecer no chat)
-  um pedido curto para registrar a lição, se houver. Os turnos da sessão ficam em fila, então a próxima mensagem espera.
-- As lições ativas entram no prompt de sistema num bloco compacto (`título | quando | passos`, sem o "por quê"),
-  no máximo 30. A tela mostra ~quantos tokens isso ocupa.
-- Onde ver/editar: página do bot (card **Memória**) e aba **Memória** do fluxo. Dá para adicionar à mão, editar,
-  desligar (não vai para o prompt) e excluir. Caixinhas de prompt usam a memória do fluxo; caixinhas de bot, a do bot.
+### Workflows (automation canvas)
 
-### Fluxos (canvas de automações)
+A workflow is a canvas (React Flow) with a **trigger** and boxes connected by arrows:
 
-Um fluxo é um canvas (React Flow) com um **gatilho** e caixinhas ligadas por setas:
+- **Trigger:** at set times (weekdays + one or more times) or "repeat every N minutes/hours". Only **active**
+  workflows fire; "Run now" always works.
+- **Bot:** sends a message to a bot (using its model and instructions).
+- **Prompt:** a standalone prompt, with the AI (provider) and model picked in the box.
+- **Decision:** the chosen AI reads the previous result and picks one of the options; each option has its own
+  output dot and only the chosen path runs (the others are marked "skipped"). An optional criterion helps it choose.
+- The result of earlier boxes is passed along automatically; `{{anterior}}` sets where it goes.
+- Branches run in parallel and a box waits for everything that leads into it. Cycles are rejected.
+- Dropping a line on empty canvas opens a menu to create the next box already connected; ⌘C/⌘V (Ctrl on Windows)
+  duplicates boxes. The side panel opens when you click a box and closes when you click the canvas.
+- History of the last 50 runs per workflow, with each box's result (`data/flow-runs/<flow>.json`).
+- The scheduler runs in the main process every 20 s. Closing the window doesn't quit the app: it stays in the
+  **menu bar icon** (Open gBot / active workflows / Quit). Times when the app was closed are not run afterwards.
 
-- **Gatilho:** em horários (dias da semana + um ou mais horários) ou "repetir a cada N minutos/horas". Só fluxos
-  **ativos** disparam; "Rodar agora" funciona sempre.
-- **Bot:** manda uma mensagem a um bot (usa o modelo e as instruções dele).
-- **Prompt:** prompt solto, com IA (provedor) e modelo escolhidos na caixinha.
-- **Decisão:** a IA escolhida lê o resultado anterior e escolhe uma das opções; cada opção tem a própria bolinha de
-  saída e só o caminho escolhido roda (os outros ficam como "pulados"). O critério opcional ajuda na escolha.
-- Soltar uma linha no vazio abre um menu para criar a próxima caixinha já ligada. O painel lateral abre ao clicar
-  numa caixinha e fecha ao clicar no canvas.
-- O resultado das caixinhas anteriores vai junto automaticamente; `{{anterior}}` escolhe onde ele entra.
-- Pode ramificar: ramos rodam em paralelo e uma caixinha espera todas as que chegam nela. Ciclos são recusados.
-- Histórico das últimas 50 execuções por fluxo, com o resultado de cada caixinha (`data/flow-runs/<fluxo>.json`).
-- O agendador roda no processo principal a cada 20 s. Fechar a janela não encerra o app: ele fica no **ícone da
-  barra de menu** (Abrir gBot / fluxos ativos / Sair). Horários em que o app estava fechado não são executados depois.
+### gBot's browser
 
-### Navegador do gBot
+gBot opens your **installed** Edge/Chrome/Brave (pick it in Settings; default: Edge) with a fixed profile in
+`<userData>/browser-profiles/<browser>` and connects over CDP (`playwright-core`).
 
-O gBot abre o Edge/Chrome/Brave **instalado** (escolha em Configurações; padrão: Edge) com um perfil fixo em
-`~/Library/Application Support/gBot/browser-profiles/<navegador>` e se conecta via CDP (`playwright-core`).
-
-- O perfil é um só por navegador, compartilhado por todas as conversas e bots: logins e cookies ficam salvos
-  entre conversas, bots e reinícios (o perfil já nasce com "continuar de onde parou" para manter cookies de sessão).
-- Abre com `--disable-blink-features=AutomationControlled`, então os sites não veem `navigator.webdriver`.
-- Ferramentas no MCP do gBot: `browser_navigate`, `browser_read`, `browser_click`, `browser_type`,
+- There's one profile per browser, shared by every chat and bot: logins and cookies persist across chats, bots and
+  restarts (the profile starts with "continue where you left off" to keep session cookies).
+- It launches with `--disable-blink-features=AutomationControlled`, so sites don't see `navigator.webdriver`.
+- Tools on gBot's MCP server: `browser_navigate`, `browser_read`, `browser_click`, `browser_type`,
   `browser_press`, `browser_screenshot`, `browser_tabs`, `browser_back`.
-- Por padrão o navegador acessa os sites direto. Em Configurações dá para ligar **Pedir aprovação antes de usar
-  sites**: aí cada site novo mostra no chat **Permitir nesta conversa**, **Sempre em <site>** (vai para a lista de
-  sites sempre permitidos) ou **Negar**; sem resposta em 5 min, é negado.
-- O Claude não digita senhas nem códigos: login, MFA e CAPTCHA são feitos pelo usuário na janela.
+- By default the browser goes straight to sites. In Settings you can turn on **Ask before using sites**: each new
+  site then shows **Allow in this chat**, **Always on <site>** or **Deny** in the chat; with no answer in 5 min, it's
+  denied.
+- Claude doesn't type passwords or codes: login, MFA and CAPTCHAs are done by you in the window.
 
-### Modelos
+### Models
 
-Cada provedor declara os modelos que oferece (`ProviderInfo.models`). No Claude Code são os aliases
-`default`, `opus`, `sonnet`, `haiku` e `fable` (este exige créditos de uso extras na conta).
+Each provider declares the models it offers (`ProviderInfo.models`). For Claude Code these are the aliases
+`default`, `opus`, `sonnet`, `haiku` and `fable` (the latter requires extra usage credits on the account).
 
-- **Bot:** tem um modelo próprio, usado nas conversas com ele e quando outros bots o consultam.
-- **Conversa:** tem o próprio modelo (seletor no campo de mensagem); começa com o do bot, se houver.
-- Trocar o modelo reabre a sessão com `--model` + `--resume`: a conversa continua de onde parou.
-- Cada resposta guarda o modelo usado (`ChatMessage.model`).
+- **Bot:** has its own model, used in chats with it and when other bots consult it.
+- **Chat:** has its own model (picker in the message box); it starts with the bot's, if any.
+- Switching models reopens the session with `--model` + `--resume`: the chat continues where it left off.
+- Each reply records the model used (`ChatMessage.model`).
 
-### Projetos
+### Projects
 
-Projetos são opcionais: bots e conversas podem ficar soltos ou dentro de um projeto.
+Projects are optional: bots and chats can live on their own or inside a project.
 
-- **Pasta de trabalho** (opcional, pode ser escolhida depois): vira o `cwd` do Claude Code nas conversas e bots do
-  projeto. Sem pasta, vale a pasta padrão do gBot.
-- **Instruções do projeto** (opcionais): entram no prompt de sistema, somadas às instruções de cada bot.
-- **Bots visíveis**: dentro de um projeto, os bots dele + os bots soltos; bots de outros projetos ficam de fora.
-- Excluir um projeto não apaga nada: os bots e conversas dele voltam a ficar soltos.
-- Se a pasta, as instruções ou o projeto da conversa mudam, a sessão do Claude Code é reaberta com `--resume`.
+- **Working folder** (optional, can be picked later): becomes Claude Code's `cwd` for the project's chats and bots.
+  Without one, gBot's default folder is used.
+- **Project instructions** (optional): go into the system prompt, on top of each bot's instructions.
+- **Visible bots**: inside a project, its own bots plus the standalone ones; other projects' bots are hidden.
+- Deleting a project deletes nothing: its bots and chats become standalone again.
+- If the folder, the instructions or the chat's project change, the Claude Code session is reopened with `--resume`.
 
-### Bots conversando entre si
+### Bots talking to each other
 
-O processo principal sobe um servidor MCP em `127.0.0.1` (porta aleatória) com duas ferramentas,
-`list_bots` e `ask_bot`. Toda sessão do Claude Code aberta pelo gBot recebe esse servidor via
-`--mcp-config`, com um token próprio que identifica quem está chamando (conversa, bot, profundidade).
+The main process starts an MCP server on `127.0.0.1` (random port) with `list_bots` and `ask_bot`. Every Claude Code
+session gBot opens gets that server through `--mcp-config`, with its own token identifying the caller (chat, bot,
+depth).
 
-- `ask_bot` abre (ou reaproveita) a sessão daquele bot **dentro da conversa** (`<conversa>:<bot>`), então
-  o bot lembra das consultas e @menções anteriores daquela conversa.
-- Proteções: no máximo 3 consultas encadeadas, sem ciclos (A → B → A) e 10 min por consulta.
-- `@Nome` no chat envia a mensagem direto ao bot; a resposta aparece com o avatar dele, e o assistente
-  da conversa recebe essa troca como contexto na mensagem seguinte.
+- `ask_bot` opens (or reuses) that bot's session **inside the chat** (`<chat>:<bot>`), so the bot remembers earlier
+  consultations and @mentions in that chat.
+- Safeguards: at most 3 chained consultations, no cycles (A → B → A) and 10 min per consultation.
+- `@Name` in the chat sends the message straight to the bot; the reply shows its avatar, and the chat's assistant
+  gets that exchange as context in the next message.
 
-### Adicionar um provedor
+### Adding a provider
 
-1. Crie `src/main/providers/<nome>.ts` implementando `ChatProvider` (`checkStatus` + `send`).
-2. Registre na lista em `src/main/providers/registry.ts`.
+1. Create `src/main/providers/<name>.ts` implementing `ChatProvider` (`checkStatus` + `send`).
+2. Register it in `src/main/providers/registry.ts`.
 
-A interface lista o provedor automaticamente; `send` emite eventos `mood`, `delta`, `done` ou `error`.
+The UI lists the provider automatically; `send` emits `mood`, `delta`, `done` or `error` events.
 
 ### Builds (GitHub Actions)
 
-`.github/workflows/build.yml` roda o typecheck e gera os instaladores do macOS (`.dmg` arm64 e Intel) e do Windows
-(`setup.exe`) em todo push na `main` e em pull requests; ficam em **Actions → Build → Artifacts**. Uma tag `v*`
-(`git tag v0.3.0 && git push --tags`) também cria a **Release** com os instaladores anexados.
+`.github/workflows/build.yml` type-checks and builds the macOS (`.dmg`, arm64 and Intel) and Windows (`setup.exe`)
+installers on every push to `main` and on pull requests; they show up under **Actions → Build → Artifacts**. A `v*`
+tag (`git tag v0.3.0 && git push --tags`) also creates a **Release** with the installers attached.
 
-Os instaladores ainda não são assinados (sem certificado da Apple nem da Microsoft), por isso o primeiro aberto
-mostra o aviso do sistema.
+The installers aren't signed yet (no Apple or Microsoft certificate), so the first launch shows the system warning.
 
-### Etapas
+### Roadmap
 
-1. ✅ Esqueleto, design MagmaFit, avatares, chat de teste, instalador
-2. ✅ Conversa com o Claude Code (streaming, ferramentas, memória, interromper)
-3. ✅ Bots (nome, avatar, instruções), 20 avatares + gerador, conversas salvas em disco
-4. ✅ Bots consultando outros bots (`list_bots` / `ask_bot` via MCP local) e `@menções`
-5. ✅ Projetos: agrupam bots e conversas, com pasta de trabalho e instruções opcionais
-6. ✅ Fluxos: canvas com gatilho por horário/intervalo, caixinhas de bot, prompt e decisão, histórico e barra de menu
-7. ✅ Navegador do gBot e memória de lições
-8. Aprovar permissões no app
-9. Ações no computador
+1. ✅ Skeleton, design, avatars, test chat, installer
+2. ✅ Chatting with Claude Code (streaming, tools, memory, interrupt)
+3. ✅ Bots (name, avatar, instructions), 20 avatars + generator, chats saved to disk
+4. ✅ Bots consulting other bots (`list_bots` / `ask_bot` over local MCP) and `@mentions`
+5. ✅ Projects: group bots and chats, with an optional working folder and instructions
+6. ✅ Workflows: canvas with time/interval triggers, bot, prompt and decision boxes, history and menu bar icon
+7. ✅ gBot's browser and lesson memory
+8. Approving permissions in the app
+9. Actions on the computer

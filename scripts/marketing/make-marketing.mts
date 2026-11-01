@@ -1,5 +1,6 @@
 /**
- * Gera as imagens de divulgação do README (docs/marketing/*.png).
+ * Gera as imagens de divulgação do README (docs/marketing/*.png) e a prévia para redes sociais
+ * (docs/marketing/social.png).
  * Cada imagem é uma página HTML no visual do gBot (Geist, tokens do tema escuro, avatares em pixel art),
  * fotografada pelo Electron em 2x. Conteúdo fictício: nada vem dos seus dados.
  *
@@ -52,28 +53,28 @@ h1 { margin: 0; font-weight: 600; letter-spacing: -0.045em; line-height: 0.98; }
 `
 
 const page = (w: number, h: number, body: string) =>
-  `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>${css(w, h)}</style></head><body>${body}</body></html>`
+  `<!doctype html><html lang="en"><head><meta charset="utf-8"><style>${css(w, h)}</style></head><body>${body}</body></html>`
 
 // ───────────────────────── Hero ─────────────────────────
 function hero() {
   const W = 1600
   const H = 860
   const team = [
-    { id: 'brasa', name: 'Brasa', role: 'Pesquisa', status: 'Lendo 14 fontes sobre o seu setor…', mood: 'thinking', state: 'warn' },
-    { id: 'nuvem', name: 'Nuvem', role: 'Textos', status: 'Escrevendo o resumo da manhã', mood: 'talking', state: 'warn' },
-    { id: 'eco', name: 'Eco', role: 'Navegador', status: 'Conferiu 42 notas: 3 vencidas', mood: 'happy', state: 'ok' },
-    { id: 'bit', name: 'Bit', role: 'Agenda', status: 'Dormindo · acorda às 07:00', mood: 'sleeping', state: 'muted' }
-  ] as const
+    { id: 'brasa', name: 'Brasa', role: 'Research', status: 'Reading 14 sources about your industry…', mood: 'thinking', state: 'warn' },
+    { id: 'nuvem', name: 'Nuvem', role: 'Writing', status: 'Writing the morning summary', mood: 'talking', state: 'warn' },
+    { id: 'eco', name: 'Eco', role: 'Browser', status: 'Checked 42 invoices: 3 overdue', mood: 'happy', state: 'ok' },
+    { id: 'bit', name: 'Bit', role: 'Calendar', status: 'Asleep · wakes up at 7:00', mood: 'sleeping', state: 'muted' }
+  ]
   const rows = team
     .map(
-      (t) => `
+      (m) => `
     <div style="display:flex;align-items:center;gap:16px;padding:16px 0;border-bottom:1px solid #242424">
-      ${avatar(t.id, 46, t.mood)}
+      ${avatar(m.id, 46, m.mood as AvatarMood)}
       <div style="flex:1;min-width:0">
-        <div style="font-size:17px;font-weight:600">${t.name} <span class="muted" style="font-weight:400;font-size:14px">· ${t.role}</span></div>
-        <div style="font-size:15px;margin-top:3px" class="${t.state === 'muted' ? 'muted' : t.state}">${t.status}</div>
+        <div style="font-size:17px;font-weight:600">${m.name} <span class="muted" style="font-weight:400;font-size:14px">· ${m.role}</span></div>
+        <div style="font-size:15px;margin-top:3px" class="${m.state === 'muted' ? 'muted' : m.state}">${m.status}</div>
       </div>
-      <span class="dot bg-${t.state}"></span>
+      <span class="dot bg-${m.state}"></span>
     </div>`
     )
     .join('')
@@ -86,17 +87,16 @@ function hero() {
   <div class="bg-glow" style="width:420px;height:420px;left:-120px;bottom:-160px;background:#5B8DEF;opacity:.12"></div>
 
   <div style="position:absolute;left:96px;top:96px;width:760px">
-    <div class="eyebrow">${avatar('brasa', 22)} <span><b>gBot</b> · app para Mac e Windows que usa a sua assinatura do Claude</span></div>
-    <h1 style="font-size:92px;margin-top:40px">Monte um time de IA que trabalha <span class="hl">enquanto você dorme.</span></h1>
+    <div class="eyebrow">${avatar('brasa', 22)} <span><b>gBot</b> · the Mac and Windows app that runs on your Claude subscription</span></div>
+    <h1 style="font-size:92px;margin-top:40px">Build an AI team that works <span class="hl">while you sleep.</span></h1>
     <p style="font-size:24px;line-height:1.45;color:#c9cacc;margin:34px 0 0;max-width:680px">
-      Bots com personalidade, fluxos que rodam sozinhos, um navegador de verdade nas mãos deles e memória que aprende com os erros.
-      Sem API, sem cobrança extra: roda na assinatura que você já paga.
+      Bots with personality, workflows that run on their own, a real browser in their hands and a memory that learns from mistakes. No API keys, no extra bill: it runs on the subscription you already pay for.
     </p>
     <div style="display:flex;gap:10px;margin-top:40px;flex-wrap:wrap">
-      <span class="chip"><span class="dot bg-warn"></span>Fluxos agendados</span>
-      <span class="chip"><span class="dot" style="background:#5B8DEF"></span>Navega por você</span>
-      <span class="chip"><span class="dot bg-ok"></span>Aprende sozinho</span>
-      <span class="chip"><span class="dot" style="background:#9B7BF0"></span>Bots que chamam bots</span>
+      <span class="chip"><span class="dot bg-warn"></span>Scheduled workflows</span>
+      <span class="chip"><span class="dot" style="background:#5B8DEF"></span>Browses for you</span>
+      <span class="chip"><span class="dot bg-ok"></span>Learns on its own</span>
+      <span class="chip"><span class="dot" style="background:#9B7BF0"></span>Bots that call bots</span>
     </div>
   </div>
 
@@ -104,11 +104,11 @@ function hero() {
     <div style="position:absolute;right:30px;top:-70px;filter:drop-shadow(0 30px 40px rgba(0,0,0,.6))">${avatar('brasa', 190)}</div>
     <div class="card" style="padding:30px 32px 18px;margin-top:150px;box-shadow:0 40px 80px rgba(0,0,0,.55)">
       <div style="display:flex;justify-content:space-between;align-items:baseline">
-        <div style="font-size:15px;color:#8e9196;font-weight:500">Seu time agora</div>
-        <div class="warn" style="font-size:14px;display:flex;align-items:center;gap:8px"><span class="dot bg-warn"></span>3 trabalhando</div>
+        <div style="font-size:15px;color:#8e9196;font-weight:500">Your team right now</div>
+        <div class="warn" style="font-size:14px;display:flex;align-items:center;gap:8px"><span class="dot bg-warn"></span>3 working</div>
       </div>
       ${rows}
-      <div style="font-size:14px;padding-top:14px" class="muted">Próximo fluxo: <span style="color:#f2f2f2">Resumo da manhã</span> · amanhã, 07:00</div>
+      <div style="font-size:14px;padding-top:14px" class="muted">Next workflow: <span style="color:#f2f2f2">Morning summary</span> · tomorrow, 7:00</div>
     </div>
   </div>
 `
@@ -132,15 +132,15 @@ function features() {
   const link = `<div style="width:2px;height:16px;background:#3a3a3a;margin:0 auto"></div>`
   const miniFlow = `
     <div style="display:flex;flex-direction:column;align-items:center">
-      <div class="chip" style="background:#141414">Todo dia · 07:00</div>${link}
-      <div class="chip" style="background:#141414">${avatar('nuvem', 20)} Pesquisa as notícias</div>${link}
-      <div class="chip" style="border-color:#e3a02b55;color:#e3a02b;background:#141414">Tem algo urgente?</div>
+      <div class="chip" style="background:#141414">Every day · 7:00</div>${link}
+      <div class="chip" style="background:#141414">${avatar('nuvem', 20)} Researches the news</div>${link}
+      <div class="chip" style="border-color:#e3a02b55;color:#e3a02b;background:#141414">Anything urgent?</div>
     </div>`
   const browser = `
     <div style="width:280px;border:1px solid #2f2f2f;border-radius:14px;background:#121212;overflow:hidden">
       <div style="display:flex;gap:6px;align-items:center;padding:10px 12px;border-bottom:1px solid #262626">
         <span class="dot" style="background:#e5554d"></span><span class="dot" style="background:#e3a02b"></span><span class="dot bg-ok"></span>
-        <span style="margin-left:10px;font-size:12px;color:#8e9196;font-family:GeistMono">portal.empresa.com</span>
+        <span style="margin-left:10px;font-size:12px;color:#8e9196;font-family:GeistMono">portal.company.com</span>
       </div>
       <div style="padding:14px;display:flex;flex-direction:column;gap:8px">
         <div style="height:9px;width:70%;background:#2a2a2a;border-radius:5px"></div>
@@ -150,9 +150,9 @@ function features() {
     </div>`
   const memory = `
     <div style="width:290px;border:1px solid #2f2f2f;border-radius:14px;background:#121212;padding:16px 18px">
-      <div style="font-size:12px;color:#2fae6b;font-family:GeistMono;letter-spacing:.08em">+ LIÇÃO APRENDIDA</div>
-      <div style="font-size:16px;font-weight:600;margin-top:8px">Enviar relatório ao financeiro</div>
-      <div style="font-size:13px;color:#8e9196;margin-top:6px;line-height:1.45">1. Exportar em PDF, não XLSX<br>2. Assunto com o mês no início</div>
+      <div style="font-size:12px;color:#2fae6b;font-family:GeistMono;letter-spacing:.08em">+ LESSON LEARNED</div>
+      <div style="font-size:16px;font-weight:600;margin-top:8px">Send report to finance</div>
+      <div style="font-size:13px;color:#8e9196;margin-top:6px;line-height:1.45">1. Export as PDF, not XLSX<br>2. Month at the start of the subject</div>
     </div>`
   return page(
     W,
@@ -160,13 +160,13 @@ function features() {
     `
   <div class="bg-glow" style="width:700px;height:400px;left:450px;top:-260px;background:${ORANGE};opacity:.14"></div>
   <div style="position:absolute;left:96px;right:96px;top:80px">
-    <div class="tag">O que vem na caixa</div>
-    <h1 style="font-size:58px;margin-top:16px">Tudo que um time precisa. <span class="muted">Menos o salário.</span></h1>
+    <div class="tag">What's in the box</div>
+    <h1 style="font-size:58px;margin-top:16px">Everything a team needs. <span class="muted">Minus the payroll.</span></h1>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin-top:52px">
-      ${card(ORANGE, 'Bots com cara própria', 'Nome, avatar, instruções e modelo. Um especialista para cada tarefa.', `<div style="display:flex;align-items:center;gap:6px">${avatars}</div>`)}
-      ${card('#e3a02b', 'Fluxos que se viram', 'Arraste caixinhas, agende o horário e deixe a IA decidir o caminho.', miniFlow)}
-      ${card('#5B8DEF', 'Navegador de verdade', 'Seu Chrome ou Edge, com os seus logins salvos. O bot clica, lê e preenche.', browser)}
-      ${card('#2fae6b', 'Memória que aprende', 'Errou uma vez? Ele anota a lição e acerta de primeira na próxima.', memory)}
+      ${card(ORANGE, 'Bots with a face', 'Name, avatar, instructions and model. A specialist for every job.', `<div style="display:flex;align-items:center;gap:6px">${avatars}</div>`)}
+      ${card('#e3a02b', 'Workflows that handle it', 'Drag boxes, pick a schedule and let the AI choose the path.', miniFlow)}
+      ${card('#5B8DEF', 'A real browser', 'Your Chrome or Edge, with your saved logins. The bot clicks, reads and fills in.', browser)}
+      ${card('#2fae6b', 'Memory that learns', 'Got it wrong once? It writes down the lesson and nails it next time.', memory)}
     </div>
   </div>
 `
@@ -183,11 +183,11 @@ function problem(n: string, accent: string, pain: string, painText: string, fix:
     `
   <div class="bg-glow" style="width:640px;height:640px;right:160px;top:120px;background:${accent};opacity:.16"></div>
   <div style="position:absolute;left:96px;top:96px;width:500px">
-    <div class="tag" style="color:${accent}">Problema ${n}</div>
+    <div class="tag" style="color:${accent}">Problem ${n}</div>
     <h1 style="font-size:56px;margin-top:20px">${pain}</h1>
     <p style="font-size:21px;line-height:1.5;color:#8e9196;margin:26px 0 0">${painText}</p>
     <div style="margin-top:44px;padding:26px 28px;border-radius:20px;background:#171717;border:1px solid #2a2a2a;border-left:4px solid ${accent}">
-      <div style="display:flex;align-items:center;gap:12px;font-size:16px;font-weight:600;color:${accent}">${avatar('brasa', 26, 'happy')} Com o gBot</div>
+      <div style="display:flex;align-items:center;gap:12px;font-size:16px;font-weight:600;color:${accent}">${avatar('brasa', 26, 'happy')} With gBot</div>
       <div style="font-size:20px;line-height:1.5;color:#e4e4e4;margin-top:12px">${fix}</div>
     </div>
   </div>
@@ -199,24 +199,24 @@ function problem(n: string, accent: string, pain: string, painText: string, fix:
 function problem1() {
   type Row = { at: string; id: string; name: string; role: string; task: string; note?: string; state: 'ok' | 'run' | 'next' | 'sleep'; pct?: number }
   const rows: Row[] = [
-    { at: '06:30', id: 'brasa', name: 'Brasa', role: 'Pesquisa', task: 'Varreu Reddit, X e Hacker News: 3 tendências do seu nicho', state: 'ok' },
-    { at: '08:00', id: 'nuvem', name: 'Nuvem', role: 'Textos', task: 'Escreveu 3 posts para o LinkedIn', note: 'usou a pesquisa da Brasa', state: 'ok' },
-    { at: '10:00', id: 'eco', name: 'Eco', role: 'Prospecção', task: 'Achou 47 de 100 empresas com o perfil do seu cliente', state: 'run', pct: 47 },
-    { at: '14:00', id: 'rubi', name: 'Rubi', role: 'Revisão', task: 'Revisa os posts e separa os melhores', state: 'next' },
-    { at: 'Sex 17:00', id: 'bit', name: 'Bit', role: 'Newsletter', task: 'Monta a newsletter da semana com o melhor de tudo', state: 'sleep' }
+    { at: '6:30 AM', id: 'brasa', name: 'Brasa', role: 'Research', task: 'Scanned Reddit, X and Hacker News: 3 trends in your niche', state: 'ok' },
+    { at: '8:00 AM', id: 'nuvem', name: 'Nuvem', role: 'Writing', task: 'Wrote 3 LinkedIn posts', note: 'used Brasa\'s research', state: 'ok' },
+    { at: '10:00 AM', id: 'eco', name: 'Eco', role: 'Prospecting', task: 'Found 47 of 100 companies that match your ideal customer', state: 'run', pct: 47 },
+    { at: '2:00 PM', id: 'rubi', name: 'Rubi', role: 'Review', task: 'Reviews the posts and picks the best ones', state: 'next' },
+    { at: 'Fri 5 PM', id: 'bit', name: 'Bit', role: 'Newsletter', task: 'Puts together the week\'s newsletter with the best of it all', state: 'sleep' }
   ]
   const badge = (r: Row) =>
     r.state === 'ok'
-      ? `<span class="chip ok" style="border-color:#2fae6b44"><span class="dot bg-ok"></span>Pronto</span>`
+      ? `<span class="chip ok" style="border-color:#2fae6b44"><span class="dot bg-ok"></span>Done</span>`
       : r.state === 'run'
-        ? `<span class="chip warn" style="border-color:#e3a02b55"><span class="dot bg-warn"></span>Trabalhando</span>`
+        ? `<span class="chip warn" style="border-color:#e3a02b55"><span class="dot bg-warn"></span>Working</span>`
         : r.state === 'next'
-          ? `<span class="chip">Agendado</span>`
-          : `<span class="chip muted">Dormindo</span>`
+          ? `<span class="chip">Scheduled</span>`
+          : `<span class="chip muted">Asleep</span>`
   const mood = (r: Row): AvatarMood => (r.state === 'ok' ? 'happy' : r.state === 'run' ? 'thinking' : r.state === 'sleep' ? 'sleeping' : 'idle')
   const row = (r: Row) => `
     <div style="display:flex;align-items:center;gap:18px;padding:16px 0;border-bottom:1px solid #222;${r.state === 'sleep' ? 'opacity:.6' : ''}">
-      <div style="width:78px;font-family:GeistMono;font-size:14px;color:${r.state === 'run' ? '#e3a02b' : '#8e9196'}">${r.at}</div>
+      <div style="width:88px;font-family:GeistMono;font-size:14px;color:${r.state === 'run' ? '#e3a02b' : '#8e9196'}">${r.at}</div>
       ${avatar(r.id, 44, mood(r))}
       <div style="flex:1;min-width:0">
         <div style="font-size:16px;font-weight:600">${r.name} <span class="muted" style="font-weight:400;font-size:14px">· ${r.role}</span></div>
@@ -230,65 +230,65 @@ function problem1() {
   <div class="card" style="position:absolute;inset:0;padding:30px 34px;background:#121212;overflow:hidden">
     <div style="display:flex;justify-content:space-between;align-items:baseline;padding-bottom:6px">
       <div>
-        <div style="font-size:20px;font-weight:600">Rotina do time · hoje</div>
-        <div class="muted" style="font-size:14px;margin-top:4px">5 bots, cada um com o seu horário</div>
+        <div style="font-size:20px;font-weight:600">Team routine · today</div>
+        <div class="muted" style="font-size:14px;margin-top:4px">5 bots, each on its own schedule</div>
       </div>
-      <div class="ok" style="font-size:15px;display:flex;align-items:center;gap:8px"><span class="dot bg-ok"></span>2 entregas esperando você</div>
+      <div class="ok" style="font-size:15px;display:flex;align-items:center;gap:8px"><span class="dot bg-ok"></span>2 deliveries waiting for you</div>
     </div>
     ${rows.map(row).join('')}
     <div style="display:flex;align-items:center;gap:12px;margin-top:20px;padding:14px 18px;border-radius:14px;border:1px dashed #333;font-size:15px;color:#c9cacc">
-      ${avatar('brasa', 24, 'happy')} Você só revisa o que chega pronto. O resto o time faz sozinho.
+      ${avatar('brasa', 24, 'happy')} You only review what arrives finished. The team handles the rest.
     </div>
   </div>`
   return problem(
     '01',
     ORANGE,
-    'Você faz sozinho o trabalho de um time inteiro.',
-    'Pesquisar, escrever, prospectar, revisar, mandar a newsletter. Todo dia a lista é maior que o dia.',
-    'Monte o seu time: cada bot com nome, cara e <b>rotina própria</b>. Um pesquisa de madrugada, outro escreve com o que foi achado, outro prospecta à tarde. Você só aprova.',
+    'You\'re doing a whole team\'s job by yourself.',
+    'Research, write, prospect, review, send the newsletter. Every day the list is longer than the day.',
+    'Build your team: every bot with a name, a face and <b>its own routine</b>. One researches before dawn, another writes from what was found, another prospects in the afternoon. You just approve.',
     mock
   )
 }
 
 function problem2() {
-  const step = (t: string) =>
-    `<div style="display:flex;align-items:center;gap:10px;font-size:15px;color:#c9cacc;padding:7px 0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2fae6b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>${t}</div>`
+  const step = (text: string) =>
+    `<div style="display:flex;align-items:center;gap:10px;font-size:15px;color:#c9cacc;padding:7px 0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2fae6b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>${text}</div>`
   const row = (nf: string, who: string, val: string, late: string) =>
     `<tr><td style="padding:11px 0;font-family:GeistMono;color:#c9cacc">${nf}</td><td>${who}</td><td style="text-align:right">${val}</td><td style="text-align:right;color:#e5554d">${late}</td></tr>`
   const mock = `
   <div class="card" style="position:absolute;inset:0;overflow:hidden;padding:30px 34px;background:#121212">
     <div style="display:flex;align-items:center;gap:12px;padding-bottom:20px;border-bottom:1px solid #242424">
-      ${avatar('eco', 34, 'happy')}<div><div style="font-size:17px;font-weight:600">Eco</div><div class="muted" style="font-size:13px">Bot · usa o navegador</div></div>
+      ${avatar('eco', 34, 'happy')}<div><div style="font-size:17px;font-weight:600">Eco</div><div class="muted" style="font-size:13px">Bot · uses the browser</div></div>
     </div>
     <div style="display:flex;justify-content:flex-end;margin-top:24px">
       <div style="max-width:560px;background:#242424;border-radius:18px 18px 4px 18px;padding:14px 18px;font-size:17px;line-height:1.45">
-        Entra no portal de fornecedores, confere as notas de outubro e me diz quais estão vencidas.
+        Go to the supplier portal, check October's invoices and tell me which ones are overdue.
       </div>
     </div>
     <div style="margin-top:22px;padding:6px 18px;border:1px solid #242424;border-radius:16px;background:#161616">
-      ${step('Abriu <span style="font-family:GeistMono;color:#f2f2f2">portal-fornecedores.com</span> no seu navegador')}
-      ${step('Usou o login que já estava salvo')}
-      ${step('Leu 42 notas fiscais de outubro')}
-      ${step('Comparou os vencimentos com a data de hoje')}
+      ${step('Opened <span style="font-family:GeistMono;color:#f2f2f2">supplier-portal.com</span> in your browser')}
+      ${step('Reused the login you had already saved')}
+      ${step('Read 42 invoices from October')}
+      ${step('Compared the due dates with today\'s date')}
     </div>
-    <div style="margin-top:22px;font-size:17px;line-height:1.5">Encontrei <b class="hl">3 notas vencidas</b>, somando R$ 11.290:</div>
+    <div style="margin-top:22px;font-size:17px;line-height:1.5">I found <b class="hl">3 overdue invoices</b>, totaling $11,290:</div>
     <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:15px">
-      <tr class="muted" style="font-size:13px"><td style="padding-bottom:6px">Nota</td><td>Fornecedor</td><td style="text-align:right">Valor</td><td style="text-align:right">Atraso</td></tr>
-      ${row('NF 1042', 'Alfa Embalagens', 'R$ 4.820', '3 dias')}
-      ${row('NF 1057', 'Nova Logística', 'R$ 3.910', '6 dias')}
-      ${row('NF 1063', 'Beta Serviços', 'R$ 2.560', '1 dia')}
+      <tr class="muted" style="font-size:13px"><td style="padding-bottom:6px">Invoice</td><td>Supplier</td><td style="text-align:right">Amount</td><td style="text-align:right">Late by</td></tr>
+      ${row('INV 1042', 'Alpha Packaging', '$4,820', '3 days')}
+      ${row('INV 1057', 'Nova Logistics', '$3,910', '6 days')}
+      ${row('INV 1063', 'Beta Services', '$2,560', '1 day')}
     </table>
     <div style="position:absolute;left:34px;right:34px;bottom:28px;display:flex;align-items:center;gap:12px;padding:14px 16px 14px 20px;border:1px solid #2a2a2a;border-radius:16px;background:#171717">
-      <span style="flex:1;font-size:16px;color:#c9cacc">Manda um e-mail cobrando os três, com cópia pro financeiro</span>
+      <span style="flex:1;font-size:16px;color:#c9cacc">Email all three asking for payment, cc finance</span>
       <span style="width:34px;height:34px;border-radius:50%;background:#f2f2f2;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span>
     </div>
   </div>`
   return problem(
     '02',
     '#5B8DEF',
-    'Copiar e colar entre sistemas virou o seu emprego.',
-    'Portal, planilha, e-mail, portal de novo. Trabalho repetitivo que ninguém vê e todo mundo cobra.',
-    'O gBot abre <b>o seu navegador</b>, com os seus logins salvos, e faz a parte chata: entra, procura, confere e te entrega só a resposta.',
+    'Copy-pasting between systems became your job.',
+    'Portal, spreadsheet, email, portal again. Repetitive work nobody sees and everybody expects.',
+    'gBot opens <b>your own browser</b>, with your saved logins, and does the boring part: signs in, searches, checks and hands you just the answer.',
     mock
   )
 }
@@ -298,30 +298,30 @@ function problem3() {
   <div style="position:absolute;inset:0">
     <div class="card" style="position:absolute;left:0;top:0;width:520px;padding:28px 30px;background:#121212;box-shadow:0 30px 60px rgba(0,0,0,.5)">
       <div style="display:flex;align-items:center;gap:12px">
-        ${avatar('nina', 34)}<div><div style="font-size:17px;font-weight:600">Memória da Nina</div><div class="muted" style="font-size:13px">4 lições · ~120 tokens no prompt</div></div>
+        ${avatar('nina', 34)}<div><div style="font-size:17px;font-weight:600">Nina's memory</div><div class="muted" style="font-size:13px">4 lessons · ~120 tokens in the prompt</div></div>
       </div>
       <div style="margin-top:22px;border:1px solid #2fae6b55;border-radius:16px;padding:18px 20px;background:#2fae6b0d">
-        <div style="font-size:12px;color:#2fae6b;font-family:GeistMono;letter-spacing:.1em">NOVA LIÇÃO</div>
-        <div style="font-size:19px;font-weight:600;margin-top:8px">Publicar post no blog</div>
-        <div class="muted" style="font-size:14px;margin-top:4px">Quando: ao subir um post novo</div>
-        <div style="font-size:15px;line-height:1.6;color:#d6d6d6;margin-top:12px">1. Salvar como rascunho primeiro<br>2. Capa em 1200×630<br>3. Publicar só depois do ok do @Rubi</div>
-        <div class="muted" style="font-size:13px;margin-top:12px">Por quê: o post da semana passada saiu sem capa.</div>
+        <div style="font-size:12px;color:#2fae6b;font-family:GeistMono;letter-spacing:.1em">NEW LESSON</div>
+        <div style="font-size:19px;font-weight:600;margin-top:8px">Publish a blog post</div>
+        <div class="muted" style="font-size:14px;margin-top:4px">When: uploading a new post</div>
+        <div style="font-size:15px;line-height:1.6;color:#d6d6d6;margin-top:12px">1. Save as a draft first<br>2. Cover image at 1200×630<br>3. Publish only after @Rubi signs off</div>
+        <div class="muted" style="font-size:13px;margin-top:12px">Why: last week's post went out without a cover.</div>
       </div>
-      <div class="muted" style="font-size:13px;margin-top:14px">Aprendido há 2 dias · fluxo "Post semanal"</div>
+      <div class="muted" style="font-size:13px;margin-top:14px">Learned 2 days ago · "Weekly post" workflow</div>
     </div>
 
     <div class="card" style="position:absolute;right:0;top:330px;width:470px;padding:24px 26px;background:#171717;box-shadow:0 30px 60px rgba(0,0,0,.55)">
       <div style="display:flex;justify-content:flex-end">
-        <div style="background:#242424;border-radius:16px 16px 4px 16px;padding:12px 16px;font-size:16px">@Nina escreve o post de sexta</div>
+        <div style="background:#242424;border-radius:16px 16px 4px 16px;padding:12px 16px;font-size:16px">@Nina write Friday's post</div>
       </div>
       <div style="display:flex;gap:12px;margin-top:18px">
         ${avatar('nina', 30, 'talking')}
         <div style="flex:1">
           <div style="display:flex;flex-direction:column;gap:8px">
-            <span class="chip" style="align-self:flex-start"><span class="dot bg-ok"></span>Usou a lição "Publicar post no blog"</span>
-            <span class="chip" style="align-self:flex-start">${avatar('rubi', 18, 'happy')} Consultou Rubi: "revisado, pode subir"</span>
+            <span class="chip" style="align-self:flex-start"><span class="dot bg-ok"></span>Used the lesson "Publish a blog post"</span>
+            <span class="chip" style="align-self:flex-start">${avatar('rubi', 18, 'happy')} Asked Rubi: "reviewed, good to go"</span>
           </div>
-          <div style="font-size:16px;line-height:1.5;margin-top:12px;color:#e4e4e4">Pronto: rascunho salvo com capa e revisado pela Rubi. <span class="ok">Acertei de primeira.</span></div>
+          <div style="font-size:16px;line-height:1.5;margin-top:12px;color:#e4e4e4">Done: draft saved with a cover and reviewed by Rubi. <span class="ok">Got it right the first time.</span></div>
         </div>
       </div>
     </div>
@@ -329,29 +329,53 @@ function problem3() {
   return problem(
     '03',
     '#2fae6b',
-    'Sua IA esquece tudo e repete o mesmo erro amanhã.',
-    'Toda conversa começa do zero. Você explica de novo, corrige de novo e perde a paciência de novo.',
-    'Os bots do gBot <b>anotam o que deu errado</b> e acertam de primeira na próxima. Quando precisam, chamam outro bot especialista para ajudar.',
+    'Your AI forgets everything and repeats the same mistake tomorrow.',
+    'Every chat starts from zero. You explain again, correct again, lose your patience again.',
+    'gBot\'s bots <b>write down what went wrong</b> and get it right the next time. When they need help, they call in another specialist bot.',
     mock
   )
 }
 
+// ───────────────────────── Prévia para redes sociais (1280×640) ─────────────────────────
+function social() {
+  return page(
+    1280,
+    640,
+    `
+  <div class="dots" style="opacity:.5;mask-image:radial-gradient(circle at 78% 50%, #000 0, transparent 65%)"></div>
+  <div class="bg-glow" style="width:520px;height:520px;right:40px;top:60px;background:${ORANGE};opacity:.25"></div>
+  <div style="position:absolute;left:80px;top:90px;width:700px">
+    <div style="display:flex;align-items:center;gap:16px">${avatar('brasa', 44)}<span style="font-size:40px;font-weight:600;letter-spacing:-0.03em">gBot</span></div>
+    <h1 style="font-size:74px;margin-top:40px">Build an AI team that works <span class="hl">while you sleep.</span></h1>
+    <p style="font-size:23px;color:#a9abaf;margin-top:30px">Bots, workflows, a real browser and memory. On your Claude subscription.</p>
+  </div>
+  <div style="position:absolute;right:90px;top:120px;filter:drop-shadow(0 30px 40px rgba(0,0,0,.6))">${avatar('brasa', 300)}</div>
+  <div style="position:absolute;right:84px;bottom:56px;display:flex;gap:8px;align-items:flex-end">${['nuvem', 'eco', 'bit', 'nina', 'rubi'].map((id) => avatar(id, 48)).join('')}</div>
+`
+  )
+}
+
 // ───────────────────────── Fotografa ─────────────────────────
-const pages = {
-  'hero.png': [hero(), 1600, 860],
-  'recursos.png': [features(), 1600, 720],
-  'problema-1-time.png': [problem1(), 1600, 820],
-  'problema-2-navegador.png': [problem2(), 1600, 820],
-  'problema-3-memoria.png': [problem3(), 1600, 820]
-} as const
+const PAGES: [string, () => string, number, number][] = [
+  ['hero.png', hero, 1600, 860],
+  ['features.png', features, 1600, 720],
+  ['problem-1-team.png', problem1, 1600, 820],
+  ['problem-2-browser.png', problem2, 1600, 820],
+  ['problem-3-memory.png', problem3, 1600, 820]
+]
 
 const tmp = mkdtempSync(join(tmpdir(), 'gbot-marketing-'))
-mkdirSync(OUT, { recursive: true })
-const jobs = Object.entries(pages).map(([name, [html, width, height]]) => {
+const jobs: { html: string; out: string; width: number; height: number; scale?: number }[] = []
+const add = (dir: string, name: string, html: string, width: number, height: number, scale?: number) => {
+  mkdirSync(dir, { recursive: true })
   const file = join(tmp, name.replace('.png', '.html'))
   writeFileSync(file, html)
-  return { html: file, out: join(OUT, name), width, height }
-})
+  jobs.push({ html: file, out: join(dir, name), width, height, scale })
+}
+for (const [name, make, width, height] of PAGES) add(OUT, name, make(), width, height)
+// O GitHub pede 1280×640 e menos de 1 MB.
+add(OUT, 'social.png', social(), 1280, 640, 1)
+
 const jobsFile = join(tmp, 'jobs.json')
 writeFileSync(jobsFile, JSON.stringify(jobs))
 const r = spawnSync(join(ROOT, 'node_modules/.bin/electron'), [join(import.meta.dirname, 'capture.cjs'), jobsFile], { stdio: 'inherit' })

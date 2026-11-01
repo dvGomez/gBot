@@ -1,4 +1,4 @@
-// Fotografa páginas HTML em PNG (2x). Chamado por make-marketing.mts: electron capture.cjs <jobs.json>
+// Fotografa páginas HTML em PNG (2x, ou a escala pedida no job). Chamado por make-marketing.mts: electron capture.cjs <jobs.json>
 const { app, BrowserWindow } = require('electron')
 const fs = require('node:fs')
 
@@ -12,7 +12,8 @@ app.whenReady().then(async () => {
     await win.loadFile(job.html)
     await win.webContents.executeJavaScript('document.fonts.ready.then(() => new Promise((r) => setTimeout(r, 300)))')
     let img = await win.webContents.capturePage()
-    if (img.getSize().width !== job.width * 2) img = img.resize({ width: job.width * 2, quality: 'best' })
+    const scale = job.scale ?? 2
+    if (img.getSize().width !== job.width * scale) img = img.resize({ width: job.width * scale, quality: 'best' })
     fs.writeFileSync(job.out, img.toPNG())
     console.log('ok', job.out.split('/').slice(-2).join('/'), img.getSize())
     win.destroy()

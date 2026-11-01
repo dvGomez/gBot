@@ -2,7 +2,7 @@
   "name": "gbot",
   "productName": "gBot",
   "version": "0.2.0",
-  "description": "gBot — monte um time de bots de IA no seu computador, usando a sua assinatura do Claude",
+  "description": "gBot: build an AI team that works while you sleep, on your own Claude subscription",
   "main": "./out/main/index.js",
   "author": "Lucas Carvalho",
   "private": true,
@@ -43,5 +43,13 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.5"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dvGomez/gBot.git"
+  },
+  "homepage": "https://github.com/dvGomez/gBot#readme",
+  "bugs": {
+    "url": "https://github.com/dvGomez/gBot/issues"
+  }
 }

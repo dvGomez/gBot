@@ -1,0 +1,7 @@
+# Mantém as actions do workflow atualizadas (as dependências do npm são atualizadas à mão).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
