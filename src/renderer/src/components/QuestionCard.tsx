@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { useState } from 'react'
 import { Check, LoaderCircle, MessageCircleQuestion } from 'lucide-react'
 import type { QuestionAnswer, UserQuestion } from '@shared/types'
@@ -22,7 +23,7 @@ export function QuestionCard({
   onSubmit,
   onSkip,
   busy,
-  title = 'Algumas perguntas para acertar de primeira'
+  title = tr('Algumas perguntas para acertar de primeira')
 }: {
   questions: UserQuestion[]
   onSubmit(answers: QuestionAnswer[]): void
@@ -30,6 +31,7 @@ export function QuestionCard({
   busy?: boolean
   title?: string
 }) {
+  useLanguage()
   const [choices, setChoices] = useState<Choice[]>(() => questions.map(() => ({ picked: [], other: '', otherOn: false })))
   const complete = choices.every((c) => answerOf(c))
 
@@ -105,7 +107,7 @@ export function QuestionCard({
                   disabled={busy}
                   onFocus={() => update(i, (c) => ({ ...c, otherOn: true, picked: q.multiSelect ? c.picked : [] }))}
                   onChange={(e) => update(i, (c) => ({ ...c, other: e.target.value, otherOn: true }))}
-                  placeholder="Outra resposta…"
+                  placeholder={tr('Outra resposta…')}
                   className="selectable h-7 min-w-0 flex-1 bg-transparent text-[13px] text-fg outline-none placeholder:text-muted"
                 />
               </div>
@@ -115,18 +117,14 @@ export function QuestionCard({
       </div>
       <div className="mt-4 flex items-center justify-end gap-2">
         {onSkip && (
-          <Button variant="ghost" onClick={onSkip} disabled={busy}>
-            Pular, decida você
-          </Button>
+          <Button variant="ghost" onClick={onSkip} disabled={busy}>{tr('Pular, decida você')}</Button>
         )}
         <Button
           variant="primary"
           disabled={!complete || busy}
           onClick={() => onSubmit(questions.map((q, i) => ({ question: q.question, answer: answerOf(choices[i]) })))}
         >
-          {busy && <LoaderCircle size={14} className="animate-spin" />}
-          Enviar respostas
-        </Button>
+          {busy && <LoaderCircle size={14} className="animate-spin" />}{tr('Enviar respostas')}</Button>
       </div>
     </div>
   )

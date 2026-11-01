@@ -60,7 +60,7 @@ function describe(tool: string, input: Record<string, unknown>): string {
   return `${tool} ${json.length > 300 ? `${json.slice(0, 300)}…` : json}`
 }
 
-export function registerApprovalTool(server: McpServer, caller: { readonly conversationId: string; readonly callerName: string }) {
+export function registerApprovalTool(server: McpServer, caller: { readonly conversationId: string; readonly callerName: string; readonly signal?: AbortSignal }) {
   server.registerTool(
     'approve',
     {
@@ -80,7 +80,7 @@ export function registerApprovalTool(server: McpServer, caller: { readonly conve
         host: rule,
         action: describe(tool_name, input),
         alwaysLabel: label
-      })
+      }, caller.signal)
       const result =
         decision === 'deny'
           ? {

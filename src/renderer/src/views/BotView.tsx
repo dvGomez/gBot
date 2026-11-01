@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { ArrowLeft, MessageSquarePlus, Pencil, Trash2 } from 'lucide-react'
 import { BotFiles } from '@/components/BotFiles'
 import { BotTasks } from '@/components/BotTasks'
@@ -14,11 +15,13 @@ import { useApp } from '@/state/app'
 /** Página de um bot: identidade, instruções e as conversas com ele. */
 /** Arquivos que o bot mexeu nas conversas, consultas e fluxos. */
 function BotTouchedFiles({ botId }: { botId: string }) {
+  useLanguage()
   const files = useTouchedFiles({ botId })
-  return <FilesPanel files={files} empty="Nenhum arquivo mexido por este bot ainda." />
+  return <FilesPanel files={files} empty={tr('Nenhum arquivo mexido por este bot ainda.')} />
 }
 
 export function BotView() {
+  useLanguage()
   const app = useApp()
   const bot = app.selectedBot
   if (!bot) return null
@@ -31,7 +34,7 @@ export function BotView() {
         onClick={() => (project ? app.openProject(project.id) : app.setView('home'))}
         className="mb-4 inline-flex items-center gap-1.5 text-[13px] text-muted hover:text-fg"
       >
-        <ArrowLeft size={14} /> {project ? project.name : 'Início'}
+        <ArrowLeft size={14} /> {project ? project.name : tr('Início')}
       </button>
 
       <div className="flex items-center gap-6">
@@ -53,25 +56,23 @@ export function BotView() {
           <h1 className="mt-1 text-[36px] leading-tight font-medium tracking-[-0.03em]">{bot.name}</h1>
           {bot.description && <p className="mt-1 text-[15px] text-muted">{bot.description}</p>}
           {app.models.length > 0 && (
-            <p className="mt-2 text-[12px] text-muted">Modelo: {modelLabel(app.models, bot.model)}</p>
+            <p className="mt-2 text-[12px] text-muted">{tr('Modelo: ')}{modelLabel(app.models, bot.model)}</p>
           )}
         </div>
         <div className="flex gap-2">
           <LimitsButton className="self-center" />
           <Button onClick={() => app.editBot(bot.id)}>
-            <Pencil size={14} /> Editar
-          </Button>
+            <Pencil size={14} />{tr(' Editar')}</Button>
           <Button variant="primary" onClick={() => app.newConversation(bot.id)}>
-            <MessageSquarePlus size={14} /> Nova conversa
-          </Button>
+            <MessageSquarePlus size={14} />{tr(' Nova conversa')}</Button>
           <ItemMenu
             className="self-center"
             actions={[
               {
-                label: 'Excluir bot',
+                label: tr('Excluir bot'),
                 icon: Trash2,
                 danger: true,
-                confirm: `Excluir ${bot.name} e as conversas dele? Não dá para desfazer.`,
+                confirm: tr('Excluir {0} e as conversas dele? Não dá para desfazer.', bot.name),
                 onSelect: () => void app.removeBot(bot.id)
               }
             ]}
@@ -83,19 +84,19 @@ export function BotView() {
 
       <div className="mt-8 grid grid-cols-[1fr_360px] gap-4">
         <Card className="p-5">
-          <p className="pb-2 text-[13px] font-medium text-muted">Conversas com {bot.name}</p>
-          <ConversationList items={conversations} empty="Nenhuma conversa ainda. Comece uma nova." />
+          <p className="pb-2 text-[13px] font-medium text-muted">{tr('Conversas com ')}{bot.name}</p>
+          <ConversationList items={conversations} empty={tr('Nenhuma conversa ainda. Comece uma nova.')} />
         </Card>
         <div className="space-y-4 self-start">
           <Card className="p-5">
-            <p className="pb-2 text-[13px] font-medium text-muted">Instruções</p>
+            <p className="pb-2 text-[13px] font-medium text-muted">{tr('Instruções')}</p>
             <p className="selectable text-[13px] leading-relaxed whitespace-pre-wrap text-fg-2">{bot.instructions}</p>
           </Card>
           <Card className="p-5">
             <BotFiles key={bot.id} botId={bot.id} botName={bot.name} />
           </Card>
           <Card className="p-5">
-            <p className="pb-2 text-[13px] font-medium text-muted">Arquivos mexidos</p>
+            <p className="pb-2 text-[13px] font-medium text-muted">{tr('Arquivos mexidos')}</p>
             <BotTouchedFiles botId={bot.id} />
           </Card>
           <Card className="p-5">

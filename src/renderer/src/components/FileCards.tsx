@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { File, FileImage, FileSpreadsheet, FileText, FolderSearch } from 'lucide-react'
 import type { ChatFile } from '@shared/types'
 
@@ -14,7 +15,8 @@ export function iconFor(name: string) {
 
 /** Arquivos gerados numa resposta: clicar abre no app padrão; o ícone ao lado mostra no Finder/Explorer. */
 export function FileCards({ files }: { files: ChatFile[] }) {
-  const where = window.gbot.platform === 'darwin' ? 'Mostrar no Finder' : 'Mostrar no Explorer'
+  useLanguage()
+  const where = window.gbot.platform === 'darwin' ? tr('Mostrar no Finder') : tr('Mostrar no Explorer')
   return (
     <div className="mt-3 flex flex-wrap gap-2">
       {files.map((f) => {
@@ -23,13 +25,13 @@ export function FileCards({ files }: { files: ChatFile[] }) {
           <div key={f.path} className="flex max-w-full items-center rounded-tile border border-line bg-sidebar">
             <button
               onClick={() => void window.gbot.files.open(f.path)}
-              title={`Abrir ${f.path}`}
+              title={tr('Abrir {0}', f.path)}
               className="flex min-w-0 items-center gap-3 rounded-l-tile py-2.5 pr-3 pl-3.5 text-left hover:bg-hover"
             >
               <Icon size={20} className="shrink-0 text-muted" />
               <span className="min-w-0">
                 <span className="block truncate text-[13px] font-medium">{f.name}</span>
-                <span className="block text-[11px] text-muted">{fileSize(f.size)} · abrir</span>
+                <span className="block text-[11px] text-muted">{fileSize(f.size)}{tr(' · abrir')}</span>
               </span>
             </button>
             <button

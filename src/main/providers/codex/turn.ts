@@ -6,6 +6,7 @@ import type { ChatEvent, TokenUsage } from '@shared/types'
 import { totalTokens } from '@shared/usage'
 import { recordFiles } from '../../fileIndex'
 import { recordUsage } from '../../usage'
+import { killProcessTree, processGroup } from '../../processTree'
 import { fileContext, type UsageTag } from '../claude-code/session'
 import { sanitizePlan } from '../claude-code/architect'
 import { ASK_BOT_TOOL, describeTool, HIDDEN_TOOLS, PROPOSE_PLAN_TOOL } from '../claude-code/tools'
@@ -113,6 +114,7 @@ const resultText = (r: Item['result']) =>
 
 export async function runCodexTurn(opts: TurnOptions, emit: (ev: ChatEvent) => void, signal: AbortSignal): Promise<void> {
   const { bin, env, accountId } = await resolveCodexEnv()
+  signal.throwIfAborted()
   const key = `${opts.conversationId}:${accountId}`
   const threadId = readThreads()[key]
   const config = [
@@ -139,7 +141,7 @@ export async function runCodexTurn(opts: TurnOptions, emit: (ev: ChatEvent) => v
 
   emit({ type: 'mood', mood: 'thinking' })
   await new Promise<void>((resolve) => {
-    const proc = spawn(bin, argv, { cwd: opts.cwd, env: { ...env, GBOT_MCP_TOKEN: opts.mcp.token }, windowsHide: true })
+    const proc = spawn(bin, argv, { cwd: opts.cwd, env: { ...env, GBOT_MCP_TOKEN: opts.mcp.token }, ...processGroup })
     let buffer = ''
     let stderr = ''
     let finished = false
@@ -156,7 +158,7 @@ export async function runCodexTurn(opts: TurnOptions, emit: (ev: ChatEvent) => v
     }
 
     const onAbort = () => {
-      proc.kill()
+      killProcessTree(proc)
       finish({ type: 'done' })
     }
     signal.addEventListener('abort', onAbort, { once: true })
@@ -201,6 +203,7 @@ export async function runCodexTurn(opts: TurnOptions, emit: (ev: ChatEvent) => v
     }
 
     const onLine = (line: Line) => {
+      if (finished || signal.aborted) return
       switch (line.type) {
         case 'thread.started':
           if (line.thread_id) saveThread(key, line.thread_id)

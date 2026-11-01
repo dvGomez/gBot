@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { useEffect, useState } from 'react'
 import { ExternalLink, Hand, X } from 'lucide-react'
 import type { PendingConfirmation } from '@shared/types'
@@ -9,6 +10,7 @@ import { Button, inputClass } from './ui'
 
 /** Botões das opções: a primeira em destaque, como na notificação. */
 function OptionButtons({ item, note, small }: { item: PendingConfirmation; note?: string; small?: boolean }) {
+  useLanguage()
   const app = useApp()
   const [sending, setSending] = useState(false)
   return (
@@ -36,6 +38,7 @@ function OptionButtons({ item, note, small }: { item: PendingConfirmation; note?
  * anteriores e os arquivos (imagens com miniatura), sem precisar abrir o fluxo.
  */
 export function ConfirmationModal() {
+  useLanguage()
   const app = useApp()
   const item = app.confirmations.find((c) => c.id === app.openConfirmationId)
   const [note, setNote] = useState('')
@@ -65,7 +68,7 @@ export function ConfirmationModal() {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Confirmação do fluxo"
+        aria-label={tr('Confirmação do fluxo')}
         className="flex max-h-full w-full max-w-[720px] flex-col overflow-hidden rounded-card border border-line bg-page shadow-2xl"
       >
         <div className="flex items-start gap-3 border-b border-line px-6 py-4">
@@ -73,14 +76,13 @@ export function ConfirmationModal() {
             <Hand size={17} />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[12px] text-muted">
-              Fluxo {item.flowName} · {timeAgo(item.createdAt)}
+            <p className="text-[12px] text-muted">{tr('Fluxo ')}{item.flowName} · {timeAgo(item.createdAt)}
             </p>
             <p className="truncate text-[16px] font-semibold">{item.title}</p>
           </div>
           <button
             onClick={() => app.openConfirmation(undefined)}
-            aria-label="Fechar"
+            aria-label={tr('Fechar')}
             className="rounded-full p-1.5 text-muted hover:bg-hover hover:text-fg"
           >
             <X size={16} />
@@ -88,7 +90,7 @@ export function ConfirmationModal() {
         </div>
 
         <div className="selectable space-y-4 overflow-y-auto px-6 py-5">
-          <p className="text-[15px] leading-relaxed text-fg">{item.message || 'Escolha como o fluxo deve seguir.'}</p>
+          <p className="text-[15px] leading-relaxed text-fg">{item.message || tr('Escolha como o fluxo deve seguir.')}</p>
 
           {images.length > 0 && (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -96,7 +98,7 @@ export function ConfirmationModal() {
                 <button
                   key={f.path}
                   onClick={() => void window.gbot.files.open(f.path)}
-                  title={`Abrir ${f.name}`}
+                  title={tr('Abrir {0}', f.name)}
                   className="group overflow-hidden rounded-tile border border-line bg-sidebar text-left"
                 >
                   <img src={f.thumb} alt={f.name} className="aspect-[4/3] w-full object-cover transition-opacity group-hover:opacity-85" />
@@ -109,7 +111,7 @@ export function ConfirmationModal() {
 
           {item.detail && (
             <div>
-              <p className="pb-1.5 text-[12px] font-medium text-muted">O que chegou até aqui</p>
+              <p className="pb-1.5 text-[12px] font-medium text-muted">{tr('O que chegou até aqui')}</p>
               <div className="max-h-[260px] overflow-y-auto rounded-tile bg-sidebar px-4 py-3 text-[13px]">
                 <Markdown text={item.detail} />
               </div>
@@ -120,7 +122,7 @@ export function ConfirmationModal() {
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={2}
-            placeholder="Comentário (opcional): vai junto para as próximas caixinhas. Ex.: aprovado, mas dê 5% de desconto."
+            placeholder={tr('Comentário (opcional): vai junto para as próximas caixinhas. Ex.: aprovado, mas dê 5% de desconto.')}
             className={`${inputClass} resize-y leading-relaxed`}
           />
         </div>
@@ -134,8 +136,7 @@ export function ConfirmationModal() {
               app.openFlow(item.flowId)
             }}
           >
-            <ExternalLink size={14} /> Abrir fluxo
-          </Button>
+            <ExternalLink size={14} />{tr(' Abrir fluxo')}</Button>
           <OptionButtons item={item} note={note} />
         </div>
       </div>
@@ -145,6 +146,7 @@ export function ConfirmationModal() {
 
 /** Aviso no topo, em qualquer tela, enquanto houver confirmação esperando: dá para responder dali mesmo. */
 export function PendingConfirmationsBar() {
+  useLanguage()
   const app = useApp()
   const first = app.confirmations[0]
   if (!first) return null
@@ -153,13 +155,11 @@ export function PendingConfirmationsBar() {
     <div className="mx-auto mb-2 flex w-full max-w-[860px] flex-wrap items-center gap-2 rounded-tile border border-warning/50 bg-sidebar px-4 py-2.5 text-[13px]">
       <Hand size={15} className="shrink-0 text-warning" />
       <button onClick={() => app.openConfirmation(first.id)} className="min-w-0 flex-1 truncate text-left text-fg-2 hover:text-fg">
-        <span className="font-medium text-fg">{first.flowName}</span> espera sua confirmação: {first.title}
-        {first.files.length > 0 && ` · ${first.files.length === 1 ? '1 arquivo' : `${first.files.length} arquivos`}`}
+        <span className="font-medium text-fg">{first.flowName}</span>{tr(' espera sua confirmação: ')}{first.title}
+        {first.files.length > 0 && ` · ${first.files.length === 1 ? tr('1 arquivo') : tr('{0} arquivos', first.files.length)}`}
         {more > 0 && ` (+${more})`}
       </button>
-      <Button variant="ghost" className="h-7 px-3 text-[12px]" onClick={() => app.openConfirmation(first.id)}>
-        Ver detalhes
-      </Button>
+      <Button variant="ghost" className="h-7 px-3 text-[12px]" onClick={() => app.openConfirmation(first.id)}>{tr('Ver detalhes')}</Button>
       <OptionButtons item={first} small />
     </div>
   )

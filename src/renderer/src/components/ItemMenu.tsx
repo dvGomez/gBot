@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { useEffect, useRef, useState, type ComponentType } from 'react'
 import { MoreHorizontal } from 'lucide-react'
 import { cn } from '@/lib/cn'
@@ -15,12 +16,13 @@ export interface MenuAction {
 export function ItemMenu({
   actions,
   className,
-  label = 'Mais opções'
+  label = tr('Mais opções')
 }: {
   actions: MenuAction[]
   className?: string
   label?: string
 }) {
+  useLanguage()
   const [open, setOpen] = useState(false)
   const [confirming, setConfirming] = useState<MenuAction>()
   const ref = useRef<HTMLDivElement>(null)
@@ -76,9 +78,7 @@ export function ItemMenu({
                   type="button"
                   onClick={() => setConfirming(undefined)}
                   className="rounded-full px-3 py-1 text-[12px] text-fg-2 hover:bg-hover"
-                >
-                  Cancelar
-                </button>
+                >{tr('Cancelar')}</button>
                 <button
                   type="button"
                   onClick={() => {

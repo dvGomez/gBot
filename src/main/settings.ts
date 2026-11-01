@@ -18,6 +18,7 @@ export function getSettings(): AppSettings {
 }
 
 export function updateSettings(patch: Partial<AppSettings>): AppSettings {
+  if (patch.language !== undefined && !['system', 'en', 'pt-BR'].includes(patch.language)) throw new Error('Unsupported language')
   const next = { ...getSettings(), ...patch }
   const tmp = `${file()}.tmp`
   writeFileSync(tmp, JSON.stringify(next, null, 2))

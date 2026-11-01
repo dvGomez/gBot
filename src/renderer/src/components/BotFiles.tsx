@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { useEffect, useState, type DragEvent } from 'react'
 import { FileImage, FileText, FolderSearch, Paperclip, Plus, Trash2, TriangleAlert } from 'lucide-react'
 import type { BotFile } from '@shared/types'
@@ -15,6 +16,7 @@ const UNREADABLE = new Set(['docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt', 'zip', 
 
 /** Nota do arquivo, editável no lugar; salva ao sair do campo. */
 function NoteInput({ botId, file }: { botId: string; file: BotFile }) {
+  useLanguage()
   const [note, setNote] = useState(file.note ?? '')
   return (
     <input
@@ -23,7 +25,7 @@ function NoteInput({ botId, file }: { botId: string; file: BotFile }) {
       onBlur={() => note !== (file.note ?? '') && void window.gbot.bots.setFileNote(botId, file.name, note)}
       onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
       maxLength={120}
-      placeholder="Nota para o bot (opcional): do que se trata, quando usar"
+      placeholder={tr('Nota para o bot (opcional): do que se trata, quando usar')}
       className="selectable mt-1 w-full rounded-nav border border-transparent bg-transparent px-1.5 py-0.5 -ml-1.5 text-[12px] text-fg-2 outline-none placeholder:text-muted/70 hover:border-line focus:border-muted/60"
     />
   )
@@ -31,6 +33,7 @@ function NoteInput({ botId, file }: { botId: string; file: BotFile }) {
 
 /** Arquivos de referência do bot: ele vê a lista no prompt e lê o conteúdo quando o pedido precisar. */
 export function BotFiles({ botId, botName }: { botId: string; botName: string }) {
+  useLanguage()
   const [files, setFiles] = useState<BotFile[]>([])
   const [dragging, setDragging] = useState(false)
 
@@ -60,24 +63,18 @@ export function BotFiles({ botId, botName }: { botId: string; botName: string })
       <div className="flex items-center justify-between gap-3 pb-3">
         <div className="min-w-0">
           <p className="flex items-center gap-2 text-[13px] font-medium text-muted">
-            <Paperclip size={14} /> Arquivos
-          </p>
+            <Paperclip size={14} />{tr(' Arquivos')}</p>
           {files.length > 0 && (
             <p className="text-[12px] text-muted">
-              {files.length} {files.length === 1 ? 'arquivo' : 'arquivos'} · {botName} lê quando precisar
-            </p>
+              {files.length} {files.length === 1 ? 'arquivo' : 'arquivos'} · {botName}{tr(' lê quando precisar')}</p>
           )}
         </div>
         <Button onClick={() => void add()} className="h-8">
-          <Plus size={14} /> Adicionar
-        </Button>
+          <Plus size={14} />{tr(' Adicionar')}</Button>
       </div>
 
       {files.length === 0 ? (
-        <p className="text-[13px] leading-relaxed text-muted">
-          Arraste arquivos para cá: contratos, manuais, planilhas em CSV, prints… {botName} vê a lista em toda conversa,
-          fluxo ou consulta e abre o conteúdo só quando o pedido precisar.
-        </p>
+        <p className="text-[13px] leading-relaxed text-muted">{tr('Arraste arquivos para cá: contratos, manuais, planilhas em CSV, prints… ')}{botName}{tr(' vê a lista em toda conversa, fluxo ou consulta e abre o conteúdo só quando o pedido precisar.')}</p>
       ) : (
         <div className="space-y-1">
           {files.map((f) => {
@@ -95,19 +92,18 @@ export function BotFiles({ botId, botName }: { botId: string; botName: string })
                   </p>
                   {UNREADABLE.has(e) && (
                     <p className="mt-1 flex items-center gap-1.5 text-[11px] text-warning">
-                      <TriangleAlert size={12} /> O bot não abre este formato: exporte como PDF ou CSV.
-                    </p>
+                      <TriangleAlert size={12} />{tr(' O bot não abre este formato: exporte como PDF ou CSV.')}</p>
                   )}
                   <NoteInput botId={botId} file={f} />
                 </div>
                 <ItemMenu
                   actions={[
-                    { label: window.gbot.platform === 'darwin' ? 'Mostrar no Finder' : 'Mostrar no Explorer', icon: FolderSearch, onSelect: () => void window.gbot.bots.revealFile(botId, f.name) },
+                    { label: window.gbot.platform === 'darwin' ? tr('Mostrar no Finder') : tr('Mostrar no Explorer'), icon: FolderSearch, onSelect: () => void window.gbot.bots.revealFile(botId, f.name) },
                     {
-                      label: 'Excluir',
+                      label: tr('Excluir'),
                       icon: Trash2,
                       danger: true,
-                      confirm: `Excluir "${f.name}" dos arquivos de ${botName}?`,
+                      confirm: tr('Excluir "{0}" dos arquivos de {1}?', f.name, botName),
                       onSelect: () => {
                         setFiles((fs) => fs.filter((x) => x.name !== f.name))
                         void window.gbot.bots.removeFile(botId, f.name)

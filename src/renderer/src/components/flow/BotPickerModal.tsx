@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Search, X } from 'lucide-react'
 import type { Bot } from '@shared/types'
@@ -15,6 +16,7 @@ interface Props {
 
 /** Janela para escolher o bot de uma caixinha nova do fluxo, com os avatares. */
 export function BotPickerModal({ projectId, onPick, onClose }: Props) {
+  useLanguage()
   const app = useApp()
   const [query, setQuery] = useState('')
 
@@ -43,20 +45,20 @@ export function BotPickerModal({ projectId, onPick, onClose }: Props) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Escolher bot"
+        aria-label={tr('Escolher bot')}
         className="flex max-h-full w-full max-w-[640px] flex-col overflow-hidden rounded-card border border-line bg-page shadow-2xl"
       >
         <div className="flex items-center justify-between border-b border-line px-6 py-4">
-          <p className="text-[16px] font-semibold">Qual bot faz esta etapa?</p>
-          <button onClick={onClose} aria-label="Fechar" className="rounded-full p-1.5 text-muted hover:bg-hover hover:text-fg">
+          <p className="text-[16px] font-semibold">{tr('Qual bot faz esta etapa?')}</p>
+          <button onClick={onClose} aria-label={tr('Fechar')} className="rounded-full p-1.5 text-muted hover:bg-hover hover:text-fg">
             <X size={16} />
           </button>
         </div>
 
         {app.bots.length === 0 ? (
           <div className="flex flex-col items-center px-6 py-10 text-center">
-            <p className="text-[15px] font-medium">Você ainda não tem bots</p>
-            <p className="mt-1 text-[13px] text-muted">Crie um bot e depois volte para colocá-lo no fluxo.</p>
+            <p className="text-[15px] font-medium">{tr('Você ainda não tem bots')}</p>
+            <p className="mt-1 text-[13px] text-muted">{tr('Crie um bot e depois volte para colocá-lo no fluxo.')}</p>
             <Button
               variant="primary"
               className="mt-5"
@@ -65,8 +67,7 @@ export function BotPickerModal({ projectId, onPick, onClose }: Props) {
                 app.editBot(undefined, projectId)
               }}
             >
-              <Plus size={14} /> Criar bot
-            </Button>
+              <Plus size={14} />{tr(' Criar bot')}</Button>
           </div>
         ) : (
           <>
@@ -77,7 +78,7 @@ export function BotPickerModal({ projectId, onPick, onClose }: Props) {
                   autoFocus
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Buscar bot…"
+                  placeholder={tr('Buscar bot…')}
                   className={`${inputClass} pl-9`}
                 />
               </div>
@@ -100,7 +101,7 @@ export function BotPickerModal({ projectId, onPick, onClose }: Props) {
                   </button>
                 )
               })}
-              {bots.length === 0 && <p className="col-span-3 py-6 text-center text-[13px] text-muted">Nenhum bot com esse nome.</p>}
+              {bots.length === 0 && <p className="col-span-3 py-6 text-center text-[13px] text-muted">{tr('Nenhum bot com esse nome.')}</p>}
             </div>
           </>
         )}

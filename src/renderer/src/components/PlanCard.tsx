@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { useState, type ReactNode } from 'react'
 import { ArrowRight, ChevronDown, CircleCheck, Clock, FolderOpen, GitFork, Hand, LoaderCircle, Play, Wand2 } from 'lucide-react'
 import type { AutomationPlan, AvatarDef, ChatMessage, PlanStep } from '@shared/types'
@@ -14,6 +15,7 @@ const MODEL_LABEL: Record<string, string> = { haiku: 'Haiku', sonnet: 'Sonnet', 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 function Badge({ children, tone = 'muted' }: { children: ReactNode; tone?: 'muted' | 'new' | 'edit' }) {
+  useLanguage()
   return (
     <span
       className={cn(
@@ -27,6 +29,7 @@ function Badge({ children, tone = 'muted' }: { children: ReactNode; tone?: 'mute
 }
 
 function Section({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
+  useLanguage()
   return (
     <div className={cn('rounded-tile border border-line bg-card p-4', className)}>
       <p className="pb-3 text-[12px] font-medium text-muted">{title}</p>
@@ -37,8 +40,9 @@ function Section({ title, children, className }: { title: string; children: Reac
 
 /** Uma etapa do fluxo como "pílula" na corrente do fluxo. */
 function StepPill({ step, avatar, botName }: { step: PlanStep; avatar?: AvatarDef; botName?: string }) {
+  useLanguage()
   const label =
-    step.label || (step.type === 'bot' ? botName : step.type === 'prompt' ? 'Prompt' : step.type === 'confirm' ? 'Confirmação' : 'Decisão')
+    step.label || (step.type === 'bot' ? botName : step.type === 'prompt' ? 'Prompt' : step.type === 'confirm' ? tr('Confirmação') : tr('Decisão'))
   return (
     <span className="inline-flex max-w-[220px] items-center gap-1.5 rounded-full border border-line bg-sidebar py-1 pr-3 pl-1.5 text-[12px]">
       {step.type === 'bot' ? (
@@ -58,6 +62,7 @@ function StepPill({ step, avatar, botName }: { step: PlanStep; avatar?: AvatarDe
 }
 
 function PlanView({ plan, avatars }: { plan: AutomationPlan; avatars: Record<string, AvatarDef> }) {
+  useLanguage()
   const app = useApp()
   const [openBot, setOpenBot] = useState<string>()
   const avatarOf = (ref: string) => {
@@ -72,7 +77,7 @@ function PlanView({ plan, avatars }: { plan: AutomationPlan; avatars: Record<str
   return (
     <div className="grid gap-3">
       {project && (
-        <Section title="Projeto">
+        <Section title={tr('Projeto')}>
           <div className="flex items-center gap-3">
             <ProjectTile project={{ color: existingProject?.color ?? PROJECT_COLORS[app.projects.length % PROJECT_COLORS.length] }} size={40} />
             <div className="min-w-0 flex-1">
@@ -84,7 +89,7 @@ function PlanView({ plan, avatars }: { plan: AutomationPlan; avatars: Record<str
               </p>
             </div>
             <Badge tone={projectEdit ? 'edit' : existingProject ? 'muted' : 'new'}>
-              {projectEdit ? 'Alterado' : existingProject ? 'Já existe' : 'Novo'}
+              {projectEdit ? tr('Alterado') : existingProject ? tr('Já existe') : tr('Novo')}
             </Badge>
           </div>
         </Section>
@@ -103,7 +108,7 @@ function PlanView({ plan, avatars }: { plan: AutomationPlan; avatars: Record<str
                     <div className="flex items-center gap-2">
                       <p className="truncate text-[14px] font-semibold">{b.name}</p>
                       <Badge tone={b.edit ? 'edit' : b.existingId ? 'muted' : 'new'}>
-                        {b.edit ? 'Alterado' : b.existingId ? 'Reaproveitado' : 'Novo'}
+                        {b.edit ? tr('Alterado') : b.existingId ? tr('Reaproveitado') : tr('Novo')}
                       </Badge>
                       {b.model && <Badge>{MODEL_LABEL[b.model] ?? b.model}</Badge>}
                     </div>
@@ -114,7 +119,7 @@ function PlanView({ plan, avatars }: { plan: AutomationPlan; avatars: Record<str
                         onClick={() => setOpenBot(openBot === b.ref ? undefined : b.ref)}
                         className="mt-1 inline-flex items-center gap-1 text-[12px] text-fg-2 hover:text-fg"
                       >
-                        {openBot === b.ref ? 'Esconder instruções' : 'Ver instruções'}
+                        {openBot === b.ref ? tr('Esconder instruções') : tr('Ver instruções')}
                         <ChevronDown size={12} className={cn('transition-transform', openBot === b.ref && 'rotate-180')} />
                       </button>
                     )}
@@ -132,28 +137,27 @@ function PlanView({ plan, avatars }: { plan: AutomationPlan; avatars: Record<str
       )}
 
       {plan.flows.length > 0 && (
-        <Section title={plural(plan.flows.length, 'Fluxo', 'Fluxos')}>
+        <Section title={plural(plan.flows.length, tr('Fluxo'), tr('Fluxos'))}>
           <div className="space-y-4">
             {plan.flows.map((f, i) => (
               <div key={i}>
                 <div className="flex items-center gap-2">
                   <p className="truncate text-[14px] font-semibold">{f.name}</p>
-                  <Badge tone={f.existingId ? 'edit' : 'new'}>{f.existingId ? 'Alterado' : 'Novo'}</Badge>
+                  <Badge tone={f.existingId ? 'edit' : 'new'}>{f.existingId ? tr('Alterado') : tr('Novo')}</Badge>
                 </div>
                 <p className="mt-0.5 inline-flex items-center gap-1.5 text-[12px] text-fg-2">
                   <Clock size={12} className="text-muted" />
-                  {f.schedule ? describeSchedule(f.schedule) : 'Quando você mandar rodar'}
+                  {f.schedule ? describeSchedule(f.schedule) : tr('Quando você mandar rodar')}
                 </p>
                 {f.why && <p className="mt-1 text-[12px] leading-snug text-muted">{f.why}</p>}
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                   <span className="inline-flex items-center gap-1 rounded-full bg-hover px-2.5 py-1 text-[12px] text-fg-2">
-                    <Play size={11} /> Início
-                  </span>
+                    <Play size={11} />{tr(' Início')}</span>
                   {f.steps.map((s, j) => (
                     <span key={j} className="inline-flex items-center gap-1.5">
                       <ArrowRight size={12} className="text-muted" />
                       <StepPill step={s} avatar={s.type === 'bot' ? avatarOf(s.bot) : undefined} botName={s.type === 'bot' ? nameOf(s.bot) : undefined} />
-                      {(s.type === 'decision' || s.type === 'confirm') && <span className="text-[11px] text-muted">se “{s.options[0]}”</span>}
+                      {(s.type === 'decision' || s.type === 'confirm') && <span className="text-[11px] text-muted">{tr('se “')}{s.options[0]}”</span>}
                     </span>
                   ))}
                 </div>
@@ -164,7 +168,7 @@ function PlanView({ plan, avatars }: { plan: AutomationPlan; avatars: Record<str
       )}
 
       {plan.setup.length > 0 && (
-        <Section title="Antes de ligar">
+        <Section title={tr('Antes de ligar')}>
           <ol className="space-y-2">
             {plan.setup.map((s, i) => (
               <li key={i} className="flex gap-3 text-[13px] leading-snug text-fg-2">
@@ -186,6 +190,7 @@ function PlanView({ plan, avatars }: { plan: AutomationPlan; avatars: Record<str
  * mostra atalhos para abrir o que foi feito.
  */
 export function PlanCard({ conversationId, msg }: { conversationId: string; msg: ChatMessage }) {
+  useLanguage()
   const app = useApp()
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string>()
@@ -196,7 +201,7 @@ export function PlanCard({ conversationId, msg }: { conversationId: string; msg:
   const edits =
     plan.bots.some((b) => b.edit) || plan.flows.some((f) => f.existingId) || (!!plan.project && 'existingId' in plan.project && !!plan.project.edit)
   const news = plan.bots.some((b) => !b.existingId) || plan.flows.some((f) => !f.existingId) || (!!plan.project && !('existingId' in plan.project))
-  const action = edits ? (news ? 'Aplicar tudo' : 'Aplicar alterações') : 'Criar tudo'
+  const action = edits ? (news ? tr('Aplicar tudo') : tr('Aplicar alterações')) : tr('Criar tudo')
   const newFlows = plan.flows.some((f) => !f.existingId)
 
   const create = async () => {
@@ -216,14 +221,14 @@ export function PlanCard({ conversationId, msg }: { conversationId: string; msg:
     <div className="mt-4 rounded-card border border-line bg-sidebar p-4">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[12px] font-medium text-muted">Plano do gBot</p>
+          <p className="text-[12px] font-medium text-muted">{tr('Plano do gBot')}</p>
           <h3 className="text-[18px] font-medium tracking-[-0.01em]">{plan.title}</h3>
           {plan.summary && <p className="mt-1 text-[13px] leading-relaxed text-fg-2">{plan.summary}</p>}
         </div>
         {!applied && (
           <Button variant="primary" onClick={() => void create()} disabled={creating}>
             {creating ? <LoaderCircle size={14} className="animate-spin" /> : <Wand2 size={14} />}
-            {creating ? 'Aplicando…' : action}
+            {creating ? tr('Aplicando…') : action}
           </Button>
         )}
       </div>
@@ -232,23 +237,19 @@ export function PlanCard({ conversationId, msg }: { conversationId: string; msg:
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-tile border border-success/40 bg-success/10 px-4 py-3">
           <CircleCheck size={18} className="shrink-0 text-success" />
           <p className="min-w-0 flex-1 text-[13px] text-fg-2">
-            {edits && !news ? 'Alterações aplicadas' : 'Pronto'}
-            {newFlows && '. Os fluxos novos ficam desligados até você fazer os passos de preparação e ligar'}.
+            {edits && !news ? tr('Alterações aplicadas') : tr('Pronto')}
+            {newFlows && tr('. Os fluxos novos ficam desligados até você fazer os passos de preparação e ligar')}.
           </p>
           {applied.flowIds[0] && (
             <Button className="h-8" onClick={() => app.openFlow(applied.flowIds[0])}>
-              <Play size={13} /> Abrir fluxo
-            </Button>
+              <Play size={13} />{tr(' Abrir fluxo')}</Button>
           )}
           {applied.projectId && (
             <Button className="h-8" onClick={() => app.openProject(applied.projectId!)}>
-              <FolderOpen size={13} /> Abrir projeto
-            </Button>
+              <FolderOpen size={13} />{tr(' Abrir projeto')}</Button>
           )}
           {!applied.flowIds.length && applied.botIds[0] && (
-            <Button className="h-8" onClick={() => app.newConversation(applied.botIds[0])}>
-              Conversar com o bot
-            </Button>
+            <Button className="h-8" onClick={() => app.newConversation(applied.botIds[0])}>{tr('Conversar com o bot')}</Button>
           )}
         </div>
       )}

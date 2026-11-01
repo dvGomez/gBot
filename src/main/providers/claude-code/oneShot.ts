@@ -13,7 +13,8 @@ export async function askOnce(
   model: string | undefined,
   tag: UsageTag,
   timeoutMs = 120_000,
-  jsonSchema?: object
+  jsonSchema?: object,
+  signal?: AbortSignal
 ): Promise<{ text: string; usage: TokenUsage; structured?: unknown }> {
   const args = [
     '-p',
@@ -23,7 +24,7 @@ export async function askOnce(
     '--output-format', 'json',
     ...(jsonSchema ? ['--json-schema', JSON.stringify(jsonSchema)] : [])
   ]
-  const out = await runClaude(args, { timeoutMs, cwd: workspaceDir(), input: prompt })
+  const out = await runClaude(args, { timeoutMs, cwd: workspaceDir(), input: prompt, signal })
   let res: { result?: string; is_error?: boolean; structured_output?: unknown } & Parameters<typeof usageByModel>[0]
   try {
     res = JSON.parse(out)

@@ -1,3 +1,4 @@
+import { t as tr, localized, useLanguage } from '@/i18n'
 import { useState } from 'react'
 import { ExternalLink, FlaskConical, KeyRound, LoaderCircle, Pencil, RefreshCw, SquareTerminal, Trash2, UserRound } from 'lucide-react'
 import type { ProviderAccount, ProviderInfo, ProviderKind } from '@shared/types'
@@ -13,14 +14,15 @@ const KIND_ICON: Record<ProviderKind, typeof SquareTerminal> = {
   dev: FlaskConical
 }
 
-const KIND_LABEL: Record<ProviderKind, string> = {
-  'local-cli': 'Programa local',
-  api: 'API com chave',
-  dev: 'Teste'
-}
+const KIND_LABEL: Record<ProviderKind, string> = localized({
+  'local-cli': tr('Programa local'),
+  api: tr('API com chave'),
+  dev: tr('Teste')
+})
 
 /** Uma conta conectada: apelido, plano, limites e ações (usar, renomear, remover). */
 function AccountRow({ account }: { account: ProviderAccount }) {
+  useLanguage()
   const app = useApp()
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(account.name ?? '')
@@ -39,7 +41,7 @@ function AccountRow({ account }: { account: ProviderAccount }) {
     setEditing(false)
     if (name.trim() !== (account.name ?? '')) void act(() => window.gbot.accounts.rename(account.providerId, account.id, name))
   }
-  const sub = [account.name && account.email, account.organization, account.plan && `plano ${account.plan}`].filter(Boolean).join(' · ')
+  const sub = [account.name && account.email, account.organization, account.plan && tr('plano {0}', account.plan)].filter(Boolean).join(' · ')
   const limits = account.limits.map((l) => `${l.label}: ${l.percent}%`).join(' · ')
 
   return (
@@ -59,7 +61,7 @@ function AccountRow({ account }: { account: ProviderAccount }) {
                 setEditing(false)
               }
             }}
-            placeholder={account.email ?? 'Apelido da conta'}
+            placeholder={account.email ?? tr('Apelido da conta')}
             maxLength={40}
             className={`${inputClass} h-8 max-w-[280px] text-[13px]`}
           />
@@ -68,33 +70,29 @@ function AccountRow({ account }: { account: ProviderAccount }) {
         )}
         {sub && <p className="truncate text-[12px] text-muted">{sub}</p>}
         {!account.loggedIn ? (
-          <p className="text-[12px] text-danger">Sem login: adicione a conta de novo para entrar.</p>
+          <p className="text-[12px] text-danger">{tr('Sem login: adicione a conta de novo para entrar.')}</p>
         ) : (
           limits && <p className="truncate text-[12px] text-fg-2">{limits}</p>
         )}
         {error && <p className="text-[12px] text-danger">{error}</p>}
       </div>
       {account.active ? (
-        <span className="inline-flex h-8 w-20 items-center justify-center rounded-full bg-primary text-[12px] font-medium text-on-primary">
-          Em uso
-        </span>
+        <span className="inline-flex h-8 w-20 items-center justify-center rounded-full bg-primary text-[12px] font-medium text-on-primary">{tr('Em uso')}</span>
       ) : (
         <Button
           className="h-8 w-20"
           disabled={!account.loggedIn}
           onClick={() => void act(() => window.gbot.accounts.setActive(account.providerId, account.id))}
-        >
-          Usar
-        </Button>
+        >{tr('Usar')}</Button>
       )}
       <ItemMenu
         actions={[
-          { label: 'Renomear', icon: Pencil, onSelect: () => setEditing(true) },
+          { label: tr('Renomear'), icon: Pencil, onSelect: () => setEditing(true) },
           {
-            label: 'Remover conta',
+            label: tr('Remover conta'),
             icon: Trash2,
             danger: true,
-            confirm: `Sair de ${account.label} no gBot? As conversas continuam; quem estiver usando esta conta passa para a próxima.`,
+            confirm: tr('Sair de {0} no gBot? As conversas continuam; quem estiver usando esta conta passa para a próxima.', account.label),
             onSelect: () => void act(() => window.gbot.accounts.remove(account.providerId, account.id))
           }
         ]}
@@ -104,6 +102,7 @@ function AccountRow({ account }: { account: ProviderAccount }) {
 }
 
 function ProviderRow({ p, accounts }: { p: ProviderInfo; accounts: ProviderAccount[] }) {
+  useLanguage()
   const app = useApp()
   const state = useProviderAction(p.id)
   const Icon = KIND_ICON[p.kind]
@@ -117,10 +116,10 @@ function ProviderRow({ p, accounts }: { p: ProviderInfo; accounts: ProviderAccou
         </IconTile>
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-2 text-[15px] font-semibold">
-            {p.name}
+            {tr(p.name)}
             <span className="text-[12px] font-normal text-muted">· {KIND_LABEL[p.kind]}</span>
           </p>
-          <p className="text-[13px] text-muted">{p.description}</p>
+          <p className="text-[13px] text-muted">{tr(p.description)}</p>
           {p.statusDetail && <p className="mt-1 font-mono text-[12px] text-fg-2">{p.statusDetail}</p>}
         </div>
         <StatusBadge status={p.status} />
@@ -132,17 +131,13 @@ function ProviderRow({ p, accounts }: { p: ProviderInfo; accounts: ProviderAccou
             onClick={() => state.run(a.id)}
           >
             {state.running === a.id && <LoaderCircle size={14} className="animate-spin" />}
-            {a.label}
+            {tr(a.label)}
           </Button>
         ))}
         {inUse ? (
-          <span className="inline-flex h-9 w-24 items-center justify-center rounded-full bg-primary text-[13px] font-medium text-on-primary">
-            Em uso
-          </span>
+          <span className="inline-flex h-9 w-24 items-center justify-center rounded-full bg-primary text-[13px] font-medium text-on-primary">{tr('Em uso')}</span>
         ) : (
-          <Button disabled={p.status !== 'ready'} onClick={() => app.setProviderId(p.id)} className="w-24">
-            Usar
-          </Button>
+          <Button disabled={p.status !== 'ready'} onClick={() => app.setProviderId(p.id)} className="w-24">{tr('Usar')}</Button>
         )}
       </div>
 
@@ -156,8 +151,7 @@ function ProviderRow({ p, accounts }: { p: ProviderInfo; accounts: ProviderAccou
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1.5 font-medium text-fg underline underline-offset-2"
-            >
-              Abrir link <ExternalLink size={12} />
+            >{tr('Abrir link ')}<ExternalLink size={12} />
             </a>
           )}
         </div>
@@ -178,6 +172,7 @@ function ProviderRow({ p, accounts }: { p: ProviderInfo; accounts: ProviderAccou
 }
 
 export function ProvidersView() {
+  useLanguage()
   const app = useApp()
   const accounts = useAccounts()
   const [refreshing, setRefreshing] = useState(false)
@@ -191,26 +186,20 @@ export function ProvidersView() {
   return (
     <div className="mx-auto w-full max-w-[1120px] px-[60px] pt-6 pb-12">
       <div className="flex items-end justify-between">
-        <PageHeader eyebrow="Assistente" title="Provedores" subtitle="De onde vêm as respostas. Novos provedores entram aqui." />
+        <PageHeader eyebrow={tr('Assistente')} title={tr('Provedores')} subtitle={tr('De onde vêm as respostas. Novos provedores entram aqui.')} />
         <Button onClick={refresh} disabled={refreshing}>
-          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-          Verificar
-        </Button>
+          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />{tr('Verificar')}</Button>
       </div>
 
       <Card className="mt-8 px-6 py-2">
-        {app.providers.length === 0 && <p className="py-5 text-[14px] text-muted">Verificando provedores…</p>}
+        {app.providers.length === 0 && <p className="py-5 text-[14px] text-muted">{tr('Verificando provedores…')}</p>}
         {app.providers.map((p) => (
           <ProviderRow key={p.id} p={p} accounts={accounts.filter((a) => a.providerId === p.id)} />
         ))}
       </Card>
 
-      <p className="mt-4 px-1 text-[12px] leading-relaxed text-muted">
-        O gBot usa perfis próprios do Claude Code e do Codex, um por conta, separados do seu{' '}
-        <span className="font-mono">~/.claude</span> e <span className="font-mono">~/.codex</span>: os logins feitos aqui valem
-        só para o gBot. A conta em uso de cada provedor atende o que usa aquele provedor; ao trocar, cada conversa continua na
-        nova conta. Os bots trabalham sempre no Claude Code.
-      </p>
+      <p className="mt-4 px-1 text-[12px] leading-relaxed text-muted">{tr('O gBot usa perfis próprios do Claude Code e do Codex, um por conta, separados do seu')}{' '}
+        <span className="font-mono">~/.claude</span>{tr(' e ')}<span className="font-mono">~/.codex</span>{tr(': os logins feitos aqui valem só para o gBot. A conta em uso de cada provedor atende o que usa aquele provedor; ao trocar, cada conversa continua na nova conta. Os bots trabalham sempre no Claude Code.')}</p>
     </div>
   )
 }

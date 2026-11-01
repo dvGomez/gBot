@@ -1,34 +1,33 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { Plus, Trash2, X } from 'lucide-react'
 import { uid } from '@/lib/format'
 import type { FlowDecisionOption, FlowNodeData, FlowNodeType, FlowSchedule } from '@shared/types'
 import { Button, Chip, Field, inputClass } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { WEEKDAYS } from '@/lib/schedule'
+import { ModelSelect } from '@/components/ModelSelect'
 import { useApp } from '@/state/app'
 
-const PREV_HINT = 'O resultado das caixinhas anteriores vai junto automaticamente. Use {{anterior}} para escolher onde ele entra.'
+const PREV_HINT = tr('O resultado das caixinhas anteriores vai junto automaticamente. Use {{anterior}} para escolher onde ele entra.')
 
 function ScheduleEditor({ value, onChange }: { value: FlowSchedule; onChange(s: FlowSchedule): void }) {
+  useLanguage()
   return (
     <div className="space-y-5">
       <div className="flex gap-2">
         <Chip
           active={value.mode === 'times'}
           onClick={() => value.mode !== 'times' && onChange({ mode: 'times', days: [1, 2, 3, 4, 5], times: ['09:00'] })}
-        >
-          Em horários
-        </Chip>
+        >{tr('Em horários')}</Chip>
         <Chip
           active={value.mode === 'interval'}
           onClick={() => value.mode !== 'interval' && onChange({ mode: 'interval', everyMinutes: 60 })}
-        >
-          Repetir a cada
-        </Chip>
+        >{tr('Repetir a cada')}</Chip>
       </div>
 
       {value.mode === 'times' ? (
         <>
-          <Field label="Dias da semana">
+          <Field label={tr('Dias da semana')}>
             <div className="flex gap-1.5">
               {WEEKDAYS.map((d, i) => {
                 const on = value.days.includes(i)
@@ -50,7 +49,7 @@ function ScheduleEditor({ value, onChange }: { value: FlowSchedule; onChange(s: 
               })}
             </div>
           </Field>
-          <Field label="Horários">
+          <Field label={tr('Horários')}>
             <div className="space-y-2">
               {value.times.map((t, i) => (
                 <div key={i} className="flex items-center gap-2">
@@ -63,7 +62,7 @@ function ScheduleEditor({ value, onChange }: { value: FlowSchedule; onChange(s: 
                   <button
                     type="button"
                     onClick={() => onChange({ ...value, times: value.times.filter((_, j) => j !== i) })}
-                    aria-label="Remover horário"
+                    aria-label={tr('Remover horário')}
                     className="rounded-full p-2 text-muted hover:bg-hover hover:text-fg"
                   >
                     <X size={14} />
@@ -71,13 +70,12 @@ function ScheduleEditor({ value, onChange }: { value: FlowSchedule; onChange(s: 
                 </div>
               ))}
               <Button type="button" onClick={() => onChange({ ...value, times: [...value.times, '12:00'] })}>
-                <Plus size={14} /> Horário
-              </Button>
+                <Plus size={14} />{tr(' Horário')}</Button>
             </div>
           </Field>
         </>
       ) : (
-        <Field label="Intervalo" hint="Conta a partir da última execução (ou de quando o fluxo foi ativado).">
+        <Field label={tr('Intervalo')} hint={tr('Conta a partir da última execução (ou de quando o fluxo foi ativado).')}>
           <div className="flex gap-2">
             <input
               type="number"
@@ -98,8 +96,8 @@ function ScheduleEditor({ value, onChange }: { value: FlowSchedule; onChange(s: 
               }}
               className={inputClass}
             >
-              <option value="min">minutos</option>
-              <option value="h">horas</option>
+              <option value="min">{tr('minutos')}</option>
+              <option value="h">{tr('horas')}</option>
             </select>
           </div>
         </Field>
@@ -120,6 +118,7 @@ function OptionsEditor({
   placeholder(index: number, last: boolean): string
   max?: number
 }) {
+  useLanguage()
   return (
     <div className="space-y-2">
       {options.map((o, i) => (
@@ -134,7 +133,7 @@ function OptionsEditor({
           <button
             type="button"
             onClick={() => onChange(options.filter((x) => x.id !== o.id))}
-            aria-label="Remover opção"
+            aria-label={tr('Remover opção')}
             className="rounded-full p-2 text-muted hover:bg-hover hover:text-fg"
           >
             <X size={14} />
@@ -143,8 +142,7 @@ function OptionsEditor({
       ))}
       {(!max || options.length < max) && (
         <Button type="button" onClick={() => onChange([...options, { id: uid(), label: '' }])}>
-          <Plus size={14} /> Opção
-        </Button>
+          <Plus size={14} />{tr(' Opção')}</Button>
       )}
     </div>
   )
@@ -162,24 +160,25 @@ export function NodePanel({
   onChange(patch: Partial<FlowNodeData>): void
   onDelete?: () => void
 }) {
+  useLanguage()
   const app = useApp()
-  const provider = app.providers.find((p) => p.id === (data.providerId ?? 'claude-code'))
+
 
   return (
     <div className="space-y-5">
-      <Field label="Nome da caixinha" hint="Opcional.">
+      <Field label={tr('Nome da caixinha')} hint={tr('Opcional.')}>
         <input
           value={data.label ?? ''}
           onChange={(e) => onChange({ label: e.target.value })}
           placeholder={
             type === 'trigger'
-              ? 'Gatilho'
+              ? tr('Gatilho')
               : type === 'bot'
-                ? 'Nome do bot'
+                ? tr('Nome do bot')
                 : type === 'decision'
-                  ? 'Decisão'
+                  ? tr('Decisão')
                   : type === 'confirm'
-                    ? 'Confirmação'
+                    ? tr('Confirmação')
                     : 'Prompt'
           }
           className={inputClass}
@@ -194,7 +193,7 @@ export function NodePanel({
         <>
           <Field label="Bot">
             <select value={data.botId ?? ''} onChange={(e) => onChange({ botId: e.target.value || undefined })} className={inputClass}>
-              <option value="">Escolha um bot</option>
+              <option value="">{tr('Escolha um bot')}</option>
               {app.bots.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
@@ -202,12 +201,12 @@ export function NodePanel({
               ))}
             </select>
           </Field>
-          <Field label="Mensagem para o bot" hint={PREV_HINT}>
+          <Field label={tr('Mensagem para o bot')} hint={tr(PREV_HINT)}>
             <textarea
               value={data.message ?? ''}
               onChange={(e) => onChange({ message: e.target.value })}
               rows={7}
-              placeholder="Ex.: Resuma as novidades de hoje em 5 tópicos."
+              placeholder={tr('Ex.: Resuma as novidades de hoje em 5 tópicos.')}
               className={`${inputClass} resize-y leading-relaxed`}
             />
           </Field>
@@ -216,57 +215,30 @@ export function NodePanel({
 
       {type === 'decision' && (
         <>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="IA que decide">
-              <select
-                value={data.providerId ?? 'claude-code'}
-                onChange={(e) => onChange({ providerId: e.target.value, model: undefined })}
-                className={inputClass}
-              >
-                {app.providers.map((p) => (
-                  <option key={p.id} value={p.id} disabled={p.status !== 'ready'}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            {!!provider?.models?.length && (
-              <Field label="Modelo">
-                <select
-                  value={data.model ?? 'default'}
-                  onChange={(e) => {
-                    const model = e.target.value === 'default' ? undefined : e.target.value
-                    onChange({ model })
-                    app.rememberModel(model, provider.id)
-                  }}
-                  className={inputClass}
-                >
-                  {provider.models.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {/* No Claude Code a decisão usa o Haiku por padrão: é só escolher um número. */}
-                      {m.id === 'default' && provider.id === 'claude-code' ? 'Padrão (Haiku)' : m.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            )}
-          </div>
+          <Field label={tr('IA que decide')}>
+            <ModelSelect providers={app.providers} providerId={data.providerId ?? 'claude-code'} value={data.model}
+              onChange={(providerId, model) => {
+                const value = model === 'default' ? undefined : model
+                onChange({ providerId, model: value })
+                app.rememberModel(value, providerId)
+              }} fullWidth />
+          </Field>
           <Field
-            label="Opções"
-            hint="Cada opção tem sua bolinha de saída: ligue-a ao que deve acontecer nesse caso. Só o caminho escolhido roda."
+            label={tr('Opções')}
+            hint={tr('Cada opção tem sua bolinha de saída: ligue-a ao que deve acontecer nesse caso. Só o caminho escolhido roda.')}
           >
             <OptionsEditor
               options={data.options ?? []}
               onChange={(options) => onChange({ options })}
-              placeholder={(i, last) => (last ? 'Caso contrário' : 'Quando o resultado for…')}
+              placeholder={(i, last) => (last ? tr('Caso contrário') : tr('Quando o resultado for…'))}
             />
           </Field>
-          <Field label="Critério (opcional)" hint="Ajuda a IA a decidir. O resultado das caixinhas anteriores vai junto.">
+          <Field label={tr('Critério (opcional)')} hint={tr('Ajuda a IA a decidir. O resultado das caixinhas anteriores vai junto.')}>
             <textarea
               value={data.message ?? ''}
               onChange={(e) => onChange({ message: e.target.value })}
               rows={3}
-              placeholder="Ex.: Considere urgente se mencionar prazo de hoje."
+              placeholder={tr('Ex.: Considere urgente se mencionar prazo de hoje.')}
               className={`${inputClass} resize-y leading-relaxed`}
             />
           </Field>
@@ -276,25 +248,25 @@ export function NodePanel({
       {type === 'confirm' && (
         <>
           <Field
-            label="O que você precisa confirmar"
-            hint="Vai na notificação do sistema. O resultado das caixinhas anteriores e os arquivos gerados aparecem junto."
+            label={tr('O que você precisa confirmar')}
+            hint={tr('Vai na notificação do sistema. O resultado das caixinhas anteriores e os arquivos gerados aparecem junto.')}
           >
             <textarea
               value={data.message ?? ''}
               onChange={(e) => onChange({ message: e.target.value })}
               rows={3}
-              placeholder="Ex.: Revise o orçamento antes de enviar ao cliente."
+              placeholder={tr('Ex.: Revise o orçamento antes de enviar ao cliente.')}
               className={`${inputClass} resize-y leading-relaxed`}
             />
           </Field>
           <Field
-            label="Botões"
-            hint="Cada botão aparece na notificação e tem sua bolinha de saída: ligue-a ao que deve acontecer. Até 5."
+            label={tr('Botões')}
+            hint={tr('Cada botão aparece na notificação e tem sua bolinha de saída: ligue-a ao que deve acontecer. Até 5.')}
           >
             <OptionsEditor
               options={data.options ?? []}
               onChange={(options) => onChange({ options })}
-              placeholder={(i) => (i === 0 ? 'Ex.: Aprovar' : i === 1 ? 'Ex.: Recusar' : 'Ex.: Pedir ajuste')}
+              placeholder={(i) => (i === 0 ? tr('Ex.: Aprovar') : i === 1 ? tr('Ex.: Recusar') : tr('Ex.: Pedir ajuste'))}
               max={5}
             />
           </Field>
@@ -303,46 +275,20 @@ export function NodePanel({
 
       {type === 'prompt' && (
         <>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="IA">
-              <select
-                value={data.providerId ?? 'claude-code'}
-                onChange={(e) => onChange({ providerId: e.target.value, model: undefined })}
-                className={inputClass}
-              >
-                {app.providers.map((p) => (
-                  <option key={p.id} value={p.id} disabled={p.status !== 'ready'}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            {!!provider?.models?.length && (
-              <Field label="Modelo">
-                <select
-                  value={data.model ?? 'default'}
-                  onChange={(e) => {
-                    const model = e.target.value === 'default' ? undefined : e.target.value
-                    onChange({ model })
-                    app.rememberModel(model, provider.id)
-                  }}
-                  className={inputClass}
-                >
-                  {provider.models.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            )}
-          </div>
-          <Field label="Prompt" hint={PREV_HINT}>
+          <Field label={tr('Modelo')}>
+            <ModelSelect providers={app.providers} providerId={data.providerId ?? 'claude-code'} value={data.model}
+              onChange={(providerId, model) => {
+                const value = model === 'default' ? undefined : model
+                onChange({ providerId, model: value })
+                app.rememberModel(value, providerId)
+              }} fullWidth />
+          </Field>
+          <Field label="Prompt" hint={tr(PREV_HINT)}>
             <textarea
               value={data.message ?? ''}
               onChange={(e) => onChange({ message: e.target.value })}
               rows={9}
-              placeholder="Ex.: Abra o g1.globo.com no navegador e liste as 5 principais manchetes."
+              placeholder={tr('Ex.: Abra o g1.globo.com no navegador e liste as 5 principais manchetes.')}
               className={`${inputClass} resize-y leading-relaxed`}
             />
           </Field>
@@ -351,8 +297,7 @@ export function NodePanel({
 
       {onDelete && (
         <Button variant="ghost" onClick={onDelete} className="text-danger">
-          <Trash2 size={14} /> Remover caixinha
-        </Button>
+          <Trash2 size={14} />{tr(' Remover caixinha')}</Button>
       )}
     </div>
   )

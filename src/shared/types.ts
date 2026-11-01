@@ -293,6 +293,12 @@ export interface BrowserInfo {
 
 /** Configurações do app guardadas no processo principal. */
 export interface AppSettings {
+  /** Defaults to the OS language; unsupported OS languages use English. */
+  language?: 'system' | 'en' | 'pt-BR'
+  /** Download new releases in the background. Installing always waits for an explicit restart. */
+  autoDownloadUpdates?: boolean
+  /** Version the user chose to skip; updates never gate access to the application. */
+  ignoredUpdateVersion?: string
   /** Navegador usado pelas ferramentas de navegação. Ausente = o primeiro instalado (Edge, depois Chrome). */
   browserId?: string
   /** Pedir aprovação antes de o navegador agir num site (desligado por padrão). */
@@ -456,8 +462,8 @@ export interface Flow {
   updatedAt: number
 }
 
-/** `waiting`: caixinha de confirmação esperando a escolha do usuário. */
-export type FlowStepStatus = 'pending' | 'running' | 'waiting' | 'done' | 'error' | 'skipped'
+/** `waiting`: caixinha de confirmação esperando a escolha do usuário · `stopped`: o usuário parou o fluxo. */
+export type FlowStepStatus = 'pending' | 'running' | 'waiting' | 'done' | 'error' | 'skipped' | 'stopped'
 
 export interface FlowRunStep {
   nodeId: string
@@ -483,7 +489,8 @@ export interface FlowRun {
   id: string
   flowId: string
   trigger: 'schedule' | 'manual'
-  status: 'running' | 'done' | 'error'
+  /** `stopped`: o usuário parou no meio. */
+  status: 'running' | 'done' | 'error' | 'stopped'
   startedAt: number
   finishedAt?: number
   steps: FlowRunStep[]
@@ -607,8 +614,27 @@ export interface PendingConfirmation {
   createdAt: number
 }
 
+export interface AppUpdateState {
+  status: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'up-to-date' | 'error' | 'development' | 'manual'
+  currentVersion: string
+  version?: string
+  percent?: number
+  error?: string
+  dismissed?: boolean
+}
+
 /** API exposta pelo preload em `window.gbot`. */
 export interface GbotApi {
+  systemLocale(): Promise<string>
+  updates: {
+    get(): Promise<AppUpdateState>
+    check(): Promise<void>
+    download(): Promise<void>
+    install(): Promise<void>
+    dismiss(): Promise<void>
+    openRelease(): Promise<void>
+    onChanged(listener: (state: AppUpdateState) => void): () => void
+  }
   platform: string
   versions: { app: string; electron: string }
   providers: {
@@ -737,6 +763,8 @@ export interface GbotApi {
     remove(id: string): Promise<void>
     /** Roda o fluxo agora (sem esperar o gatilho); resolve com o id da execução. */
     run(id: string): Promise<string>
+    /** Para a execução na hora (sessões, processos, decisões e confirmações pendentes). */
+    stop(id: string): Promise<void>
     runs(flowId: string): Promise<FlowRun[]>
     /** Atualizações ao vivo das execuções (início, cada caixinha, fim). */
     onRunUpdate(listener: (run: FlowRun) => void): () => void

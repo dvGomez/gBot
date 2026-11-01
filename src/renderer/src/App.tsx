@@ -1,6 +1,8 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { ApprovalCard, approvalTitle } from '@/components/ApprovalCard'
 import { ConfirmationModal, PendingConfirmationsBar } from '@/components/ConfirmationModal'
 import { Sidebar } from '@/components/Sidebar'
+import { UpdateNotice } from '@/components/UpdateNotice'
 import { BotEditorView } from '@/views/BotEditorView'
 import { BotView } from '@/views/BotView'
 import { ChatView } from '@/views/ChatView'
@@ -20,6 +22,7 @@ import { useApp } from '@/state/app'
  * aparecem já com os botões, para responder dali mesmo.
  */
 function PendingApprovalsBar() {
+  useLanguage()
   const app = useApp()
   const elsewhere = app.approvals.filter((r) => r.conversationId && !(app.view === 'chat' && app.activeConversation?.id === r.conversationId))
   if (!elsewhere.length) return null
@@ -40,14 +43,13 @@ function PendingApprovalsBar() {
       <button
         onClick={() => app.openConversation(first.conversationId!)}
         className="rounded-full bg-primary px-3 py-1 text-[12px] font-medium text-on-primary"
-      >
-        Ver pedido
-      </button>
+      >{tr('Ver pedido')}</button>
     </div>
   )
 }
 
 export function App() {
+  useLanguage()
   const app = useApp()
   const { view, providersLoaded, connected } = app
 
@@ -61,6 +63,7 @@ export function App() {
         <header className="drag h-14 shrink-0" />
         <PendingApprovalsBar />
         <PendingConfirmationsBar />
+        <UpdateNotice />
         <div className={view === 'chat' || view === 'flow-editor' ? 'min-h-0 flex-1' : 'min-h-0 flex-1 overflow-y-auto'}>
           {view === 'home' && <HomeView />}
           {view === 'chat' && <ChatView />}

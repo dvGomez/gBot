@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import type { Bot } from '@shared/types'
 import { Card } from '@/components/ui'
 import { cn } from '@/lib/cn'
@@ -7,6 +8,7 @@ import { PixelAvatar } from './PixelAvatar'
 
 /** "z z z" subindo sobre quem está dormindo. */
 function Snore({ seed }: { seed: number }) {
+  useLanguage()
   return (
     <span className="pointer-events-none absolute -top-1 right-0 text-[10px] font-semibold text-muted" aria-hidden>
       {[0, 1, 2].map((i) => (
@@ -29,6 +31,7 @@ function useOpen() {
 
 /** Bot trabalhando: avatar grande e animado, com um balão dizendo o que está fazendo. */
 function Worker({ bot, activity, seed }: { bot: Bot; activity: BotActivity; seed: number }) {
+  useLanguage()
   const open = useOpen()
   const waiting = activity.state === 'waiting'
   return (
@@ -67,6 +70,7 @@ function Worker({ bot, activity, seed }: { bot: Bot; activity: BotActivity; seed
 
 /** Bot dormindo: pequeno, de olhos fechados; o detalhe aparece ao passar o mouse. */
 function Sleeper({ bot, activity, seed }: { bot: Bot; activity: BotActivity; seed: number }) {
+  useLanguage()
   const open = useOpen()
   return (
     <button onClick={() => open(activity)} className="group relative flex flex-col items-center rounded-tile px-1 pt-3 pb-2 hover:bg-hover">
@@ -86,6 +90,7 @@ function Sleeper({ bot, activity, seed }: { bot: Bot; activity: BotActivity; see
 
 /** Painel da equipe: quem está trabalhando em destaque, o resto dormindo numa grade compacta. */
 export function TeamPanel({ activity }: { activity: Map<string, BotActivity> }) {
+  useLanguage()
   const app = useApp()
   const awake = app.bots.filter((b) => activity.get(b.id)?.state !== 'sleeping')
   const asleep = app.bots.filter((b) => activity.get(b.id)?.state === 'sleeping')
@@ -94,8 +99,8 @@ export function TeamPanel({ activity }: { activity: Map<string, BotActivity> }) 
   if (!app.bots.length) {
     return (
       <Card className="p-5">
-        <p className="text-[13px] font-medium text-muted">Equipe</p>
-        <p className="py-3 text-[14px] text-muted">Você ainda não tem bots. Crie um para ele aparecer aqui.</p>
+        <p className="text-[13px] font-medium text-muted">{tr('Equipe')}</p>
+        <p className="py-3 text-[14px] text-muted">{tr('Você ainda não tem bots. Crie um para ele aparecer aqui.')}</p>
       </Card>
     )
   }
@@ -103,11 +108,10 @@ export function TeamPanel({ activity }: { activity: Map<string, BotActivity> }) 
   return (
     <Card className="p-5">
       <div className="flex items-baseline justify-between gap-4">
-        <p className="text-[13px] font-medium text-muted">Equipe</p>
+        <p className="text-[13px] font-medium text-muted">{tr('Equipe')}</p>
         <p className="text-[12px] text-muted">
-          {awake.length > 0 && <span className="text-success">{awake.length} trabalhando · </span>}
-          {asleep.length} descansando
-        </p>
+          {awake.length > 0 && <span className="text-success">{awake.length}{tr(' trabalhando · ')}</span>}
+          {asleep.length}{tr(' descansando')}</p>
       </div>
 
       {awake.length > 0 ? (
@@ -117,7 +121,7 @@ export function TeamPanel({ activity }: { activity: Map<string, BotActivity> }) 
           ))}
         </div>
       ) : (
-        <p className="mt-2 text-[13px] text-muted">Todo mundo descansando. Eles acordam quando uma conversa ou fluxo precisar deles.</p>
+        <p className="mt-2 text-[13px] text-muted">{tr('Todo mundo descansando. Eles acordam quando uma conversa ou fluxo precisar deles.')}</p>
       )}
 
       {asleep.length > 0 && (

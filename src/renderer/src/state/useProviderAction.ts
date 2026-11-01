@@ -1,3 +1,4 @@
+import { t as tr } from '@/i18n'
 import { useEffect, useState } from 'react'
 import type { ProviderActionProgress } from '@shared/types'
 import { useApp } from './app'
@@ -27,7 +28,7 @@ export function useProviderAction(providerId: string) {
     let ok = true
     try {
       const text = await window.gbot.providers.runAction(providerId, actionId)
-      setState({ result: { ok: true, text: text ?? 'Pronto.' } })
+      setState({ result: { ok: true, text: text ?? tr('Pronto.') } })
     } catch (e) {
       ok = false
       // O Electron prefixa erros de IPC com "Error invoking remote method ..."

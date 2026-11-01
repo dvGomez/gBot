@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { killProcessTree, processGroup } from '../../processTree'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -89,16 +90,26 @@ export interface RunOptions {
   accountId?: string
   /** Texto enviado pela entrada padrão (ex.: o prompt de `-p`, sem limite de tamanho da linha de comando). */
   input?: string
+  /** Cancela: encerra o processo na hora. */
+  signal?: AbortSignal
 }
 
 /** Roda um subcomando curto do Claude Code (ex.: `--version`, `auth status`) no perfil da conta (por padrão, a ativa). */
-export async function runClaude(args: string[], { timeoutMs = 15_000, cwd, accountId, input }: RunOptions = {}): Promise<string> {
+export async function runClaude(args: string[], { timeoutMs = 15_000, cwd, accountId, input, signal }: RunOptions = {}): Promise<string> {
   const { bin, env } = await resolveClaudeEnv(accountId)
+  signal?.throwIfAborted()
   return new Promise((resolve, reject) => {
-    const child = execFile(bin, args, { env, cwd, timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) => {
-      if (error && !stdout) reject(new Error(stderr.trim() || error.message))
+    const abort = () => {
+      killProcessTree(child)
+      reject(new Error('Execução interrompida.'))
+    }
+    const child = execFile(bin, args, { env, cwd, timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024, ...processGroup }, (error, stdout, stderr) => {
+      signal?.removeEventListener('abort', abort)
+      if (signal?.aborted) reject(new Error('Execução interrompida.'))
+      else if (error && !stdout) reject(new Error(stderr.trim() || error.message))
       else resolve(stdout.trim())
     })
+    signal?.addEventListener('abort', abort, { once: true })
     if (input !== undefined) child.stdin?.end(input)
   })
 }

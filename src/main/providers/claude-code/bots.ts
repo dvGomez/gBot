@@ -4,6 +4,7 @@ import { attachmentsAccess } from '../../attachments'
 import { botFilesAccess, botFilesPrompt } from '../../botFiles'
 import { runAsBot } from '../../botQueue'
 import { memoryPrompt } from '../../memory'
+import { languageInstructions } from '../../localization'
 import { withOutputFiles } from './outputs'
 import { reflectIfNeeded } from './reflect'
 import { listBots } from '../../store'
@@ -56,6 +57,7 @@ function baseLines(work: WorkContext): string[] {
   return [
     'Você está no gBot, um aplicativo de chat para desktop.',
     'Responda no idioma do usuário, de forma direta e amigável. Use Markdown quando ajudar a leitura.',
+    languageInstructions(),
     ...work.promptLines,
     PERMISSIONS_HINT,
     TOOLS_HINT
@@ -92,7 +94,8 @@ function enqueue<T>(key: string, task: () => Promise<T>): Promise<T> {
 const botContexts = new Map<string, { ctx: CallerContext; config: string }>()
 
 /** Uma sessão por bot dentro de cada conversa: ele lembra das consultas e @menções daquela conversa. */
-async function botSession(conversationId: string, projectId: string | undefined, bot: Bot, source?: Lesson['source']) {
+async function botSession(conversationId: string, projectId: string | undefined, bot: Bot, source?: Lesson['source'], signal?: AbortSignal) {
+  signal?.throwIfAborted()
   const key = `${conversationId}:${bot.id}`
   let entry = botContexts.get(key)
   if (!entry) {
@@ -108,6 +111,7 @@ async function botSession(conversationId: string, projectId: string | undefined,
     botContexts.set(key, entry)
   }
   entry.ctx.projectId = projectId
+  entry.ctx.signal = signal
   entry.ctx.memorySource = source ?? { kind: 'conversation', id: conversationId }
   const work = workContext(projectId)
   // Arquivos de referência do bot e anexos da conversa onde ele foi chamado.
@@ -115,6 +119,7 @@ async function botSession(conversationId: string, projectId: string | undefined,
   const attached = attachmentsAccess(conversationId)
   const session = await getSession({
     key,
+    signal,
     sessionId: stableUuid(key),
     cwd: work.cwd,
     systemPrompt: botSystemPrompt(bot, work),
@@ -140,7 +145,7 @@ async function askBot(caller: CallerContext, ref: string, message: string, signa
     throw new Error(`Limite de ${MAX_DEPTH} consultas encadeadas atingido. Responda com o que você já tem.`)
   }
 
-  const { key, session, ctx } = await botSession(caller.conversationId, caller.projectId, bot, caller.memorySource)
+  const { key, session, ctx } = await botSession(caller.conversationId, caller.projectId, bot, caller.memorySource, signal)
   const from = caller.callerName || 'o assistente da conversa'
   // Consultas também entram na fila do bot consultado: ele faz uma tarefa por vez.
   return runAsBot(bot.id, { label: `Consulta de ${from}`, origin: 'consult', originId: caller.conversationId }, signal, (stop) =>
@@ -160,7 +165,7 @@ async function askBot(caller: CallerContext, ref: string, message: string, signa
         botId: bot.id,
         ...(source?.kind === 'flow' ? { flowId: source.id } : { conversationId: caller.conversationId })
       })
-      reflectIfNeeded(session, ctx.memory)
+      if (!signal.aborted) reflectIfNeeded(session, ctx.memory)
       if (error) throw new Error(`${bot.name} não conseguiu responder: ${error}`)
       if (timeout.aborted) throw new Error(`${bot.name} demorou demais para responder.`)
       return text.trim() || `${bot.name} não respondeu nada.`
@@ -183,14 +188,14 @@ export async function sendToBot(
     emit({ type: 'error', message: 'Esse bot não existe mais ou não está disponível neste projeto.' })
     return
   }
-  const { key, session, ctx } = await botSession(conversationId, projectId, bot, origin)
+  const { key, session, ctx } = await botSession(conversationId, projectId, bot, origin, signal)
   const cwd = workContext(projectId).cwd
   await enqueue(key, () => {
     ctx.chain = [bot.id]
     ctx.depth = 1
     return session
       .send(text, withOutputFiles(cwd, emit, { conversationId, botId: bot.id }), signal, { kind: 'mention', conversationId, botId: bot.id })
-      .then(() => reflectIfNeeded(session, ctx.memory))
+      .then(() => { if (!signal.aborted) reflectIfNeeded(session, ctx.memory) })
   })
 }
 

@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import { Clock, Hand, Sparkles, Split } from 'lucide-react'
 import type { FlowNodeData, FlowStepStatus } from '@shared/types'
@@ -15,6 +16,7 @@ const STATUS_RING: Record<FlowStepStatus, string> = {
   pending: 'border-line',
   running: 'border-warning animate-pulse',
   waiting: 'border-warning',
+  stopped: 'border-muted opacity-60',
   done: 'border-success',
   error: 'border-danger',
   skipped: 'border-line opacity-60'
@@ -33,6 +35,7 @@ function Box({
   target?: boolean
   source?: boolean
 }) {
+  useLanguage()
   return (
     <div
       className={cn(
@@ -48,14 +51,16 @@ function Box({
 }
 
 function Preview({ text }: { text?: string }) {
+  useLanguage()
   return (
     <p className={cn('mt-2 line-clamp-2 text-[12px] leading-snug', text?.trim() ? 'text-fg-2' : 'text-muted italic')}>
-      {text?.trim() || 'Sem mensagem ainda'}
+      {text?.trim() || tr('Sem mensagem ainda')}
     </p>
   )
 }
 
 export function TriggerNode({ data, selected }: NodeProps<CanvasNode>) {
+  useLanguage()
   const next = nextRun(data.schedule)
   return (
     <Box selected={selected} target={false} status={data.status}>
@@ -64,16 +69,17 @@ export function TriggerNode({ data, selected }: NodeProps<CanvasNode>) {
           <Clock size={17} />
         </div>
         <div className="min-w-0">
-          <p className="text-[14px] font-semibold">{data.label || 'Gatilho'}</p>
+          <p className="text-[14px] font-semibold">{data.label || tr('Gatilho')}</p>
           <p className="truncate text-[12px] text-muted">{describeSchedule(data.schedule)}</p>
         </div>
       </div>
-      {next && <p className="mt-2 text-[12px] text-fg-2">Próxima: {formatWhen(next)}</p>}
+      {next && <p className="mt-2 text-[12px] text-fg-2">{tr('Próxima: ')}{formatWhen(next)}</p>}
     </Box>
   )
 }
 
 export function BotNode({ data, selected }: NodeProps<CanvasNode>) {
+  useLanguage()
   const app = useApp()
   const bot = app.getBot(data.botId)
   return (
@@ -85,7 +91,7 @@ export function BotNode({ data, selected }: NodeProps<CanvasNode>) {
           <div className="size-9 shrink-0 rounded-tile bg-tile" />
         )}
         <div className="min-w-0">
-          <p className="truncate text-[14px] font-semibold">{data.label || bot?.name || 'Escolha um bot'}</p>
+          <p className="truncate text-[14px] font-semibold">{data.label || bot?.name || tr('Escolha um bot')}</p>
           <p className="truncate text-[12px] text-muted">Bot{bot && app.models.length ? ` · ${modelLabel(app.models, bot.model)}` : ''}</p>
         </div>
       </div>
@@ -95,6 +101,7 @@ export function BotNode({ data, selected }: NodeProps<CanvasNode>) {
 }
 
 export function PromptNode({ data, selected }: NodeProps<CanvasNode>) {
+  useLanguage()
   const app = useApp()
   const provider = app.providers.find((p) => p.id === (data.providerId ?? 'claude-code'))
   return (
@@ -106,7 +113,7 @@ export function PromptNode({ data, selected }: NodeProps<CanvasNode>) {
         <div className="min-w-0">
           <p className="truncate text-[14px] font-semibold">{data.label || 'Prompt'}</p>
           <p className="truncate text-[12px] text-muted">
-            {provider?.name ?? 'Provedor'}
+            {provider?.name ?? tr('Provedor')}
             {provider?.models?.length ? ` · ${modelLabel(provider.models, data.model)}` : ''}
           </p>
         </div>
@@ -118,6 +125,7 @@ export function PromptNode({ data, selected }: NodeProps<CanvasNode>) {
 
 /** Decisão: uma bolinha de saída por opção; só o ramo da opção escolhida segue. */
 export function DecisionNode({ data, selected }: NodeProps<CanvasNode>) {
+  useLanguage()
   const app = useApp()
   const provider = app.providers.find((p) => p.id === (data.providerId ?? 'claude-code'))
   const options = data.options ?? []
@@ -128,9 +136,9 @@ export function DecisionNode({ data, selected }: NodeProps<CanvasNode>) {
           <Split size={17} />
         </div>
         <div className="min-w-0">
-          <p className="truncate text-[14px] font-semibold">{data.label || 'Decisão'}</p>
+          <p className="truncate text-[14px] font-semibold">{data.label || tr('Decisão')}</p>
           <p className="truncate text-[12px] text-muted">
-            {provider?.name ?? 'Provedor'}
+            {provider?.name ?? tr('Provedor')}
             {provider?.models?.length
               ? ` · ${!data.model && provider.id === 'claude-code' ? 'Haiku' : modelLabel(provider.models, data.model)}`
               : ''}
@@ -140,7 +148,7 @@ export function DecisionNode({ data, selected }: NodeProps<CanvasNode>) {
       <div className="mt-3 space-y-1.5">
         {options.map((o) => (
           <div key={o.id} className="relative rounded-nav border border-line bg-sidebar py-1.5 pr-4 pl-2.5 text-[12px] text-fg-2">
-            <span className="line-clamp-2">{o.label || 'Opção sem texto'}</span>
+            <span className="line-clamp-2">{o.label || tr('Opção sem texto')}</span>
             <Handle
               type="source"
               id={o.id}
@@ -149,7 +157,7 @@ export function DecisionNode({ data, selected }: NodeProps<CanvasNode>) {
             />
           </div>
         ))}
-        {!options.length && <p className="text-[12px] text-muted italic">Adicione opções no painel</p>}
+        {!options.length && <p className="text-[12px] text-muted italic">{tr('Adicione opções no painel')}</p>}
       </div>
     </Box>
   )
@@ -157,11 +165,12 @@ export function DecisionNode({ data, selected }: NodeProps<CanvasNode>) {
 
 /** Bolinhas de saída, uma por opção (decisão e confirmação). */
 function OptionOutputs({ options, empty }: { options: CanvasNodeData['options']; empty: string }) {
+  useLanguage()
   return (
     <div className="mt-3 space-y-1.5">
       {(options ?? []).map((o) => (
         <div key={o.id} className="relative rounded-nav border border-line bg-sidebar py-1.5 pr-4 pl-2.5 text-[12px] text-fg-2">
-          <span className="line-clamp-2">{o.label || 'Opção sem texto'}</span>
+          <span className="line-clamp-2">{o.label || tr('Opção sem texto')}</span>
           <Handle type="source" id={o.id} position={Position.Right} className="!-right-[19px] !size-3 !border-2 !border-page !bg-warning" />
         </div>
       ))}
@@ -172,6 +181,7 @@ function OptionOutputs({ options, empty }: { options: CanvasNodeData['options'];
 
 /** Confirmação: pausa o fluxo, notifica o usuário e segue pela opção que ele escolher. */
 export function ConfirmNode({ id, data, selected }: NodeProps<CanvasNode>) {
+  useLanguage()
   const app = useApp()
   const waiting = app.confirmations.find((c) => c.nodeId === id)
   return (
@@ -181,8 +191,8 @@ export function ConfirmNode({ id, data, selected }: NodeProps<CanvasNode>) {
           <Hand size={17} />
         </div>
         <div className="min-w-0">
-          <p className="truncate text-[14px] font-semibold">{data.label || 'Confirmação'}</p>
-          <p className="truncate text-[12px] text-muted">Você decide · notificação</p>
+          <p className="truncate text-[14px] font-semibold">{data.label || tr('Confirmação')}</p>
+          <p className="truncate text-[12px] text-muted">{tr('Você decide · notificação')}</p>
         </div>
       </div>
       <Preview text={data.message} />
@@ -193,11 +203,9 @@ export function ConfirmNode({ id, data, selected }: NodeProps<CanvasNode>) {
             app.openConfirmation(waiting.id)
           }}
           className="nodrag mt-2 w-full rounded-full bg-warning px-3 py-1.5 text-[12px] font-semibold text-page hover:opacity-90"
-        >
-          Esperando você · responder
-        </button>
+        >{tr('Esperando você · responder')}</button>
       )}
-      <OptionOutputs options={data.options} empty="Adicione as opções (botões) no painel" />
+      <OptionOutputs options={data.options} empty={tr('Adicione as opções (botões) no painel')} />
     </Box>
   )
 }

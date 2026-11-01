@@ -3,6 +3,7 @@ import type { ProviderAccount, SendMessageRequest } from '@shared/types'
 import type { ChatProvider, ProviderAccounts } from '../types'
 import type { MemoryOwner } from '@shared/types'
 import { memoryPrompt } from '../../memory'
+import { languageInstructions } from '../../localization'
 import { attachmentsAccess, withAttachments } from '../../attachments'
 import { botFilesAccess, botFilesPrompt } from '../../botFiles'
 import { PERMISSIONS_HINT, sendToBot, TOOLS_HINT } from './bots'
@@ -41,7 +42,7 @@ const memoryOf = (req: SendMessageRequest): MemoryOwner | undefined =>
 
 function systemPrompt(req: SendMessageRequest, work: WorkContext): string {
   if (req.architect) {
-    return [...architectPrompt(), '', ...work.promptLines, PERMISSIONS_HINT, TOOLS_HINT].join('\n')
+    return [...architectPrompt(), '', ...work.promptLines, PERMISSIONS_HINT, TOOLS_HINT, languageInstructions()].join('\n')
   }
   const { bot } = req
   const lines = ['Você está conversando com o usuário pelo gBot, um aplicativo de chat para desktop.']
@@ -63,7 +64,7 @@ function systemPrompt(req: SendMessageRequest, work: WorkContext): string {
     GBOT_EDIT_HINT,
     ...memoryPrompt(memoryOf(req))
   )
-  return lines.join('\n')
+  return [...lines, languageInstructions()].join('\n')
 }
 
 /**
@@ -72,12 +73,13 @@ function systemPrompt(req: SendMessageRequest, work: WorkContext): string {
  */
 export async function suggestBotIdentity(instructions: string): Promise<{ name: string; description: string }> {
   const prompt = [
-    'Sugira um nome curto e simpático (1 ou 2 palavras, em português) e uma descrição de uma frase',
+    'Sugira um nome curto e simpático (1 ou 2 palavras, no idioma preferido do usuário) e uma descrição de uma frase',
     '(até 90 caracteres, começando com verbo, ex.: "Revisa contratos e aponta riscos") para um bot de chat com estas instruções:',
     '<instrucoes>',
     instructions.trim(),
     '</instrucoes>',
-    'Responda apenas com JSON no formato {"name": "...", "description": "..."}.'
+    'Responda apenas com JSON no formato {"name": "...", "description": "..."}.',
+    languageInstructions()
   ].join('\n')
   const { text } = await askOnce(prompt, 'haiku', { kind: 'suggest' }, 60_000)
   const json = text.match(/\{[\s\S]*\}/)?.[0]
@@ -168,6 +170,7 @@ export const claudeCodeProvider: ChatProvider = {
       mainContexts.set(req.conversationId, entry)
     }
     entry.ctx.projectId = req.projectId
+    entry.ctx.signal = signal
     entry.ctx.architect = req.architect
     entry.ctx.memory = memoryOf(req)
     entry.ctx.memorySource = req.origin ?? { kind: 'conversation', id: req.conversationId }
@@ -177,6 +180,7 @@ export const claudeCodeProvider: ChatProvider = {
     const attached = attachmentsAccess(req.conversationId)
     const session = await getSession({
       key: req.conversationId,
+      signal,
       sessionId: req.conversationId,
       cwd: work.cwd,
       systemPrompt: systemPrompt(req, work),
@@ -190,7 +194,7 @@ export const claudeCodeProvider: ChatProvider = {
         ? { kind: 'flow', flowId: req.origin.id, botId: req.bot?.id }
         : { kind: 'conversation', conversationId: req.conversationId, botId: req.bot?.id }
     await session.send(text, withOutputFiles(work.cwd, emit, fileContext(tag)), signal, tag)
-    reflectIfNeeded(session, entry.ctx.memory)
+    if (!signal.aborted) reflectIfNeeded(session, entry.ctx.memory)
   }
 }
 

@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { useEffect, useState } from 'react'
 import { MessageSquareText, Workflow } from 'lucide-react'
 import type { TokenUsage, UsageSummary } from '@shared/types'
@@ -8,6 +9,7 @@ import { formatTokens, usageDetail } from '@/lib/format'
 import { useApp } from '@/state/app'
 
 function Stat({ label, usage }: { label: string; usage: TokenUsage }) {
+  useLanguage()
   return (
     <div className="flex-1 rounded-tile bg-sidebar px-3 py-2.5" title={usageDetail(usage)}>
       <p className="text-[12px] text-muted">{label}</p>
@@ -19,6 +21,7 @@ function Stat({ label, usage }: { label: string; usage: TokenUsage }) {
 
 /** Quanto o gBot gastou hoje e na semana, e quem mais pesou (fluxo, bot ou conversa). */
 export function UsageCard() {
+  useLanguage()
   const app = useApp()
   const [summary, setSummary] = useState<UsageSummary>()
 
@@ -34,23 +37,21 @@ export function UsageCard() {
   return (
     <Card className="p-5">
       <div className="flex items-baseline justify-between pb-3">
-        <p className="text-[13px] font-medium text-muted">Consumo</p>
-        <button onClick={() => app.setView('usage')} className="text-[12px] text-fg-2 hover:text-fg hover:underline">
-          Ver detalhes
-        </button>
+        <p className="text-[13px] font-medium text-muted">{tr('Consumo')}</p>
+        <button onClick={() => app.setView('usage')} className="text-[12px] text-fg-2 hover:text-fg hover:underline">{tr('Ver detalhes')}</button>
       </div>
       <div className="flex gap-2">
-        <Stat label="Hoje" usage={summary.today} />
-        <Stat label="Últimos 7 dias" usage={summary.week} />
+        <Stat label={tr('Hoje')} usage={summary.today} />
+        <Stat label={tr('Últimos 7 dias')} usage={summary.week} />
       </div>
       {summary.top.length > 0 && (
         <>
-          <p className="pt-4 pb-1 text-[12px] text-muted">O que mais gastou na semana</p>
+          <p className="pt-4 pb-1 text-[12px] text-muted">{tr('O que mais gastou na semana')}</p>
           {summary.top.map((t) => {
             const bot = t.kind === 'bot' ? app.getBot(t.id) : undefined
             const flow = t.kind === 'flow' ? app.flows.find((f) => f.id === t.id) : undefined
             const conv = t.kind === 'conversation' ? app.conversations.find((c) => c.id === t.id) : undefined
-            const name = bot?.name ?? flow?.name ?? conv?.title ?? (t.kind === 'conversation' ? 'Conversa excluída' : 'Excluído')
+            const name = bot?.name ?? flow?.name ?? conv?.title ?? (t.kind === 'conversation' ? tr('Conversa excluída') : tr('Excluído'))
             const open = bot
               ? () => app.openBot(bot.id)
               : flow

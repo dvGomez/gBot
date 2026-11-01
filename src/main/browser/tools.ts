@@ -12,6 +12,7 @@ import { browserController } from './controller'
 export interface BrowserCaller {
   conversationId: string
   callerName: string
+  signal?: AbortSignal
 }
 
 type Content = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
@@ -44,13 +45,15 @@ function isShareable(file: string): boolean {
 
 /** Pede aprovação para agir num site; páginas sem site (about:blank) passam direto. */
 async function approve(caller: BrowserCaller, host: string, action: string) {
+  caller.signal?.throwIfAborted()
   if (!host) return
   const decision = await requestApproval({
     conversationId: caller.conversationId,
     requester: caller.callerName,
     host,
     action
-  })
+  }, caller.signal)
+  caller.signal?.throwIfAborted()
   if (decision === 'deny') throw new Error(`O usuário não permitiu: ${action}. Não tente de novo a menos que ele peça.`)
 }
 
@@ -140,11 +143,29 @@ async function settle(page: Page) {
 
 /** Ferramentas de navegador no servidor MCP do gBot. Toda ação num site passa pela aprovação do usuário. */
 export function registerBrowserTools(server: McpServer, caller: BrowserCaller) {
+  // Each MCP request has its own server. Close only tabs touched by this request if it is interrupted.
+  const touched = new Set<Page>()
+  const getPage = async (fresh = false) => {
+    caller.signal?.throwIfAborted()
+    const page = await (fresh ? browserController.newTab() : browserController.page())
+    caller.signal?.throwIfAborted()
+    touched.add(page)
+    return page
+  }
   const run = async (fn: () => Promise<{ content: Content[] }>) => {
+    const signal = caller.signal
+    const abort = () => {
+      for (const page of touched) void page.close({ runBeforeUnload: false }).catch(() => undefined)
+    }
     try {
+      signal?.throwIfAborted()
+      signal?.addEventListener('abort', abort, { once: true })
       return await fn()
     } catch (e) {
       return fail((e as Error).message)
+    } finally {
+      signal?.removeEventListener('abort', abort)
+      touched.clear()
     }
   }
 
@@ -159,7 +180,7 @@ export function registerBrowserTools(server: McpServer, caller: BrowserCaller) {
       run(async () => {
         const target = normalizeUrl(url)
         await approve(caller, hostOf(target), `Abrir ${target}`)
-        const page = await browserController.page()
+        const page = await getPage()
         await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 45_000 })
         await settle(page)
         return text(await readPage(page))
@@ -174,7 +195,7 @@ export function registerBrowserTools(server: McpServer, caller: BrowserCaller) {
     },
     () =>
       run(async () => {
-        const page = await browserController.page()
+        const page = await getPage()
         await approve(caller, hostOf(page.url()), `Ler a página ${page.url()}`)
         return text(await readPage(page))
       })
@@ -191,7 +212,7 @@ export function registerBrowserTools(server: McpServer, caller: BrowserCaller) {
     },
     ({ ref, description }) =>
       run(async () => {
-        const page = await browserController.page()
+        const page = await getPage()
         await approve(caller, hostOf(page.url()), `Clicar em ${description}`)
         await (await element(page, ref)).click({ timeout: 10_000 })
         await settle(page)
@@ -213,7 +234,7 @@ export function registerBrowserTools(server: McpServer, caller: BrowserCaller) {
     },
     ({ ref, text: value, description, submit }) =>
       run(async () => {
-        const page = await browserController.page()
+        const page = await getPage()
         await approve(caller, hostOf(page.url()), `Digitar em ${description}`)
         const el = await element(page, ref)
         if ((await el.getAttribute('type'))?.toLowerCase() === 'password') {
@@ -234,7 +255,7 @@ export function registerBrowserTools(server: McpServer, caller: BrowserCaller) {
     },
     ({ key }) =>
       run(async () => {
-        const page = await browserController.page()
+        const page = await getPage()
         await approve(caller, hostOf(page.url()), `Apertar ${key}`)
         await page.keyboard.press(key)
         await settle(page)
@@ -247,7 +268,7 @@ export function registerBrowserTools(server: McpServer, caller: BrowserCaller) {
     { description: 'Tira um print da parte visível da aba atual.', inputSchema: {} },
     () =>
       run(async () => {
-        const page = await browserController.page()
+        const page = await getPage()
         await approve(caller, hostOf(page.url()), `Tirar print de ${page.url()}`)
         const img = await page.screenshot({ type: 'jpeg', quality: 70 })
         return { content: [{ type: 'image', data: img.toString('base64'), mimeType: 'image/jpeg' }] }
@@ -265,15 +286,16 @@ export function registerBrowserTools(server: McpServer, caller: BrowserCaller) {
     },
     ({ select, new: openNew }) =>
       run(async () => {
-        if (openNew) await browserController.newTab()
+        if (openNew) await getPage(true)
         const tabs = await browserController.tabs()
+        caller.signal?.throwIfAborted()
         if (select !== undefined) {
           const tab = tabs[select - 1]
           if (!tab) throw new Error(`Não existe a aba ${select}.`)
           browserController.select(tab)
           await tab.bringToFront()
         }
-        const current = await browserController.page()
+        const current = await getPage()
         const lines = await Promise.all(
           tabs.map(async (t, i) => `${i + 1}. ${t === current ? '(atual) ' : ''}${(await t.title().catch(() => '')) || '(sem título)'} — ${t.url()}`)
         )
@@ -300,7 +322,7 @@ export function registerBrowserTools(server: McpServer, caller: BrowserCaller) {
         const files = paths.map((p) => resolve(p))
         const missing = files.filter((f) => !existsSync(f) || !statSync(f).isFile())
         if (missing.length) throw new Error(`Arquivo não encontrado: ${missing.join(', ')}`)
-        const page = await browserController.page()
+        const page = await getPage()
         const host = hostOf(page.url())
         await approve(caller, host, `Anexar ${files.map((f) => basename(f)).join(', ')}: ${description}`)
         // Arquivos fora das pastas do gBot (trabalho, projetos, arquivos dos bots) só saem com aprovação do usuário.
@@ -312,7 +334,7 @@ export function registerBrowserTools(server: McpServer, caller: BrowserCaller) {
             host: `Upload:${dir}`,
             action: `Enviar para ${host || 'o site'} arquivos de ${dir}:\n${files.filter((f) => dirname(f) === dir).join('\n')}`,
             alwaysLabel: `Sempre de ${basename(dir) || dir}`
-          })
+          }, caller.signal)
           if (decision === 'deny') throw new Error('O usuário não permitiu enviar esses arquivos. Não tente de novo a menos que ele peça.')
         }
         const el = await element(page, ref)
@@ -334,7 +356,7 @@ export function registerBrowserTools(server: McpServer, caller: BrowserCaller) {
     { description: 'Volta para a página anterior na aba atual.', inputSchema: {} },
     () =>
       run(async () => {
-        const page = await browserController.page()
+        const page = await getPage()
         await approve(caller, hostOf(page.url()), 'Voltar a página')
         await page.goBack({ timeout: 15_000 })
         await settle(page)

@@ -203,7 +203,7 @@ function planGuide(): string[] {
     'O plano segue este exemplo (criação):',
     JSON.stringify(EXAMPLE),
     'Regras do plano:',
-    '- Tudo em português, direto e claro. Inclua só o que será criado ou alterado (e os bots que os fluxos usam).',
+    '- Use o idioma preferido pelo usuário, direto e claro. Inclua só o que será criado ou alterado (e os bots que os fluxos usam).',
     '- "bots" lista todos os bots que os fluxos do plano usam. Cada etapa "bot" aponta para o "ref" de um bot da lista.',
     '- Bot novo também pode entrar sem fluxo, quando o pedido for um assistente para conversar.',
     '- "setup": passos curtos que o usuário ainda precisa fazer antes de ligar.',

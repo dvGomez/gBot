@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { ArrowLeft, Bot as BotIcon, FolderOpen, MessageSquarePlus, Pencil, Plus, Workflow } from 'lucide-react'
 import { ConversationList } from '@/components/ConversationList'
 import { PixelAvatar } from '@/components/PixelAvatar'
@@ -9,6 +10,7 @@ import { describeSchedule } from '@/lib/schedule'
 import { useApp } from '@/state/app'
 
 function NewCard({ label, onClick }: { label: string; onClick(): void }) {
+  useLanguage()
   return (
     <button
       onClick={onClick}
@@ -22,6 +24,7 @@ function NewCard({ label, onClick }: { label: string; onClick(): void }) {
 
 /** Página do projeto: bots, fluxos e conversas dele, pasta e instruções. Aceita itens arrastados de fora. */
 export function ProjectView() {
+  useLanguage()
   const app = useApp()
   const project = app.selectedProject
   const drop = useDrop(
@@ -45,35 +48,29 @@ export function ProjectView() {
           className="pointer-events-none absolute inset-x-[40px] inset-y-2 z-20 flex items-start justify-center rounded-card border-2 border-dashed pt-3"
           style={{ borderColor: project.color, background: `${project.color}10` }}
         >
-          <span className="rounded-full px-3 py-1 text-[12px] font-medium" style={{ color: project.color, background: `${project.color}26` }}>
-            Soltar para mover para {project.name}
+          <span className="rounded-full px-3 py-1 text-[12px] font-medium" style={{ color: project.color, background: `${project.color}26` }}>{tr('Soltar para mover para ')}{project.name}
           </span>
         </div>
       )}
       <button onClick={() => app.setView('home')} className="mb-4 inline-flex items-center gap-1.5 text-[13px] text-muted hover:text-fg">
-        <ArrowLeft size={14} /> Início
-      </button>
+        <ArrowLeft size={14} />{tr(' Início')}</button>
 
       <div className="flex items-center gap-6">
         <ProjectTile project={project} size={96} />
         <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-medium tracking-[0.02em] text-muted">Projeto</p>
+          <p className="text-[12px] font-medium tracking-[0.02em] text-muted">{tr('Projeto')}</p>
           <h1 className="mt-1 truncate text-[36px] leading-tight font-medium tracking-[-0.03em]">{project.name}</h1>
           {project.description && <p className="mt-1 text-[15px] text-muted">{project.description}</p>}
         </div>
         <div className="flex gap-2">
           <Button onClick={() => app.editProject(project.id)}>
-            <Pencil size={14} /> Editar
-          </Button>
+            <Pencil size={14} />{tr(' Editar')}</Button>
           <Button onClick={() => app.editBot(undefined, project.id)}>
-            <BotIcon size={14} /> Novo bot
-          </Button>
+            <BotIcon size={14} />{tr(' Novo bot')}</Button>
           <Button onClick={() => void app.newFlow(project.id)}>
-            <Workflow size={14} /> Novo fluxo
-          </Button>
+            <Workflow size={14} />{tr(' Novo fluxo')}</Button>
           <Button variant="primary" onClick={() => app.newConversation(undefined, project.id)}>
-            <MessageSquarePlus size={14} /> Nova conversa
-          </Button>
+            <MessageSquarePlus size={14} />{tr(' Nova conversa')}</Button>
         </div>
       </div>
 
@@ -82,14 +79,14 @@ export function ProjectView() {
         {project.folder ? (
           <span className="selectable min-w-0 flex-1 truncate font-mono text-[12px] text-fg-2">{project.folder}</span>
         ) : (
-          <span className="flex-1 text-muted">Sem pasta própria: o Claude usa a pasta padrão do gBot.</span>
+          <span className="flex-1 text-muted">{tr('Sem pasta própria: o Claude usa a pasta padrão do gBot.')}</span>
         )}
         <Button onClick={() => void pickFolder()} className="h-8">
-          {project.folder ? 'Trocar pasta' : 'Escolher pasta'}
+          {project.folder ? tr('Trocar pasta') : tr('Escolher pasta')}
         </Button>
       </div>
 
-      <p className="mt-8 text-[13px] font-medium text-muted">Bots do projeto</p>
+      <p className="mt-8 text-[13px] font-medium text-muted">{tr('Bots do projeto')}</p>
       <div className="mt-3 grid grid-cols-3 gap-3 xl:grid-cols-4">
         {bots.map((b, i) => (
           <button
@@ -100,13 +97,13 @@ export function ProjectView() {
           >
             <PixelAvatar avatar={b.avatar} size={44} seed={i} />
             <p className="mt-3 w-full truncate text-[15px] font-semibold">{b.name}</p>
-            <p className="mt-0.5 line-clamp-2 text-[12px] text-muted">{b.description || 'Sem descrição'}</p>
+            <p className="mt-0.5 line-clamp-2 text-[12px] text-muted">{b.description || tr('Sem descrição')}</p>
           </button>
         ))}
-        <NewCard label="Criar bot no projeto" onClick={() => app.editBot(undefined, project.id)} />
+        <NewCard label={tr('Criar bot no projeto')} onClick={() => app.editBot(undefined, project.id)} />
       </div>
 
-      <p className="mt-8 text-[13px] font-medium text-muted">Fluxos do projeto</p>
+      <p className="mt-8 text-[13px] font-medium text-muted">{tr('Fluxos do projeto')}</p>
       <div className="mt-3 grid grid-cols-3 gap-3 xl:grid-cols-4">
         {flows.map((f) => (
           <button
@@ -125,21 +122,21 @@ export function ProjectView() {
             </span>
             <p className="mt-3 w-full truncate text-[15px] font-semibold">{f.name}</p>
             <p className="mt-0.5 line-clamp-2 text-[12px] text-muted">
-              {f.enabled ? 'Ativo' : 'Pausado'} · {describeSchedule(f.nodes.find((n) => n.type === 'trigger')?.data.schedule)}
+              {f.enabled ? tr('Ativo') : tr('Pausado')} · {describeSchedule(f.nodes.find((n) => n.type === 'trigger')?.data.schedule)}
             </p>
           </button>
         ))}
-        <NewCard label="Criar fluxo no projeto" onClick={() => void app.newFlow(project.id)} />
+        <NewCard label={tr('Criar fluxo no projeto')} onClick={() => void app.newFlow(project.id)} />
       </div>
 
       <div className={`mt-8 grid gap-4 ${project.instructions ? 'grid-cols-[1fr_360px]' : 'grid-cols-1'}`}>
         <Card className="p-5">
-          <p className="pb-2 text-[13px] font-medium text-muted">Conversas do projeto</p>
-          <ConversationList items={conversations} empty="Nenhuma conversa ainda. Comece uma nova ou arraste uma para cá." />
+          <p className="pb-2 text-[13px] font-medium text-muted">{tr('Conversas do projeto')}</p>
+          <ConversationList items={conversations} empty={tr('Nenhuma conversa ainda. Comece uma nova ou arraste uma para cá.')} />
         </Card>
         {project.instructions && (
           <Card className="self-start p-5">
-            <p className="pb-2 text-[13px] font-medium text-muted">Instruções do projeto</p>
+            <p className="pb-2 text-[13px] font-medium text-muted">{tr('Instruções do projeto')}</p>
             <p className="selectable text-[13px] leading-relaxed whitespace-pre-wrap text-fg-2">{project.instructions}</p>
           </Card>
         )}

@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { FolderOpen, Trash2, X } from 'lucide-react'
 import type { ChatFile, ChatMessage, TokenUsage, ToolActivity } from '@shared/types'
@@ -34,6 +35,7 @@ function useConversationUsage(id?: string): TokenUsage | undefined {
 
 /** Anexos que o usuário mandou: fotos em miniatura, os demais como cartões. Clicar abre o arquivo. */
 function SentAttachments({ files }: { files: ChatFile[] }) {
+  useLanguage()
   const photos = files.filter((f) => f.thumb)
   const others = files.filter((f) => !f.thumb)
   return (
@@ -54,19 +56,20 @@ function SentAttachments({ files }: { files: ChatFile[] }) {
 
 /** Linha que mostra o que o bot está fazendo agora, enquanto a resposta não termina. */
 function LiveStatus({ msg }: { msg: ChatMessage }) {
+  useLanguage()
   const app = useApp()
   const waiting = app.approvals.some((r) => r.conversationId === app.activeConversation?.id)
   const asking = app.questions.some((q) => q.conversationId === app.activeConversation?.id)
   const running = msg.tools?.filter((t) => t.status === 'running' && !HIDDEN_TOOLS.has(t.name)).at(-1)
   const label = waiting
-    ? 'Esperando sua aprovação…'
+    ? tr('Esperando sua aprovação…')
     : asking
-      ? 'Esperando suas respostas…'
+      ? tr('Esperando suas respostas…')
     : running
-      ? `Trabalhando: ${running.summary}…`
+      ? tr('Trabalhando: {0}…', running.summary)
       : app.mood === 'talking'
-        ? 'Escrevendo…'
-        : 'Pensando…'
+        ? tr('Escrevendo…')
+        : tr('Pensando…')
   return (
     <p className="mt-2 flex items-center gap-2 text-[13px] text-muted">
       <span className="flex gap-1">
@@ -81,6 +84,7 @@ function LiveStatus({ msg }: { msg: ChatMessage }) {
 
 /** Resposta na ordem em que aconteceu: texto, ferramentas usadas, mais texto… */
 function Steps({ msg }: { msg: ChatMessage }) {
+  useLanguage()
   const tools = new Map((msg.tools ?? []).map((t) => [t.id, t]))
   const blocks: ({ kind: 'text'; text: string } | { kind: 'tools'; tools: ToolActivity[] })[] = []
   for (const step of msg.steps ?? []) {
@@ -102,6 +106,7 @@ function Steps({ msg }: { msg: ChatMessage }) {
 }
 
 function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
+  useLanguage()
   const app = useApp()
   if (msg.role === 'user') {
     return (
@@ -128,7 +133,7 @@ function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
       <div className="selectable min-w-0 flex-1 pt-1 text-[15px] leading-relaxed">
         {author && <p className="mb-1 text-[12px] font-semibold text-fg-2">{author.name}</p>}
         {msg.error ? (
-          <p className="text-danger">{msg.text}</p>
+          <p className="text-danger">{tr(msg.text)}</p>
         ) : msg.steps ? (
           <Steps msg={msg} />
         ) : (
@@ -157,6 +162,7 @@ function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
 }
 
 export function ChatView() {
+  useLanguage()
   const app = useApp()
   const conv = app.activeConversation
   const avatar = app.activeAvatar
@@ -175,7 +181,7 @@ export function ChatView() {
   }
   const showFiles = filesOpen && files.length > 0
   const spentLabel = spent && totalTokens(spent) > 0 && (
-    <span title={usageDetail(spent)}>{formatTokens(totalTokens(spent))} tokens nesta conversa</span>
+    <span title={usageDetail(spent)}>{formatTokens(totalTokens(spent))}{tr(' tokens nesta conversa')}</span>
   )
 
   useEffect(() => {
@@ -193,7 +199,7 @@ export function ChatView() {
                 {bot.name}
               </button>
             ) : (
-              <p className="truncate text-[15px] font-semibold">{conv?.title ?? 'Nova conversa'}</p>
+              <p className="truncate text-[15px] font-semibold">{conv?.title ?? tr('Nova conversa')}</p>
             )}
             {bot ? (
               <p className="text-[12px] text-muted">
@@ -208,14 +214,14 @@ export function ChatView() {
           <div className="ml-auto flex items-center gap-2">
             {conv && !bot?.projectId ? (
               <label className="relative inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[12px] text-fg-2 hover:bg-hover">
-                {project ? <ProjectIcon project={project} size={14} /> : <span className="text-muted">Projeto:</span>}
+                {project ? <ProjectIcon project={project} size={14} /> : <span className="text-muted">{tr('Projeto:')}</span>}
                 <select
                   value={conv.projectId ?? ''}
                   onChange={(e) => void app.moveConversation(conv.id, e.target.value || undefined)}
                   disabled={app.busy}
                   className="appearance-none bg-transparent pr-1 outline-none"
                 >
-                  <option value="">Nenhum</option>
+                  <option value="">{tr('Nenhum')}</option>
                   {app.projects.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name}
@@ -238,19 +244,19 @@ export function ChatView() {
               <button
                 onClick={toggleFiles}
                 className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-[12px] whitespace-nowrap hover:bg-hover ${showFiles ? 'bg-hover text-fg' : 'text-fg-2'}`}
-                title={showFiles ? 'Esconder arquivos' : 'Arquivos que esta conversa mexeu'}
+                title={showFiles ? tr('Esconder arquivos') : tr('Arquivos que esta conversa mexeu')}
               >
-                <FolderOpen size={14} /> Arquivos ({files.length})
+                <FolderOpen size={14} />{tr(' Arquivos (')}{files.length})
               </button>
             )}
             {conv && (
               <ItemMenu
                 actions={[
                   {
-                    label: 'Excluir conversa',
+                    label: tr('Excluir conversa'),
                     icon: Trash2,
                     danger: true,
-                    confirm: 'Excluir esta conversa? Não dá para desfazer.',
+                    confirm: tr('Excluir esta conversa? Não dá para desfazer.'),
                     onSelect: () => void app.removeConversation(conv.id)
                   }
                 ]}
@@ -265,14 +271,14 @@ export function ChatView() {
               <div className="flex flex-col items-center pt-16 text-center">
                 {avatar && <PixelAvatar avatar={avatar} mood={app.mood} size={96} />}
                 <p className={`${avatar ? 'mt-5' : ''} text-[22px] font-medium tracking-[-0.02em]`}>
-                  {bot ? `Converse com ${bot.name}` : 'Nova conversa'}
+                  {bot ? tr('Converse com {0}', bot.name) : tr('Nova conversa')}
                 </p>
                 <p className="mt-1 max-w-[460px] text-[14px] text-muted">
                   {bot
-                    ? bot.description || 'Este bot segue as instruções que você definiu.'
+                    ? bot.description || tr('Este bot segue as instruções que você definiu.')
                     : app.visibleBots.length
-                      ? 'Pergunte o que quiser. Para falar com um bot, mencione com @.'
-                      : 'Pergunte o que quiser.'}
+                      ? tr('Pergunte o que quiser. Para falar com um bot, mencione com @.')
+                      : tr('Pergunte o que quiser.')}
                 </p>
               </div>
             )}
@@ -295,20 +301,20 @@ export function ChatView() {
               <div key={q.id} className="mb-3">
                 <QuestionCard
                   questions={q.questions}
-                  title={q.requester ? `${q.requester} quer saber` : 'Para acertar de primeira'}
+                  title={q.requester ? tr('{0} quer saber', q.requester) : tr('Para acertar de primeira')}
                   onSubmit={(answers) => app.answerQuestions(q.id, answers)}
                   onSkip={() => app.answerQuestions(q.id)}
                 />
               </div>
             ))}
-          <Composer autoFocus placeholder={empty ? (bot ? `Mensagem para ${bot.name}…` : 'Mensagem…') : 'Responder…'} />
+          <Composer autoFocus placeholder={empty ? (bot ? tr('Mensagem para {0}…', bot.name) : tr('Mensagem…')) : tr('Responder…')} />
         </div>
       </div>
       {showFiles && (
         <aside className="flex w-[300px] shrink-0 flex-col border-l border-line bg-sidebar">
           <div className="flex items-center justify-between px-4 pt-1 pb-3">
-            <p className="text-[13px] font-medium text-fg-2">Arquivos da conversa</p>
-            <button onClick={toggleFiles} aria-label="Fechar" className="rounded-full p-1.5 text-muted hover:bg-hover hover:text-fg">
+            <p className="text-[13px] font-medium text-fg-2">{tr('Arquivos da conversa')}</p>
+            <button onClick={toggleFiles} aria-label={tr('Fechar')} className="rounded-full p-1.5 text-muted hover:bg-hover hover:text-fg">
               <X size={14} />
             </button>
           </div>

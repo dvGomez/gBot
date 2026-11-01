@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import type { AvatarDef } from '@shared/types'
@@ -16,6 +17,7 @@ interface Props {
 
 /** Janela para escolher o avatar: prévia animada, sortear, gerar novo e a grade com todos. */
 export function AvatarPickerModal({ value, generated, onGenerate, onConfirm, onClose }: Props) {
+  useLanguage()
   const [choice, setChoice] = useState(value)
 
   useEffect(() => {
@@ -36,12 +38,12 @@ export function AvatarPickerModal({ value, generated, onGenerate, onConfirm, onC
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Escolher avatar"
+        aria-label={tr('Escolher avatar')}
         className="flex max-h-full w-full max-w-[640px] flex-col overflow-hidden rounded-card border border-line bg-page shadow-2xl"
       >
         <div className="flex items-center justify-between border-b border-line px-6 py-4">
-          <p className="text-[16px] font-semibold">Escolher avatar</p>
-          <button onClick={onClose} aria-label="Fechar" className="rounded-full p-1.5 text-muted hover:bg-hover hover:text-fg">
+          <p className="text-[16px] font-semibold">{tr('Escolher avatar')}</p>
+          <button onClick={onClose} aria-label={tr('Fechar')} className="rounded-full p-1.5 text-muted hover:bg-hover hover:text-fg">
             <X size={16} />
           </button>
         </div>
@@ -60,12 +62,8 @@ export function AvatarPickerModal({ value, generated, onGenerate, onConfirm, onC
         </div>
 
         <div className="flex justify-end gap-2 border-t border-line px-6 py-4">
-          <Button variant="ghost" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button variant="primary" onClick={() => onConfirm(choice)}>
-            Usar este avatar
-          </Button>
+          <Button variant="ghost" onClick={onClose}>{tr('Cancelar')}</Button>
+          <Button variant="primary" onClick={() => onConfirm(choice)}>{tr('Usar este avatar')}</Button>
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from 'react'
-import { ArrowUp, ChevronDown, FileText, LoaderCircle, Paperclip, Square, X } from 'lucide-react'
+import { ArrowUp, FileText, LoaderCircle, Paperclip, Square, X } from 'lucide-react'
 import type { ChatFile } from '@shared/types'
 import { useApp } from '@/state/app'
 import { cn } from '@/lib/cn'
@@ -9,7 +10,8 @@ import { ModelSelect } from './ModelSelect'
 import { PixelAvatar } from './PixelAvatar'
 import { ProviderNotice } from './ProviderNotice'
 
-export function Composer({ autoFocus, placeholder = 'Pergunte qualquer coisa…' }: { autoFocus?: boolean; placeholder?: string }) {
+export function Composer({ autoFocus, placeholder = tr('Pergunte qualquer coisa…') }: { autoFocus?: boolean; placeholder?: string }) {
+  useLanguage()
   const app = useApp()
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<ChatFile[]>([])
@@ -134,7 +136,7 @@ export function Composer({ autoFocus, placeholder = 'Pergunte qualquer coisa…'
                 </span>
                 <button
                   onClick={() => setAttachments((list) => list.filter((x) => x.path !== f.path))}
-                  aria-label={`Tirar ${f.name}`}
+                  aria-label={tr('Tirar {0}', f.name)}
                   className="rounded-full p-0.5 text-muted hover:bg-hover hover:text-fg"
                 >
                   <X size={12} />
@@ -147,7 +149,7 @@ export function Composer({ autoFocus, placeholder = 'Pergunte qualquer coisa…'
         )}
         {showSuggestions && (
           <div className="absolute bottom-full left-3 mb-2 w-[300px] overflow-hidden rounded-tile border border-line bg-sidebar py-1 shadow-lg">
-            <p className="px-3 pt-1.5 pb-1 text-[11px] font-medium text-muted">Chamar um bot</p>
+            <p className="px-3 pt-1.5 pb-1 text-[11px] font-medium text-muted">{tr('Chamar um bot')}</p>
             {suggestions.map((b, i) => (
               <button
                 key={b.id}
@@ -205,38 +207,28 @@ export function Composer({ autoFocus, placeholder = 'Pergunte qualquer coisa…'
           className="selectable block w-full resize-none bg-transparent px-2 py-1.5 text-[15px] leading-relaxed text-fg outline-none placeholder:text-muted"
         />
         <div className="mt-2 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
             <button
               onClick={() => void pickFiles()}
               disabled={app.busy}
               className="flex size-8 items-center justify-center rounded-full border border-line text-fg-2 hover:bg-hover disabled:opacity-40"
-              aria-label="Anexar arquivos"
-              title="Anexar arquivos ou fotos (também dá para arrastar ou colar)"
+              aria-label={tr('Anexar arquivos')}
+              title={tr('Anexar arquivos ou fotos (também dá para arrastar ou colar)')}
             >
               <Paperclip size={15} />
             </button>
-            {/* O arquiteto trabalha sempre no Claude Code: sem escolha de provedor nessa conversa. */}
-            {app.activeConversation?.mode !== 'architect' && (
-            <label className="relative inline-flex items-center">
-              <select
-                value={app.providerId}
-                onChange={(e) => app.setProviderId(e.target.value)}
-                className="h-8 appearance-none rounded-full border border-line bg-card pr-8 pl-3.5 text-[13px] font-medium text-fg-2 outline-none hover:bg-hover"
-              >
-                {app.providers.map((p) => (
-                  <option key={p.id} value={p.id} disabled={p.status !== 'ready'}>
-                    {p.name}
-                    {p.status !== 'ready' ? ' — em breve' : ''}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="pointer-events-none absolute right-3 text-muted" />
-            </label>
-            )}
-            {app.models.length > 0 && (
-              <ModelSelect models={app.models} value={app.activeModel} onChange={app.setActiveModel} disabled={app.busy} />
-            )}
-            {app.visibleBots.length > 0 && <span className="text-[12px] text-muted">Use @ para chamar um bot</span>}
+            <ModelSelect
+              providers={app.activeConversation?.mode === 'architect' ? app.providers.filter((p) => p.id === 'claude-code') : app.providers}
+              providerId={app.activeConversation?.mode === 'architect' ? 'claude-code' : app.providerId}
+              value={app.activeModel}
+              onChange={(providerId, model) => {
+                if (app.activeConversation?.mode !== 'architect') app.setProviderId(providerId)
+                app.setActiveModel(model, providerId)
+              }}
+              disabled={app.busy}
+              placement="up"
+            />
+            {app.visibleBots.length > 0 && <span className="hidden text-[12px] text-muted xl:inline">{tr('Use @ para chamar um bot')}</span>}
           </div>
 
           <div className="flex items-center gap-2">
@@ -245,7 +237,7 @@ export function Composer({ autoFocus, placeholder = 'Pergunte qualquer coisa…'
               <button
                 onClick={app.cancel}
                 className="flex size-9 items-center justify-center rounded-full bg-primary text-on-primary"
-                aria-label="Parar resposta"
+                aria-label={tr('Parar resposta')}
               >
                 <Square size={13} fill="currentColor" />
               </button>
@@ -257,7 +249,7 @@ export function Composer({ autoFocus, placeholder = 'Pergunte qualquer coisa…'
                   'flex size-9 items-center justify-center rounded-full bg-primary text-on-primary transition-opacity',
                   !canSend && 'opacity-30'
                 )}
-                aria-label="Enviar"
+                aria-label={tr('Enviar')}
               >
                 <ArrowUp size={18} strokeWidth={2} />
               </button>

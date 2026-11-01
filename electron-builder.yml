@@ -1,5 +1,9 @@
 appId: com.gbot.desktop
 productName: gBot
+publish:
+  provider: github
+  owner: dvGomez
+  repo: gBot
 directories:
   buildResources: build
   output: dist
@@ -11,8 +15,10 @@ mac:
   target:
     - target: dmg
       arch: [arm64, x64]
-  # Sem certificado da Apple por enquanto: o app sai sem assinatura.
-  identity: null
+    - target: zip
+      arch: [arm64, x64]
+  artifactName: gBot-${version}-mac-${arch}.${ext}
+  # Releases may use MAC_CSC_LINK/MAC_CSC_KEY_PASSWORD; unsigned builds offer manual downloads.
 dmg:
   artifactName: gBot-${version}-mac-${arch}.dmg
 win:

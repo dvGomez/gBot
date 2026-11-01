@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { useState } from 'react'
 import { Check, ChevronDown, LoaderCircle, X } from 'lucide-react'
 import type { ToolActivity } from '@shared/types'
@@ -11,6 +12,7 @@ import { PixelAvatar } from './PixelAvatar'
 export const HIDDEN_TOOLS = new Set(['ToolSearch'])
 
 function StatusIcon({ status }: { status: ToolActivity['status'] }) {
+  useLanguage()
   if (status === 'running') return <LoaderCircle size={12} className="shrink-0 animate-spin text-muted" />
   if (status === 'done') return <Check size={12} strokeWidth={2.5} className="shrink-0 text-success" />
   return <X size={12} strokeWidth={2.5} className="shrink-0 text-danger" />
@@ -21,6 +23,7 @@ function StatusIcon({ status }: { status: ToolActivity['status'] }) {
  * `stacked`: uma embaixo da outra, como passos no meio da conversa.
  */
 export function ToolList({ tools, stacked }: { tools: ToolActivity[]; stacked?: boolean }) {
+  useLanguage()
   const app = useApp()
   const [open, setOpen] = useState<string>()
   const opened = tools.find((t) => t.id === open && t.detail)
@@ -50,7 +53,7 @@ export function ToolList({ tools, stacked }: { tools: ToolActivity[]; stacked?: 
                 <PixelAvatar avatar={bot.avatar} size={14} mood={t.status === 'running' ? 'thinking' : 'idle'} animated={t.status === 'running'} />
               ) : null}
               <StatusIcon status={t.status} />
-              <span className="truncate">{t.summary}</span>
+              <span className="truncate">{tr(t.summary)}</span>
               {expandable && <ChevronDown size={12} className={cn('shrink-0 transition-transform', open === t.id && 'rotate-180')} />}
             </button>
           )
@@ -58,7 +61,7 @@ export function ToolList({ tools, stacked }: { tools: ToolActivity[]; stacked?: 
       </div>
       {opened && (
         <div className="mt-2 rounded-tile border border-line bg-sidebar px-4 py-3 text-[14px]">
-          <p className="mb-2 text-[12px] font-medium text-muted">Resposta de {opened.botName}</p>
+          <p className="mb-2 text-[12px] font-medium text-muted">{tr('Resposta de ')}{opened.botName}</p>
           <Markdown text={opened.detail!} />
         </div>
       )}

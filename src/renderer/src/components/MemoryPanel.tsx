@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Brain, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import type { Lesson, MemoryOwner } from '@shared/types'
@@ -14,6 +15,7 @@ const tokens = (ls: Lesson[]) =>
   Math.round(ls.filter((l) => l.enabled).reduce((n, l) => n + l.title.length + l.when.length + l.steps.length + 20, 0) / 4)
 
 function LessonForm({ initial, onSave, onCancel }: { initial: Draft; onSave(d: Draft): void; onCancel(): void }) {
+  useLanguage()
   const [d, setD] = useState(initial)
   const [error, setError] = useState<string>()
   const set = (k: keyof Draft) => (e: { target: { value: string } }) => {
@@ -22,38 +24,34 @@ function LessonForm({ initial, onSave, onCancel }: { initial: Draft; onSave(d: D
   }
   return (
     <div className="space-y-3 rounded-tile border border-line bg-sidebar p-4">
-      <Field label="Título" error={error}>
-        <input value={d.title} onChange={set('title')} maxLength={70} placeholder="Enviar mensagem no WhatsApp Web" className={inputClass} />
+      <Field label={tr('Título')} error={error}>
+        <input value={d.title} onChange={set('title')} maxLength={70} placeholder={tr('Enviar mensagem no WhatsApp Web')} className={inputClass} />
       </Field>
-      <Field label="Quando usar">
-        <input value={d.when} onChange={set('when')} maxLength={140} placeholder="Ao mandar texto longo num grupo" className={inputClass} />
+      <Field label={tr('Quando usar')}>
+        <input value={d.when} onChange={set('when')} maxLength={140} placeholder={tr('Ao mandar texto longo num grupo')} className={inputClass} />
       </Field>
-      <Field label="Passos" hint="Curto e objetivo: tudo isto vai no prompt do bot.">
+      <Field label={tr('Passos')} hint={tr('Curto e objetivo: tudo isto vai no prompt do bot.')}>
         <textarea
           value={d.steps}
           onChange={set('steps')}
           maxLength={500}
           rows={4}
-          placeholder={'1. Abrir a conversa pela busca\n2. Mandar uma mensagem por parágrafo, sem quebras de linha'}
+          placeholder={tr('1. Abrir a conversa pela busca\n2. Mandar uma mensagem por parágrafo, sem quebras de linha')}
           className={`${inputClass} resize-y leading-relaxed`}
         />
       </Field>
-      <Field label="Por quê">
-        <input value={d.why} onChange={set('why')} maxLength={200} placeholder="Quebras de linha cortavam caracteres" className={inputClass} />
+      <Field label={tr('Por quê')}>
+        <input value={d.why} onChange={set('why')} maxLength={200} placeholder={tr('Quebras de linha cortavam caracteres')} className={inputClass} />
       </Field>
       <div className="flex justify-end gap-2">
-        <Button variant="ghost" onClick={onCancel}>
-          Cancelar
-        </Button>
+        <Button variant="ghost" onClick={onCancel}>{tr('Cancelar')}</Button>
         <Button
           variant="primary"
           onClick={() => {
-            if (!d.title.trim() || !d.steps.trim()) return setError('Preencha pelo menos o título e os passos.')
+            if (!d.title.trim() || !d.steps.trim()) return setError(tr('Preencha pelo menos o título e os passos.'))
             onSave(d)
           }}
-        >
-          Salvar
-        </Button>
+        >{tr('Salvar')}</Button>
       </div>
     </div>
   )
@@ -61,25 +59,24 @@ function LessonForm({ initial, onSave, onCancel }: { initial: Draft; onSave(d: D
 
 /** De onde a lição veio (conversa ou fluxo, com link), para o rodapé do cartão. */
 function SourceLabel({ lesson: l }: { lesson: Lesson }) {
+  useLanguage()
   const app = useApp()
-  if (l.source.kind === 'manual') return <>adicionado por você</>
+  if (l.source.kind === 'manual') return <>{tr('adicionado por você')}</>
   if (l.source.kind === 'flow') {
     const flow = app.flows.find((f) => f.id === l.source.id)
     return flow ? (
-      <button onClick={() => app.openFlow(flow.id)} className="inline text-left underline underline-offset-2 hover:text-fg">
-        no fluxo "{flow.name}"
+      <button onClick={() => app.openFlow(flow.id)} className="inline text-left underline underline-offset-2 hover:text-fg">{tr('no fluxo "')}{flow.name}"
       </button>
     ) : (
-      <>num fluxo</>
+      <>{tr('num fluxo')}</>
     )
   }
   const conv = app.conversations.find((c) => c.id === l.source.id)
   return conv ? (
-    <button onClick={() => app.openConversation(conv.id)} className="inline text-left underline underline-offset-2 hover:text-fg">
-      na conversa "{conv.title}"
+    <button onClick={() => app.openConversation(conv.id)} className="inline text-left underline underline-offset-2 hover:text-fg">{tr('na conversa "')}{conv.title}"
     </button>
   ) : (
-    <>numa conversa</>
+    <>{tr('numa conversa')}</>
   )
 }
 
@@ -96,6 +93,7 @@ export const matches = (text: string, query: string) => !query.trim() || fold(te
 
 /** Texto com o trecho procurado destacado (sem diferenciar acentos e maiúsculas). */
 export function Highlight({ text, query }: { text: string; query?: string }) {
+  useLanguage()
   const q = query?.trim()
   if (!q) return <>{text}</>
   const hay = fold(text)
@@ -114,6 +112,7 @@ export function Highlight({ text, query }: { text: string; query?: string }) {
 
 /** Uma lição: ligar/desligar, editar e excluir, com o trecho procurado destacado. */
 export function LessonCard({ lesson: l, query }: { lesson: Lesson; query?: string }) {
+  useLanguage()
   const [editing, setEditing] = useState(false)
   const save = (lesson: Lesson) => void window.gbot.memory.save(lesson)
   if (editing) {
@@ -136,20 +135,19 @@ export function LessonCard({ lesson: l, query }: { lesson: Lesson; query?: strin
             <Highlight text={l.title} query={query} />
           </p>
           {l.when && (
-            <p className="text-[12px] text-muted">
-              Quando: <Highlight text={l.when} query={query} />
+            <p className="text-[12px] text-muted">{tr('Quando: ')}<Highlight text={l.when} query={query} />
             </p>
           )}
         </div>
-        <Toggle label="Usar esta lição" checked={l.enabled} onChange={(v) => save({ ...l, enabled: v, updatedAt: Date.now() })} />
+        <Toggle label={tr('Usar esta lição')} checked={l.enabled} onChange={(v) => save({ ...l, enabled: v, updatedAt: Date.now() })} />
         <ItemMenu
           actions={[
-            { label: 'Editar', icon: Pencil, onSelect: () => setEditing(true) },
+            { label: tr('Editar'), icon: Pencil, onSelect: () => setEditing(true) },
             {
-              label: 'Excluir',
+              label: tr('Excluir'),
               icon: Trash2,
               danger: true,
-              confirm: 'Excluir esta lição da memória?',
+              confirm: tr('Excluir esta lição da memória?'),
               onSelect: () => void window.gbot.memory.remove(l.owner, l.id)
             }
           ]}
@@ -159,13 +157,11 @@ export function LessonCard({ lesson: l, query }: { lesson: Lesson; query?: strin
         <Highlight text={l.steps} query={query} />
       </p>
       {l.why && (
-        <p className="mt-2 text-[12px] text-muted">
-          Por quê: <Highlight text={l.why} query={query} />
+        <p className="mt-2 text-[12px] text-muted">{tr('Por quê: ')}<Highlight text={l.why} query={query} />
         </p>
       )}
-      <p className="mt-2 text-[11px] text-muted">
-        Aprendido {timeAgo(l.createdAt)} <SourceLabel lesson={l} />
-        {l.updatedAt - l.createdAt > 60_000 && ` · editado ${timeAgo(l.updatedAt)}`}
+      <p className="mt-2 text-[11px] text-muted">{tr('Aprendido ')}{timeAgo(l.createdAt)} <SourceLabel lesson={l} />
+        {l.updatedAt - l.createdAt > 60_000 && tr(' · editado {0}', timeAgo(l.updatedAt))}
         {!l.enabled && ' · desligada'}
       </p>
     </div>
@@ -174,6 +170,7 @@ export function LessonCard({ lesson: l, query }: { lesson: Lesson; query?: strin
 
 /** Memória de um bot ou fluxo: o que aprendeu, quando, por quê e de onde veio; dá para editar, desligar e apagar. */
 export function MemoryPanel({ owner, compact }: { owner: MemoryOwner; compact?: boolean }) {
+  useLanguage()
   const app = useApp()
   const [lessons, setLessons] = useState<Lesson[]>([])
   const [adding, setAdding] = useState(false)
@@ -186,25 +183,22 @@ export function MemoryPanel({ owner, compact }: { owner: MemoryOwner; compact?: 
     })
   }, [owner.kind, owner.id])
 
-  const who = owner.kind === 'bot' ? 'o bot' : 'o fluxo'
+  const who = owner.kind === 'bot' ? tr('o bot') : tr('o fluxo')
 
   return (
     <div>
       <div className="flex items-center justify-between gap-3 pb-3">
         <div className="min-w-0">
           <p className="flex items-center gap-2 text-[13px] font-medium text-muted">
-            {!compact && <Brain size={14} />} Memória
-          </p>
+            {!compact && <Brain size={14} />}{tr(' Memória')}</p>
           {lessons.length > 0 && (
             <p className="text-[12px] text-muted">
-              {lessons.length} {lessons.length === 1 ? 'lição' : 'lições'} · ~{tokens(lessons)} tokens no prompt
-            </p>
+              {lessons.length} {lessons.length === 1 ? tr('lição') : tr('lições')} · ~{tokens(lessons)}{tr(' tokens no prompt')}</p>
           )}
         </div>
         {!adding && (
           <Button onClick={() => setAdding(true)} className="h-8">
-            <Plus size={14} /> Adicionar
-          </Button>
+            <Plus size={14} />{tr(' Adicionar')}</Button>
         )}
       </div>
 
@@ -223,10 +217,7 @@ export function MemoryPanel({ owner, compact }: { owner: MemoryOwner; compact?: 
       )}
 
       {lessons.length === 0 && !adding && (
-        <p className="text-[13px] leading-relaxed text-muted">
-          Nada aprendido ainda. Quando algo der errado e {who} descobrir o jeito certo, ele anota aqui um procedimento curto
-          para acertar de primeira na próxima vez.
-        </p>
+        <p className="text-[13px] leading-relaxed text-muted">{tr('Nada aprendido ainda. Quando algo der errado e ')}{who}{tr(' descobrir o jeito certo, ele anota aqui um procedimento curto para acertar de primeira na próxima vez.')}</p>
       )}
 
       <div className="space-y-2">
@@ -239,8 +230,7 @@ export function MemoryPanel({ owner, compact }: { owner: MemoryOwner; compact?: 
         onClick={() => app.openMemory(owner.kind === 'flow' ? { flowId: owner.id } : { botId: owner.id })}
         className="mt-3 flex items-center gap-1.5 text-[12px] text-muted hover:text-fg"
       >
-        <Search size={12} /> Procurar uma regra em toda a memória e nas instruções
-      </button>
+        <Search size={12} />{tr(' Procurar uma regra em toda a memória e nas instruções')}</button>
     </div>
   )
 }

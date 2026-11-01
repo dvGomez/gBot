@@ -1,5 +1,6 @@
 import { app, Menu, nativeImage, Tray } from 'electron'
 import { activeFlowCount } from './flows/scheduler'
+import { uiText } from './localization'
 
 /**
  * Ícone na barra de menu: com a janela fechada, o gBot continua rodando (os fluxos agendados disparam)
@@ -47,11 +48,11 @@ export function createTray(openWindow: () => void) {
     const n = activeFlowCount()
     tray!.setContextMenu(
       Menu.buildFromTemplate([
-        { label: 'Abrir gBot', click: openWindow },
+        { label: uiText('Abrir gBot'), click: openWindow },
         { type: 'separator' },
-        { label: n ? `${n} ${n === 1 ? 'fluxo ativo' : 'fluxos ativos'}` : 'Nenhum fluxo ativo', enabled: false },
+        { label: n ? `${n} ${uiText(n === 1 ? 'fluxo ativo' : 'fluxos ativos')}` : uiText('Nenhum fluxo ativo'), enabled: false },
         { type: 'separator' },
-        { label: 'Sair do gBot', role: 'quit' }
+        { label: uiText('Sair do gBot'), role: 'quit' }
       ])
     )
   }

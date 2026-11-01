@@ -64,6 +64,7 @@ export async function runAsBot<T>(
     if (ahead) onWait?.(ahead)
     const stop = AbortSignal.any([signal, cancel.signal])
     await Promise.race([prev, aborted(stop)])
+    stop.throwIfAborted()
     task.status = 'running'
     task.startedAt = Date.now()
     broadcast()

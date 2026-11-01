@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { useEffect, useState } from 'react'
 import { LoaderCircle, MessageSquare, Network, Workflow, X } from 'lucide-react'
 import type { BotTask } from '@shared/types'
@@ -19,6 +20,7 @@ const ICONS = { flow: Workflow, chat: MessageSquare, consult: Network }
 
 /** O que o bot está fazendo e o que espera na fila dele. Some quando não há nada. */
 export function BotTasks({ botId, botName }: { botId: string; botName: string }) {
+  useLanguage()
   const app = useApp()
   const tasks = useBotTasks().filter((t) => t.botId === botId)
   if (!tasks.length) return null
@@ -32,9 +34,9 @@ export function BotTasks({ botId, botName }: { botId: string; botName: string })
   return (
     <Card className="mt-8 p-5">
       <div className="flex items-baseline justify-between gap-4 pb-2">
-        <p className="text-[13px] font-medium text-muted">Tarefas de {botName}</p>
+        <p className="text-[13px] font-medium text-muted">{tr('Tarefas de ')}{botName}</p>
         <p className="text-[12px] text-muted">
-          {botName} faz uma tarefa por vez{waiting.length ? ` · ${waiting.length} na fila` : ''}
+          {botName}{tr(' faz uma tarefa por vez')}{waiting.length ? tr(' · {0} na fila', waiting.length) : ''}
         </p>
       </div>
       {tasks.map((t, i) => {
@@ -55,15 +57,15 @@ export function BotTasks({ botId, botName }: { botId: string; botName: string })
                 <span className="truncate">{t.label}</span>
               </span>
               <span className={`block text-[12px] ${running ? 'text-warning' : 'text-muted'}`}>
-                {running ? `Fazendo agora · começou ${timeAgo(t.startedAt ?? t.queuedAt)}` : `Na fila · chegou ${timeAgo(t.queuedAt)}`}
+                {running ? tr('Fazendo agora · começou {0}', timeAgo(t.startedAt ?? t.queuedAt)) : tr('Na fila · chegou {0}', timeAgo(t.queuedAt))}
               </span>
             </button>
             <button
               onClick={() => void window.gbot.bots.cancelTask(t.id)}
               className="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] text-muted hover:bg-hover hover:text-danger"
-              title={running ? 'Interromper esta tarefa' : 'Tirar da fila'}
+              title={running ? tr('Interromper esta tarefa') : tr('Tirar da fila')}
             >
-              <X size={13} /> {running ? 'Interromper' : 'Cancelar'}
+              <X size={13} /> {running ? tr('Interromper') : tr('Cancelar')}
             </button>
           </div>
         )

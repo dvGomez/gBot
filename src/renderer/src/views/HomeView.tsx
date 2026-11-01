@@ -1,9 +1,11 @@
+import { t as tr, locale, useLanguage } from '@/i18n'
 import type { ReactNode } from 'react'
 import {
   Bot as BotIcon,
   Check,
   ChevronRight,
   CircleAlert,
+  CircleSlash,
   FolderPlus,
   Hand,
   Clock,
@@ -29,6 +31,7 @@ import { useApp } from '@/state/app'
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 function Section({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
+  useLanguage()
   return (
     <Card className="p-5">
       <div className="flex items-baseline justify-between gap-4 pb-2">
@@ -54,6 +57,7 @@ function Row({
   right?: ReactNode
   onClick?: () => void
 }) {
+  useLanguage()
   return (
     <button
       onClick={onClick}
@@ -72,11 +76,12 @@ function Row({
 
 /** Selo de data (dia + mês), como na agenda do MagmaFit. */
 function DateBadge({ date }: { date: Date }) {
+  useLanguage()
   return (
     <span className="flex w-11 flex-col items-center rounded-nav border border-line py-1 leading-none">
       <span className="text-[15px] font-semibold">{String(date.getDate()).padStart(2, '0')}</span>
       <span className="mt-0.5 text-[10px] text-muted uppercase">
-        {new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(date).replace('.', '')}
+        {new Intl.DateTimeFormat(locale(), { month: 'short' }).format(date).replace('.', '')}
       </span>
     </span>
   )
@@ -87,6 +92,8 @@ const StatusIcon = ({ status }: { status: FlowRun['status'] }) =>
     <LoaderCircle size={17} className="animate-spin text-warning" />
   ) : status === 'done' ? (
     <Check size={17} strokeWidth={2.5} className="text-success" />
+  ) : status === 'stopped' ? (
+    <CircleSlash size={17} className="text-muted" />
   ) : (
     <X size={17} strokeWidth={2.5} className="text-danger" />
   )
@@ -101,10 +108,11 @@ function nextFor(flow: Flow, runs: FlowRun[] | undefined): Date | undefined {
 }
 
 export function HomeView() {
+  useLanguage()
   const app = useApp()
   const runs = useFlowRuns(app.flows)
   const team = useTeamActivity(runs)
-  const flowName = (id: string) => app.flows.find((f) => f.id === id)?.name ?? 'Fluxo'
+  const flowName = (id: string) => app.flows.find((f) => f.id === id)?.name ?? tr('Fluxo')
 
   // ── Agora ──
   const liveRuns = Object.values(runs)
@@ -135,7 +143,7 @@ export function HomeView() {
             key={`run-${r.id}`}
             icon={<StatusIcon status={r.status === 'running' ? 'error' : r.status} />}
             title={flowName(r.flowId)}
-            detail={`${r.status === 'done' ? 'Fluxo concluído' : 'Fluxo com erro'} · ${r.trigger === 'manual' ? 'manual' : 'agendado'} · ${timeAgo(r.finishedAt ?? r.startedAt)}`}
+            detail={`${r.status === 'done' ? tr('Fluxo concluído') : r.status === 'stopped' ? tr('Fluxo parado') : tr('Fluxo com erro')} · ${r.trigger === 'manual' ? 'manual' : 'agendado'} · ${timeAgo(r.finishedAt ?? r.startedAt)}`}
             onClick={() => app.openFlow(r.flowId)}
           />
         )
@@ -150,7 +158,7 @@ export function HomeView() {
             key={`conv-${c.id}`}
             icon={<AgentAvatar avatar={bot?.avatar} size={24} animated={false} />}
             title={c.title}
-            detail={`${bot ? `Conversa com ${bot.name}` : 'Conversa'} · ${plural(c.messageCount, 'mensagem', 'mensagens')} · ${timeAgo(c.updatedAt)}`}
+            detail={`${bot ? tr('Conversa com {0}', bot.name) : tr('Conversa')} · ${plural(c.messageCount, 'mensagem', 'mensagens')} · ${timeAgo(c.updatedAt)}`}
             onClick={() => app.openConversation(c.id)}
           />
         )
@@ -176,21 +184,13 @@ export function HomeView() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="primary" onClick={() => app.newConversation()}>
-            <MessageSquarePlus size={15} />
-            Nova conversa
-          </Button>
+            <MessageSquarePlus size={15} />{tr('Nova conversa')}</Button>
           <Button onClick={() => app.editBot()}>
-            <BotIcon size={15} />
-            Novo bot
-          </Button>
+            <BotIcon size={15} />{tr('Novo bot')}</Button>
           <Button onClick={() => app.editProject()}>
-            <FolderPlus size={15} />
-            Novo projeto
-          </Button>
+            <FolderPlus size={15} />{tr('Novo projeto')}</Button>
           <Button onClick={() => void app.newFlow()}>
-            <Workflow size={15} />
-            Novo fluxo
-          </Button>
+            <Workflow size={15} />{tr('Novo fluxo')}</Button>
         </div>
       </div>
 
@@ -205,7 +205,7 @@ export function HomeView() {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-4">
           <Section
-            title="Agora"
+            title={tr('Agora')}
             aside={
               nowCount > 0 && (
                 <span className="flex items-center gap-1.5 text-[12px] text-warning">
@@ -216,7 +216,7 @@ export function HomeView() {
             }
           >
             {nowCount === 0 ? (
-              <p className="py-3 text-[14px] text-muted">Tudo tranquilo: nada rodando agora.</p>
+              <p className="py-3 text-[14px] text-muted">{tr('Tudo tranquilo: nada rodando agora.')}</p>
             ) : (
               <>
                 {app.confirmations.map((c) => (
@@ -224,8 +224,8 @@ export function HomeView() {
                     key={c.id}
                     icon={<Hand size={18} className="text-warning" />}
                     title={c.title}
-                    detail={`Fluxo ${c.flowName}${c.files.length ? ` · ${c.files.length === 1 ? '1 arquivo' : `${c.files.length} arquivos`}` : ''} · ${timeAgo(c.createdAt)}`}
-                    right={<span className="text-[12px] text-warning">Sua confirmação</span>}
+                    detail={tr('Fluxo {0}{1} · {2}', c.flowName, c.files.length ? ` · ${c.files.length === 1 ? tr('1 arquivo') : tr('{0} arquivos', c.files.length)}` : '', timeAgo(c.createdAt))}
+                    right={<span className="text-[12px] text-warning">{tr('Sua confirmação')}</span>}
                     onClick={() => app.openConfirmation(c.id)}
                   />
                 ))}
@@ -235,7 +235,7 @@ export function HomeView() {
                     icon={<CircleAlert size={18} className="text-warning" />}
                     title={approvalTitle(r)}
                     detail={r.action}
-                    right={<span className="text-[12px] text-warning">Aguardando você</span>}
+                    right={<span className="text-[12px] text-warning">{tr('Aguardando você')}</span>}
                     onClick={() => r.conversationId && app.openConversation(r.conversationId)}
                   />
                 ))}
@@ -247,7 +247,7 @@ export function HomeView() {
                       key={r.id}
                       icon={<LoaderCircle size={18} className="animate-spin text-warning" />}
                       title={flowName(r.flowId)}
-                      detail={`${current.length ? `Rodando: ${current.join(', ')}` : 'Começando'} · ${done}/${r.steps.length} caixinhas · ${timeAgo(r.startedAt)}`}
+                      detail={tr('{0} · {1}/{2} caixinhas · {3}', current.length ? tr('Rodando: {0}', current.join(', ')) : tr('Começando'), done, r.steps.length, timeAgo(r.startedAt))}
                       onClick={() => app.openFlow(r.flowId)}
                     />
                   )
@@ -256,7 +256,7 @@ export function HomeView() {
                   <Row
                     icon={<AgentAvatar avatar={answeringBot?.avatar} size={24} mood={app.mood} />}
                     title={conv.title}
-                    detail={`${answeringBot ? `${answeringBot.name} respondendo` : 'Respondendo'} · ${
+                    detail={`${answeringBot ? tr('{0} respondendo', answeringBot.name) : tr('Respondendo')} · ${
                       app.mood === 'talking' ? 'escrevendo' : 'pensando'
                     }`}
                     onClick={() => app.openConversation(conv.id)}
@@ -266,39 +266,37 @@ export function HomeView() {
             )}
           </Section>
 
-          <Section title="Atividade recente">
+          <Section title={tr('Atividade recente')}>
             {items.length ? (
               items.map((i) => i.node)
             ) : (
-              <p className="py-3 text-[14px] text-muted">Nada por aqui ainda. Comece uma conversa ou crie um fluxo.</p>
+              <p className="py-3 text-[14px] text-muted">{tr('Nada por aqui ainda. Comece uma conversa ou crie um fluxo.')}</p>
             )}
           </Section>
         </div>
 
         <div className="space-y-4">
           <UsageCard />
-          <Section title="Próximas execuções">
+          <Section title={tr('Próximas execuções')}>
             {upcoming.length ? (
               upcoming.map(({ flow, at }) => (
                 <Row
                   key={flow.id}
                   icon={at ? <DateBadge date={at} /> : <Workflow size={18} className="text-muted" />}
                   title={flow.name}
-                  detail={`${at ? formatWhen(at) : 'Aguardando a primeira execução'} · ${describeSchedule(
+                  detail={`${at ? formatWhen(at) : tr('Aguardando a primeira execução')} · ${describeSchedule(
                     flow.nodes.find((n) => n.type === 'trigger')?.data.schedule
                   )}`}
                   onClick={() => app.openFlow(flow.id)}
                 />
               ))
             ) : (
-              <p className="py-3 text-[13px] text-muted">
-                Nenhum fluxo ativo. Ligue um fluxo para ele rodar sozinho no horário.
-              </p>
+              <p className="py-3 text-[13px] text-muted">{tr('Nenhum fluxo ativo. Ligue um fluxo para ele rodar sozinho no horário.')}</p>
             )}
           </Section>
 
           {app.flows.some((f) => !f.enabled) && (
-            <Section title="Fluxos desligados">
+            <Section title={tr('Fluxos desligados')}>
               {app.flows
                 .filter((f) => !f.enabled)
                 .map((f) => (
@@ -313,8 +311,7 @@ export function HomeView() {
             </Section>
           )}
           <p className="flex items-center gap-1.5 px-1 text-[12px] text-muted">
-            <Clock size={12} /> Fluxos agendados rodam enquanto o gBot estiver aberto (inclusive na barra de menu).
-          </p>
+            <Clock size={12} />{tr(' Fluxos agendados rodam enquanto o gBot estiver aberto (inclusive na barra de menu).')}</p>
         </div>
       </div>
     </div>

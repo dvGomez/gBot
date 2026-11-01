@@ -1,16 +1,18 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { Globe, SquareTerminal } from 'lucide-react'
 import type { ApprovalRequest } from '@shared/types'
 import { useApp } from '@/state/app'
 
 /** Frase do pedido, também usada no aviso do topo e na tela inicial. */
 export function approvalTitle(req: ApprovalRequest): string {
-  const who = req.requester || 'O assistente'
-  if (req.kind !== 'tool') return req.requester ? `${req.requester} quer usar o navegador em ${req.host}` : `Usar o navegador em ${req.host}?`
-  return req.host.startsWith('Bash') ? `${who} quer rodar um comando` : `${who} quer fazer uma ação fora da pasta de trabalho`
+  const who = req.requester || tr('O assistente')
+  if (req.kind !== 'tool') return req.requester ? tr('{0} quer usar o navegador em {1}', req.requester, req.host) : tr('Usar o navegador em {0}?', req.host)
+  return req.host.startsWith('Bash') ? tr('{0} quer rodar um comando', who) : tr('{0} quer fazer uma ação fora da pasta de trabalho', who)
 }
 
 /** Cartão pedindo para o usuário liberar uma ação: o navegador num site ou um comando do Claude Code. */
 export function ApprovalCard({ req }: { req: ApprovalRequest }) {
+  useLanguage()
   const app = useApp()
   const tool = req.kind === 'tool'
   const inChat = !!req.conversationId && app.conversations.some((c) => c.id === req.conversationId)
@@ -35,20 +37,18 @@ export function ApprovalCard({ req }: { req: ApprovalRequest }) {
         <button
           onClick={() => app.respondApproval(req.id, 'deny')}
           className="h-8 rounded-full px-3.5 text-[13px] font-medium text-fg-2 hover:bg-hover"
-        >
-          Negar
-        </button>
+        >{tr('Negar')}</button>
         <button
           onClick={() => app.respondApproval(req.id, 'always')}
           className="h-8 rounded-full border border-line px-3.5 text-[13px] font-medium text-fg-2 hover:bg-hover"
         >
-          {tool ? (req.alwaysLabel ?? 'Sempre permitir') : `Sempre em ${req.host}`}
+          {tool ? (req.alwaysLabel ?? tr('Sempre permitir')) : tr('Sempre em {0}', req.host)}
         </button>
         <button
           onClick={() => app.respondApproval(req.id, 'conversation')}
           className="h-8 rounded-full bg-primary px-3.5 text-[13px] font-medium text-on-primary hover:opacity-90"
         >
-          {inChat ? 'Permitir nesta conversa' : 'Permitir'}
+          {inChat ? tr('Permitir nesta conversa') : tr('Permitir')}
         </button>
       </div>
     </div>

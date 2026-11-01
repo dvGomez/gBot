@@ -1,6 +1,6 @@
 import { existsSync, statSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { BrowserWindow, dialog, ipcMain, shell, type WebContents } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell, type WebContents } from 'electron'
 import type {
   AppSettings,
   ApprovalDecision,
@@ -16,10 +16,11 @@ import type {
   SendMessageRequest
 } from '@shared/types'
 import { saveAttachments } from './attachments'
+import { checkUpdates, dismissUpdate, downloadUpdate, installUpdate, openUpdateRelease, updateState } from './updates'
 import { listTouchedFiles, pruneFileIndex, recordFiles } from './fileIndex'
 import { addBotFiles, botFilesDir, listBotFiles, removeBotFile, setBotFileNote } from './botFiles'
 import { cancelBotTask, listBotTasks, runAsBot, waitNotice } from './botQueue'
-import { runFlow } from './flows/runner'
+import { isFlowRunning, recoverInterruptedFlows, runFlow, stopFlow } from './flows/runner'
 import { listAllLessons, listLessons, removeLesson, saveLesson } from './memory'
 import { listAutoMemory, removeAutoMemory } from './providers/claude-code/autoMemory'
 import { conversationUsage, pruneUsage, usageRecords, usageSummary } from './usage'
@@ -35,12 +36,21 @@ import { getProvider, listAccounts, listProviders, providerAccounts, refreshAcco
 import * as store from './store'
 
 const running = new Map<string, AbortController>()
+export const hasRunningChats = () => running.size > 0
 
 function emitTo(sender: WebContents, requestId: string, event: ChatEvent) {
   if (!sender.isDestroyed()) sender.send('chat:event', requestId, event)
 }
 
 export function registerIpc() {
+  ipcMain.handle('app:locale', () => app.getPreferredSystemLanguages()[0] ?? app.getLocale())
+  ipcMain.handle('updates:get', () => updateState())
+  ipcMain.handle('updates:check', () => checkUpdates())
+  ipcMain.handle('updates:download', () => downloadUpdate())
+  ipcMain.handle('updates:install', () => installUpdate())
+  ipcMain.handle('updates:dismiss', () => dismissUpdate())
+  ipcMain.handle('updates:openRelease', () => openUpdateRelease())
+  recoverInterruptedFlows()
   ipcMain.handle('memory:list', (_e, owner: MemoryOwner) => listLessons(owner))
   ipcMain.handle('memory:all', () => listAllLessons())
   ipcMain.handle('memory:autoNotes', () => listAutoMemory())
@@ -49,8 +59,16 @@ export function registerIpc() {
   ipcMain.handle('memory:remove', (_e, owner: MemoryOwner, id: string) => removeLesson(owner, id))
 
   ipcMain.handle('flows:list', () => flows.listFlows())
-  ipcMain.handle('flows:save', (_e, flow: Flow) => flows.saveFlow(flow))
-  ipcMain.handle('flows:remove', (_e, id: string) => flows.removeFlow(id))
+  ipcMain.handle('flows:save', (_e, flow: Flow) => {
+    // Fluxo rodando não muda (nem pelo editor, nem por um plano do chat): pare ou espere terminar.
+    if (isFlowRunning(flow.id)) throw new Error('Este fluxo está rodando: pare a execução ou espere terminar para editar.')
+    flows.saveFlow(flow)
+  })
+  ipcMain.handle('flows:stop', (_e, id: string) => stopFlow(id))
+  ipcMain.handle('flows:remove', (_e, id: string) => {
+    if (isFlowRunning(id)) throw new Error('Pare o fluxo antes de excluir.')
+    flows.removeFlow(id)
+  })
   ipcMain.handle('flows:runs', (_e, flowId: string) => flows.listRuns(flowId))
   pruneUsage()
   ipcMain.handle('usage:summary', () => usageSummary())

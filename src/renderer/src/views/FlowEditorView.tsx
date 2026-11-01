@@ -1,3 +1,4 @@
+import { t as tr, localized, useLanguage } from '@/i18n'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   addEdge,
@@ -15,7 +16,7 @@ import {
   type XYPosition
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { ArrowLeft, Bot as BotIcon, Hand, LoaderCircle, PanelRight, Play, Sparkles, Split, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Bot as BotIcon, Hand, LoaderCircle, PanelRight, Play, Square, Sparkles, Split, Trash2, X } from 'lucide-react'
 import type { Flow, FlowEdge, FlowNode, FlowNodeData, FlowNodeType, FlowRun } from '@shared/types'
 import { NodePanel } from '@/components/flow/NodePanel'
 import { RunHistory } from '@/components/flow/RunHistory'
@@ -43,12 +44,23 @@ const fromEdge = (e: Edge): FlowEdge => ({
 })
 
 type AddableType = 'bot' | 'prompt' | 'decision' | 'confirm'
-const ADDABLE: { type: AddableType; label: string; icon: typeof BotIcon }[] = [
-  { type: 'bot', label: 'Bot', icon: BotIcon },
-  { type: 'prompt', label: 'Prompt', icon: Sparkles },
-  { type: 'decision', label: 'Decisão', icon: Split },
-  { type: 'confirm', label: 'Confirmação', icon: Hand }
-]
+const ADDABLE: { type: AddableType; label: string; icon: typeof BotIcon }[] = localized([{
+  type: 'bot',
+  label: 'Bot',
+  icon: BotIcon
+}, {
+  type: 'prompt',
+  label: 'Prompt',
+  icon: Sparkles
+}, {
+  type: 'decision',
+  label: tr('Decisão'),
+  icon: Split
+}, {
+  type: 'confirm',
+  label: tr('Confirmação'),
+  icon: Hand
+}])
 
 /** De onde uma caixinha nova se liga: a bolinha de onde a linha saiu (saída à direita ou entrada à esquerda). */
 interface ConnectFrom {
@@ -69,6 +81,7 @@ interface DropMenu {
 let clipboard: { nodes: CanvasNode[]; edges: Edge[] } | undefined
 
 function Editor({ flow }: { flow: Flow }) {
+  useLanguage()
   const app = useApp()
   const rf = useReactFlow()
   const [name, setName] = useState(flow.name)
@@ -85,18 +98,30 @@ function Editor({ flow }: { flow: Flow }) {
   const canvasRef = useRef<HTMLDivElement>(null)
   const [runs, setRuns] = useState<FlowRun[]>([])
   const [starting, setStarting] = useState(false)
+  const [loadingRuns, setLoadingRuns] = useState(true)
+  const [stopping, setStopping] = useState(false)
   const [runError, setRunError] = useState<string>()
 
   // Histórico + atualizações ao vivo das execuções deste fluxo
   useEffect(() => {
-    void window.gbot.flows.runs(flow.id).then(setRuns)
+    let updated = false
+    void window.gbot.flows.runs(flow.id).then((history) => {
+      if (!updated) setRuns(history)
+      setLoadingRuns(false)
+    }).catch((error) => {
+      setRunError((error as Error).message)
+      setLoadingRuns(false)
+    })
     return window.gbot.flows.onRunUpdate((run) => {
       if (run.flowId !== flow.id) return
+      updated = true
+      setLoadingRuns(false)
       setRuns((rs) => [run, ...rs.filter((r) => r.id !== run.id)])
     })
   }, [flow.id])
 
   const live = runs[0]?.status === 'running' ? runs[0] : undefined
+  const locked = loadingRuns || starting || stopping || !!live
 
   // Cor de status em cada caixinha durante a execução
   useEffect(() => {
@@ -111,6 +136,7 @@ function Editor({ flow }: { flow: Flow }) {
   // Salva sozinho (com um pequeno atraso) quando algo muda
   const first = useRef(true)
   useEffect(() => {
+    if (locked) return
     if (first.current) {
       first.current = false
       return
@@ -118,20 +144,22 @@ function Editor({ flow }: { flow: Flow }) {
     const t = setTimeout(() => {
       void app.saveFlow({
         ...flow,
-        name: name.trim() || 'Fluxo sem nome',
+        name: name.trim() || tr('Fluxo sem nome'),
         enabled,
         nodes: nodes.map(fromCanvas),
         edges: edges.map(fromEdge),
         updatedAt: Date.now()
-      })
+      }).catch((e) => setRunError((e as Error).message))
     }, 500)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, enabled, nodes.map((n) => JSON.stringify([n.position, fromCanvas(n).data])).join(), edges])
+  }, [locked, name, enabled, nodes.map((n) => JSON.stringify([n.position, fromCanvas(n).data])).join(), edges])
 
   const triggerId = useMemo(() => nodes.find((n) => n.type === 'trigger')?.id, [nodes])
 
-  const onConnect = useCallback((c: Connection) => setEdges((es) => addEdge({ ...c, id: uid() }, es)), [setEdges])
+  const onConnect = useCallback((c: Connection) => {
+    if (!locked) setEdges((es) => addEdge({ ...c, id: uid() }, es))
+  }, [locked, setEdges])
   const isValidConnection = useCallback(
     (c: Connection | Edge) => c.source !== c.target && c.target !== triggerId,
     [triggerId]
@@ -154,9 +182,14 @@ function Editor({ flow }: { flow: Flow }) {
   const [pickingBot, setPickingBot] = useState<AddOptions>()
 
   /** Bot pede antes qual bot é; os outros tipos entram direto. */
-  const requestNode = (type: AddableType, opts?: AddOptions) => (type === 'bot' ? setPickingBot(opts ?? {}) : addNode(type, opts))
+  const requestNode = (type: AddableType, opts?: AddOptions) => {
+    if (locked) return
+    if (type === 'bot') setPickingBot(opts ?? {})
+    else addNode(type, opts)
+  }
 
   const addNode = (type: AddableType, opts?: AddOptions, botId?: string) => {
+    if (locked) return
     const id = uid()
     const data: FlowNodeData =
       type === 'bot'
@@ -167,8 +200,8 @@ function Editor({ flow }: { flow: Flow }) {
             ? {
                 message: '',
                 options: [
-                  { id: uid(), label: 'Aprovar' },
-                  { id: uid(), label: 'Recusar' }
+                  { id: uid(), label: tr('Aprovar') },
+                  { id: uid(), label: tr('Recusar') }
                 ]
               }
             : {
@@ -178,7 +211,7 @@ function Editor({ flow }: { flow: Flow }) {
               message: '',
               options: [
                 { id: uid(), label: '' },
-                { id: uid(), label: 'Caso contrário' }
+                { id: uid(), label: tr('Caso contrário') }
               ]
             }
 
@@ -226,7 +259,7 @@ function Editor({ flow }: { flow: Flow }) {
 
   const onConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent, state: FinalConnectionState) => {
-      if (state.isValid || state.toHandle || !state.fromHandle || !state.fromNode) return
+      if (locked || state.isValid || state.toHandle || !state.fromHandle || !state.fromNode) return
       // Linha solta no vazio: abre o menu para criar uma caixinha já ligada.
       const point = 'changedTouches' in event ? event.changedTouches[0] : event
       const box = canvasRef.current?.getBoundingClientRect()
@@ -241,7 +274,7 @@ function Editor({ flow }: { flow: Flow }) {
         from: { nodeId: state.fromNode.id, handleId: state.fromHandle.id ?? undefined, handleType: state.fromHandle.type }
       })
     },
-    [rf]
+    [rf, locked]
   )
 
   useEffect(() => {
@@ -255,7 +288,7 @@ function Editor({ flow }: { flow: Flow }) {
   // entre as caixinhas copiadas vêm junto. Cada colagem seguida desloca um pouco mais.
   const pasteCount = useRef(0)
   const paste = () => {
-    if (!clipboard) return
+    if (locked || !clipboard) return
     const shift = 40 * ++pasteCount.current
     const ids = new Map<string, string>()
     const handles = new Map<string, string>()
@@ -317,6 +350,7 @@ function Editor({ flow }: { flow: Flow }) {
 
   const selected = nodes.find((n) => n.id === selectedId)
   const patchSelected = (patch: Partial<FlowNodeData>) => {
+    if (locked) return
     setNodes((ns) => ns.map((n) => (n.id === selectedId ? { ...n, data: { ...n.data, ...patch } } : n)))
     // Opção removida de uma decisão: a linha que saía dela vai junto.
     if (patch.options) {
@@ -325,7 +359,7 @@ function Editor({ flow }: { flow: Flow }) {
     }
   }
   const deleteSelected = () => {
-    if (!selected || selected.type === 'trigger') return
+    if (locked || !selected || selected.type === 'trigger') return
     setNodes((ns) => ns.filter((n) => n.id !== selected.id))
     setEdges((es) => es.filter((e) => e.source !== selected.id && e.target !== selected.id))
     setSelectedId(undefined)
@@ -333,13 +367,14 @@ function Editor({ flow }: { flow: Flow }) {
   }
 
   const runNow = async () => {
+    if (locked) return
     setStarting(true)
     setRunError(undefined)
     try {
       // Garante que a versão atual (mesmo antes do salvamento automático) é a que roda.
       await app.saveFlow({
         ...flow,
-        name: name.trim() || 'Fluxo sem nome',
+        name: name.trim() || tr('Fluxo sem nome'),
         enabled,
         nodes: nodes.map(fromCanvas),
         edges: edges.map(fromEdge),
@@ -354,52 +389,73 @@ function Editor({ flow }: { flow: Flow }) {
     }
   }
 
+  const stopNow = async () => {
+    setStopping(true)
+    setRunError(undefined)
+    try {
+      await window.gbot.flows.stop(flow.id)
+    } catch (e) {
+      setRunError((e as Error).message)
+    } finally {
+      setStopping(false)
+    }
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex min-w-0 items-center gap-3 px-6 pb-4">
         <button
           onClick={() => (flow.projectId && app.getProject(flow.projectId) ? app.openProject(flow.projectId) : app.setView('home'))}
           className="rounded-full p-1.5 text-muted hover:bg-hover hover:text-fg"
-          aria-label="Voltar"
+          aria-label={tr('Voltar')}
         >
           <ArrowLeft size={16} />
         </button>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          aria-label="Nome do fluxo"
+          aria-label={tr('Nome do fluxo')}
+          disabled={locked}
           className="selectable min-w-0 flex-1 rounded-nav border border-transparent bg-transparent px-2 py-1 text-[20px] font-medium tracking-[-0.02em] outline-none hover:border-line focus:border-muted/60"
         />
-        <label className="flex items-center gap-2 text-[13px] text-fg-2">
-          <Toggle label="Fluxo ativo" checked={enabled} onChange={setEnabled} />
-          {enabled ? 'Ativo' : 'Desligado'}
-        </label>
+        <div className="flex items-center gap-2 text-[13px] text-fg-2">
+          <fieldset disabled={locked}><Toggle label={tr('Fluxo ativo')} checked={enabled} onChange={setEnabled} /></fieldset>
+          {enabled ? tr('Ativo') : tr('Desligado')}
+        </div>
         <LimitsButton />
-        <Button variant="primary" onClick={() => void runNow()} disabled={starting || !!live}>
+        <Button variant="primary" onClick={() => void runNow()} disabled={locked}>
           {starting || live ? <LoaderCircle size={14} className="animate-spin" /> : <Play size={14} />}
-          {live ? 'Rodando…' : 'Rodar agora'}
+          {live ? tr('Rodando…') : tr('Rodar agora')}
         </Button>
+        {live && (
+          <Button onClick={() => void stopNow()} disabled={stopping} className="border-danger text-danger">
+            <Square size={14} fill="currentColor" /> {stopping ? tr('Parando…') : tr('Parar tudo')}
+          </Button>
+        )}
         <button
           onClick={() => setPanelOpen((o) => !o)}
           className={`rounded-full p-2 hover:bg-hover hover:text-fg ${panelOpen ? 'text-fg' : 'text-muted'}`}
-          aria-label={panelOpen ? 'Fechar painel' : 'Abrir painel'}
-          title={panelOpen ? 'Fechar painel' : 'Abrir painel'}
+          aria-label={panelOpen ? tr('Fechar painel') : tr('Abrir painel')}
+          title={panelOpen ? tr('Fechar painel') : tr('Abrir painel')}
         >
           <PanelRight size={16} />
         </button>
-        <ItemMenu
-          actions={[
-            {
-              label: 'Excluir fluxo',
-              icon: Trash2,
-              danger: true,
-              confirm: 'Excluir este fluxo e o histórico dele? Não dá para desfazer.',
-              onSelect: () => void app.removeFlow(flow.id)
-            }
-          ]}
-        />
+        {!locked && (
+          <ItemMenu
+            actions={[
+              {
+                label: tr('Excluir fluxo'),
+                icon: Trash2,
+                danger: true,
+                confirm: tr('Excluir este fluxo e o histórico dele? Não dá para desfazer.'),
+                onSelect: () => void app.removeFlow(flow.id)
+              }
+            ]}
+          />
+        )}
       </div>
       {runError && <p className="px-6 pb-2 text-[13px] text-danger">{runError}</p>}
+      {live && <p className="px-6 pb-2 text-[13px] text-warning">{tr('Fluxo em execução · edição bloqueada até terminar ou parar.')}</p>}
 
       <div
         className={`grid min-h-0 flex-1 border-t border-line ${
@@ -411,8 +467,11 @@ function Editor({ flow }: { flow: Flow }) {
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
+            onNodesChange={(changes) => onNodesChange(locked ? changes.filter((c) => c.type === 'select' || c.type === 'dimensions') : changes)}
+            onEdgesChange={(changes) => onEdgesChange(locked ? changes.filter((c) => c.type === 'select') : changes)}
+            nodesDraggable={!locked}
+            nodesConnectable={!locked}
+            edgesReconnectable={!locked}
             onConnect={onConnect}
             onConnectStart={() => setMenu(undefined)}
             onConnectEnd={onConnectEnd}
@@ -436,7 +495,7 @@ function Editor({ flow }: { flow: Flow }) {
               window.getSelection()?.removeAllRanges()
               setMenu(undefined)
             }}
-            deleteKeyCode={['Backspace', 'Delete']}
+            deleteKeyCode={locked ? null : ['Backspace', 'Delete']}
             onNodesDelete={(deleted) => {
               // O gatilho não pode ser removido.
               const trig = deleted.find((n) => n.type === 'trigger')
@@ -454,18 +513,18 @@ function Editor({ flow }: { flow: Flow }) {
           </ReactFlow>
           <div className="absolute top-4 left-4 flex gap-2">
             {ADDABLE.map(({ type, label, icon: Icon }) => (
-              <Button key={type} onClick={() => requestNode(type)} className="bg-sidebar">
+              <Button key={type} onClick={() => requestNode(type)} disabled={locked} className="bg-sidebar">
                 <Icon size={14} /> {label}
               </Button>
             ))}
           </div>
-          {menu && (
+          {menu && !locked && (
             <div
               role="menu"
               style={{ left: menu.x, top: menu.y }}
               className="absolute z-10 w-[170px] rounded-tile border border-line bg-sidebar p-1 shadow-lg"
             >
-              <p className="px-2.5 pt-1.5 pb-1 text-[11px] text-muted">Criar caixinha</p>
+              <p className="px-2.5 pt-1.5 pb-1 text-[11px] text-muted">{tr('Criar caixinha')}</p>
               {ADDABLE.map(({ type, label, icon: Icon }) => (
                 <button
                   key={type}
@@ -482,29 +541,23 @@ function Editor({ flow }: { flow: Flow }) {
             </div>
           )}
           <p className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 text-[12px] text-muted">
-            Arraste de uma bolinha até outra caixinha para ligar, ou solte no vazio para criar · ⌘C ⌘V duplica · Backspace remove
+            {locked ? tr('Execução em andamento · navegue e acompanhe sem editar') : tr('Arraste de uma bolinha até outra caixinha para ligar, ou solte no vazio para criar · ⌘C ⌘V duplica · Backspace remove')}
           </p>
         </div>
 
         {panelOpen && (
           <aside className="flex min-h-0 flex-col border-l border-line bg-sidebar">
             <div className="flex items-center gap-2 px-5 pt-4 pb-3">
-              <Chip active={tab === 'node'} onClick={() => setTab('node')}>
-                Caixinha
+              <Chip active={tab === 'node'} onClick={() => setTab('node')}>{tr('Caixinha')}</Chip>
+              <Chip active={tab === 'runs'} onClick={() => setTab('runs')}>{tr('Execuções')}{runs.length ? ` (${runs.length})` : ''}
               </Chip>
-              <Chip active={tab === 'runs'} onClick={() => setTab('runs')}>
-                Execuções{runs.length ? ` (${runs.length})` : ''}
+              <Chip active={tab === 'files'} onClick={() => setTab('files')}>{tr('Arquivos')}{files.length ? ` (${files.length})` : ''}
               </Chip>
-              <Chip active={tab === 'files'} onClick={() => setTab('files')}>
-                Arquivos{files.length ? ` (${files.length})` : ''}
-              </Chip>
-              <Chip active={tab === 'memory'} onClick={() => setTab('memory')}>
-                Memória
-              </Chip>
+              <Chip active={tab === 'memory'} onClick={() => setTab('memory')}>{tr('Memória')}</Chip>
               <button
                 onClick={() => setPanelOpen(false)}
                 className="ml-auto rounded-full p-1.5 text-muted hover:bg-hover hover:text-fg"
-                aria-label="Fechar painel"
+                aria-label={tr('Fechar painel')}
               >
                 <X size={15} />
               </button>
@@ -512,31 +565,31 @@ function Editor({ flow }: { flow: Flow }) {
             <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6">
               {tab === 'memory' ? (
                 <>
-                  <MemoryPanel owner={{ kind: 'flow', id: flow.id }} compact />
-                  <p className="mt-4 text-[12px] text-muted">
-                    Caixinhas de prompt usam e preenchem esta memória. Caixinhas de bot usam a memória do próprio bot.
-                  </p>
+                  <fieldset disabled={locked}><MemoryPanel owner={{ kind: 'flow', id: flow.id }} compact /></fieldset>
+                  <p className="mt-4 text-[12px] text-muted">{tr('Caixinhas de prompt usam e preenchem esta memória. Caixinhas de bot usam a memória do próprio bot.')}</p>
                 </>
               ) : tab === 'runs' ? (
                 <RunHistory runs={runs} />
               ) : tab === 'files' ? (
-                <FilesPanel files={files} empty="Nenhum arquivo mexido pelas execuções deste fluxo ainda." />
+                <FilesPanel files={files} empty={tr('Nenhum arquivo mexido pelas execuções deste fluxo ainda.')} />
               ) : selected ? (
-                <NodePanel
-                  key={selected.id}
-                  type={selected.type as FlowNodeType}
-                  data={selected.data}
-                  onChange={patchSelected}
-                  onDelete={selected.type === 'trigger' ? undefined : deleteSelected}
-                />
+                <fieldset disabled={locked} className="min-w-0">
+                  <NodePanel
+                    key={selected.id}
+                    type={selected.type as FlowNodeType}
+                    data={selected.data}
+                    onChange={patchSelected}
+                    onDelete={selected.type === 'trigger' ? undefined : deleteSelected}
+                  />
+                </fieldset>
               ) : (
-                <p className="text-[13px] text-muted">Clique numa caixinha para configurar, ou adicione um Bot, Prompt, Decisão ou Confirmação.</p>
+                <p className="text-[13px] text-muted">{tr('Clique numa caixinha para configurar, ou adicione um Bot, Prompt, Decisão ou Confirmação.')}</p>
               )}
             </div>
           </aside>
         )}
       </div>
-      {pickingBot && (
+      {pickingBot && !locked && (
         <BotPickerModal
           projectId={flow.projectId}
           onClose={() => setPickingBot(undefined)}
@@ -551,6 +604,7 @@ function Editor({ flow }: { flow: Flow }) {
 }
 
 export function FlowEditorView() {
+  useLanguage()
   const app = useApp()
   const flow = app.selectedFlow
   if (!flow) return null

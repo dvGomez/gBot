@@ -4,6 +4,7 @@ import type { ChatEvent, TokenUsage, UsageRecord } from '@shared/types'
 import { addUsage, emptyUsage, totalTokens } from '@shared/usage'
 import { recordFiles } from '../../fileIndex'
 import { recordUsage } from '../../usage'
+import { killProcessTree, processGroup } from '../../processTree'
 import { APPROVE_TOOL } from './permissions'
 import { sanitizePlan } from './architect'
 import { ASK_BOT_TOOL, describeTool, HIDDEN_TOOLS, PROPOSE_PLAN_TOOL } from './tools'
@@ -175,7 +176,7 @@ export class ClaudeSession {
     ]
     // Consultar outro bot pode levar minutos: o limite de tempo de ferramentas MCP precisa acompanhar.
     const env = { ...opts.env, MCP_TOOL_TIMEOUT: String(15 * 60_000) }
-    this.proc = spawn(opts.bin, args, { cwd: opts.cwd, env })
+    this.proc = spawn(opts.bin, args, { cwd: opts.cwd, env, ...processGroup })
     this.proc.stdout.setEncoding('utf8')
     this.proc.stdout.on('data', (chunk: string) => this.onData(chunk))
     this.proc.stderr.on('data', (chunk: Buffer) => (this.stderrTail = (this.stderrTail + chunk.toString()).slice(-2000)))
@@ -202,7 +203,13 @@ export class ClaudeSession {
         this.lastUsed = Date.now()
         this.lastTurnFailed = false
         this.turn = { emit, tag, done: resolve, interrupted: false, hasText: false, tools: new Map(), files: new Map(), plans: new Map() }
-        signal.addEventListener('abort', () => this.interrupt(), { once: true })
+        const abort = () => tag?.flowId ? this.kill() : this.interrupt()
+        signal.addEventListener('abort', abort, { once: true })
+        const turn = this.turn
+        turn.done = () => {
+          signal.removeEventListener('abort', abort)
+          resolve()
+        }
         emit({ type: 'mood', mood: 'thinking' })
         this.write({ type: 'user', message: { role: 'user', content: text } })
       })
@@ -223,7 +230,10 @@ export class ClaudeSession {
   }
 
   kill() {
-    if (!this.exited) this.proc.kill('SIGTERM')
+    if (this.exited) return
+    this.exited = true
+    killProcessTree(this.proc)
+    this.finish({ type: 'done' })
   }
 
   private write(obj: unknown) {

@@ -1,10 +1,24 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { ApprovalRequest, BotTask, ChatEvent, FilesFilter, FlowRun, GbotApi, MemoryOwner, ProviderActionProgress, QuestionRequest } from '@shared/types'
+import type { AppUpdateState, ApprovalRequest, BotTask, ChatEvent, FilesFilter, FlowRun, GbotApi, MemoryOwner, ProviderActionProgress, QuestionRequest } from '@shared/types'
 
 declare const __APP_VERSION__: string
 
 const api: GbotApi = {
   platform: process.platform,
+  systemLocale: () => ipcRenderer.invoke('app:locale'),
+  updates: {
+    get: () => ipcRenderer.invoke('updates:get'),
+    check: () => ipcRenderer.invoke('updates:check'),
+    download: () => ipcRenderer.invoke('updates:download'),
+    install: () => ipcRenderer.invoke('updates:install'),
+    dismiss: () => ipcRenderer.invoke('updates:dismiss'),
+    openRelease: () => ipcRenderer.invoke('updates:openRelease'),
+    onChanged: (listener) => {
+      const handler = (_: unknown, state: AppUpdateState) => listener(state)
+      ipcRenderer.on('updates:changed', handler)
+      return () => ipcRenderer.removeListener('updates:changed', handler)
+    }
+  },
   versions: { app: __APP_VERSION__, electron: process.versions.electron },
   providers: {
     list: () => ipcRenderer.invoke('providers:list'),
@@ -150,6 +164,7 @@ const api: GbotApi = {
     save: (flow) => ipcRenderer.invoke('flows:save', flow),
     remove: (id) => ipcRenderer.invoke('flows:remove', id),
     run: (id) => ipcRenderer.invoke('flows:run', id),
+    stop: (id) => ipcRenderer.invoke('flows:stop', id),
     runs: (flowId) => ipcRenderer.invoke('flows:runs', flowId),
     onRunUpdate: (listener) => {
       const handler = (_: unknown, run: FlowRun) => listener(run)

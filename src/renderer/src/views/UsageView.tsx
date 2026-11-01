@@ -1,3 +1,4 @@
+import { t as tr, locale, localized, useLanguage } from '@/i18n'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ArrowLeft, Lightbulb, MessageSquareText, Workflow } from 'lucide-react'
 import type { TokenUsage, UsageRecord } from '@shared/types'
@@ -12,35 +13,66 @@ import { useApp } from '@/state/app'
 const DAY = 24 * 60 * 60_000
 
 type Period = 'today' | '7d' | '30d' | '90d'
-const PERIODS: { id: Period; label: string; days: number }[] = [
-  { id: 'today', label: 'Hoje', days: 1 },
-  { id: '7d', label: '7 dias', days: 7 },
-  { id: '30d', label: '30 dias', days: 30 },
-  { id: '90d', label: '90 dias', days: 90 }
-]
+const PERIODS: { id: Period; label: string; days: number }[] = localized([{
+  id: 'today',
+  label: tr('Hoje'),
+  days: 1
+}, {
+  id: '7d',
+  label: tr('7 dias'),
+  days: 7
+}, {
+  id: '30d',
+  label: tr('30 dias'),
+  days: 30
+}, {
+  id: '90d',
+  label: tr('90 dias'),
+  days: 90
+}])
 
 /** Peso no limite (preço equivalente na API) ou tokens processados. */
 type Measure = 'cost' | 'tokens'
 
 /** Cores categóricas (paleta validada para o fundo escuro, ordem fixa). */
-const KINDS: Series[] = [
-  { key: 'conversation', label: 'Conversas', color: '#3987e5' },
-  { key: 'mention', label: '@menções', color: '#d95926' },
-  { key: 'consult', label: 'Consultas entre bots', color: '#199e70' },
-  { key: 'flow', label: 'Fluxos', color: '#c98500' },
-  { key: 'reflection', label: 'Reflexão automática', color: '#d55181' },
-  { key: 'suggest', label: 'Sugestões de nome', color: '#008300' },
-  { key: 'plan', label: 'Planos da página inicial', color: '#8a63d2' }
-]
+const KINDS: Series[] = localized([{
+  key: 'conversation',
+  label: tr('Conversas'),
+  color: '#3987e5'
+}, {
+  key: 'mention',
+  label: tr('@menções'),
+  color: '#d95926'
+}, {
+  key: 'consult',
+  label: tr('Consultas entre bots'),
+  color: '#199e70'
+}, {
+  key: 'flow',
+  label: tr('Fluxos'),
+  color: '#c98500'
+}, {
+  key: 'reflection',
+  label: tr('Reflexão automática'),
+  color: '#d55181'
+}, {
+  key: 'suggest',
+  label: tr('Sugestões de nome'),
+  color: '#008300'
+}, {
+  key: 'plan',
+  label: tr('Planos da página inicial'),
+  color: '#8a63d2'
+}])
 const BAR_COLOR = '#3987e5'
 
 const usd = (v: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'USD', maximumFractionDigits: v < 1 ? 3 : 2 }).format(v)
+  new Intl.NumberFormat(locale(), { style: 'currency', currency: 'USD', maximumFractionDigits: v < 1 ? 3 : 2 }).format(v)
 
 const only = ({ input, output, cacheRead, cacheWrite, cost }: TokenUsage): TokenUsage => ({ input, output, cacheRead, cacheWrite, cost })
 
 export function modelFamily(model?: string): string {
-  if (!model) return 'Não registrado'
+  if (!model) return tr('Não registrado')
   const m = model.toLowerCase()
   for (const f of ['opus', 'sonnet', 'haiku', 'fable']) if (m.includes(f)) return f.charAt(0).toUpperCase() + f.slice(1)
   return model
@@ -69,6 +101,7 @@ interface Group {
 }
 
 function Stat({ label, value, sub, title }: { label: string; value: string; sub: string; title?: string }) {
+  useLanguage()
   return (
     <Card className="flex-1 p-4">
       <div title={title}>
@@ -81,6 +114,7 @@ function Stat({ label, value, sub, title }: { label: string; value: string; sub:
 }
 
 function Panel({ title, sub, aside, children, className }: { title: string; sub?: string; aside?: ReactNode; children: ReactNode; className?: string }) {
+  useLanguage()
   return (
     <Card className={cn('p-5', className)}>
       <div className="mb-4 flex items-start justify-between gap-4">
@@ -97,6 +131,7 @@ function Panel({ title, sub, aside, children, className }: { title: string; sub?
 
 /** Página de consumo: quanto o gBot gastou, quando, em quê e onde dá para economizar. */
 export function UsageView() {
+  useLanguage()
   const app = useApp()
   const [period, setPeriod] = useState<Period>('7d')
   const [measure, setMeasure] = useState<Measure>('cost')
@@ -160,7 +195,7 @@ export function UsageView() {
     if (period === 'today') {
       for (let h = 0; h < 24; h++) {
         const s = start + h * 60 * 60_000
-        buckets.push({ start: s, label: `${h}h`, title: `Hoje, ${String(h).padStart(2, '0')}:00–${String(h).padStart(2, '0')}:59` })
+        buckets.push({ start: s, label: `${h}h`, title: tr('Hoje, {0}:00–{1}:59', String(h).padStart(2, '0'), String(h).padStart(2, '0')) })
       }
     } else {
       for (let d = 0; d < days; d++) {
@@ -169,7 +204,7 @@ export function UsageView() {
         buckets.push({
           start: s,
           label: `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`,
-          title: new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }).format(date)
+          title: new Intl.DateTimeFormat(locale(), { weekday: 'long', day: 'numeric', month: 'long' }).format(date)
         })
       }
     }
@@ -180,7 +215,7 @@ export function UsageView() {
       perBucket[i].set(r.kind, addUsage(perBucket[i].get(r.kind), only(r)))
     }
     return { total, turns: turns.size, byKind, byModel, groups: [...groups.values()], buckets, perBucket }
-  }, [records, period, start, days])
+  }, [records, period, start, days, locale()])
 
   const columns: Column[] = data.buckets.map((b, i) => ({
     label: b.label,
@@ -189,10 +224,10 @@ export function UsageView() {
   }))
 
   const nameOf = (o: Owner) => {
-    if (o.kind === 'bot') return app.getBot(o.id)?.name ?? 'Bot excluído'
-    if (o.kind === 'flow') return app.flows.find((f) => f.id === o.id)?.name ?? 'Fluxo excluído'
-    if (o.kind === 'conversation') return app.conversations.find((c) => c.id === o.id)?.title ?? 'Conversa excluída'
-    return KINDS.find((k) => k.key === o.id)?.label ?? 'Outros'
+    if (o.kind === 'bot') return app.getBot(o.id)?.name ?? tr('Bot excluído')
+    if (o.kind === 'flow') return app.flows.find((f) => f.id === o.id)?.name ?? tr('Fluxo excluído')
+    if (o.kind === 'conversation') return app.conversations.find((c) => c.id === o.id)?.title ?? tr('Conversa excluída')
+    return KINDS.find((k) => k.key === o.id)?.label ?? tr('Outros')
   }
   const openOf = (o: Owner): (() => void) | undefined => {
     if (o.kind === 'bot' && app.getBot(o.id)) return () => app.openBot(o.id)
@@ -223,13 +258,10 @@ export function UsageView() {
         key: 'opus',
         text: (
           <>
-            <b>{Math.round((opus / cost) * 100)}% do peso veio do Opus</b>, o modelo que mais gasta.
-            {heavy.length > 0 && <> Quem mais usou: {heavy.map((g) => nameOf(g.owner)).join(', ')}.</>} Para tarefas do dia a
-            dia, escolha o Sonnet no editor do bot ou na conversa: a qualidade costuma ser parecida por bem menos.
-          </>
+            <b>{Math.round((opus / cost) * 100)}{tr('% do peso veio do Opus')}</b>{tr(', o modelo que mais gasta.')}{heavy.length > 0 && <>{tr(' Quem mais usou: ')}{heavy.map((g) => nameOf(g.owner)).join(', ')}.</>}{tr(' Para tarefas do dia a dia, escolha o Sonnet no editor do bot ou na conversa: a qualidade costuma ser parecida por bem menos.')}</>
         ),
         open: heavy[0] && openOf(heavy[0].owner),
-        action: heavy[0] && `Abrir ${nameOf(heavy[0].owner)}`
+        action: heavy[0] && tr('Abrir {0}', nameOf(heavy[0].owner))
       })
     }
     // Conversas que relêem muito contexto a cada mensagem.
@@ -241,12 +273,10 @@ export function UsageView() {
         key: `long-${g.owner.id}`,
         text: (
           <>
-            <b>{nameOf(g.owner)}</b> relê em média {formatTokens(perTurn)} tokens a cada resposta: o histórico ficou longo.
-            Para assunto novo, comece outra conversa, que sai bem mais leve.
-          </>
+            <b>{nameOf(g.owner)}</b>{tr(' relê em média ')}{formatTokens(perTurn)}{tr(' tokens a cada resposta: o histórico ficou longo. Para assunto novo, comece outra conversa, que sai bem mais leve.')}</>
         ),
         open: openOf(g.owner),
-        action: 'Abrir'
+        action: tr('Abrir')
       })
       if (out.length > 4) break
     }
@@ -258,14 +288,10 @@ export function UsageView() {
       out.push({
         key: `flow-${g.owner.id}`,
         text: (
-          <>
-            O fluxo <b>{nameOf(g.owner)}</b> responde por {Math.round((g.usage.cost / cost) * 100)}% do peso
-            {perDay ? <> e roda cerca de {perDay} vezes por dia</> : null}. Veja se dá para rodar menos vezes, juntar
-            caixinhas ou usar um modelo mais leve nelas.
-          </>
+          <>{tr('O fluxo ')}<b>{nameOf(g.owner)}</b>{tr(' responde por ')}{Math.round((g.usage.cost / cost) * 100)}{tr('% do peso')}{perDay ? <>{tr(' e roda cerca de ')}{perDay}{tr(' vezes por dia')}</> : null}{tr('. Veja se dá para rodar menos vezes, juntar caixinhas ou usar um modelo mais leve nelas.')}</>
         ),
         open: openOf(g.owner),
-        action: 'Abrir fluxo'
+        action: tr('Abrir fluxo')
       })
     }
     const consult = data.byKind.get('consult')?.cost ?? 0
@@ -274,9 +300,7 @@ export function UsageView() {
         key: 'consult',
         text: (
           <>
-            <b>Consultas entre bots</b> foram {Math.round((consult / cost) * 100)}% do peso. Cada bot consultado tem a
-            própria sessão; quando já souber quem deve responder, chame o bot direto com @.
-          </>
+            <b>{tr('Consultas entre bots')}</b>{tr(' foram ')}{Math.round((consult / cost) * 100)}{tr('% do peso. Cada bot consultado tem a própria sessão; quando já souber quem deve responder, chame o bot direto com @.')}</>
         )
       })
     }
@@ -285,16 +309,13 @@ export function UsageView() {
       out.push({
         key: 'reflection',
         text: (
-          <>
-            A <b>reflexão automática</b> (registrar lições depois de falhas) foi {Math.round((reflection / cost) * 100)}% do
-            peso: houve muitas falhas de ferramenta. Vale ver os avisos nas conversas e fluxos.
-          </>
+          <>{tr('A ')}<b>{tr('reflexão automática')}</b>{tr(' (registrar lições depois de falhas) foi ')}{Math.round((reflection / cost) * 100)}{tr('% do peso: houve muitas falhas de ferramenta. Vale ver os avisos nas conversas e fluxos.')}</>
         )
       })
     }
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, app.flows, app.bots, app.conversations])
+  }, [data, app.flows, app.bots, app.conversations, locale()])
 
   const cacheShare = data.total.cacheRead / Math.max(1, data.total.input + data.total.cacheRead + data.total.cacheWrite)
   const rows = data.groups
@@ -307,11 +328,10 @@ export function UsageView() {
   return (
     <div className="mx-auto w-full max-w-[1120px] px-[60px] pt-6 pb-12">
       <button onClick={() => app.setView('home')} className="mb-4 inline-flex items-center gap-1.5 text-[13px] text-muted hover:text-fg">
-        <ArrowLeft size={14} /> Início
-      </button>
-      <p className="text-[12px] font-medium tracking-[0.02em] text-muted">Sistema</p>
-      <h1 className="mt-1 text-[36px] leading-tight font-medium tracking-[-0.03em]">Consumo</h1>
-      <p className="mt-1 text-[15px] text-muted">Quanto o gBot gastou do seu limite, em quê, e onde dá para economizar.</p>
+        <ArrowLeft size={14} />{tr(' Início')}</button>
+      <p className="text-[12px] font-medium tracking-[0.02em] text-muted">{tr('Sistema')}</p>
+      <h1 className="mt-1 text-[36px] leading-tight font-medium tracking-[-0.03em]">{tr('Consumo')}</h1>
+      <p className="mt-1 text-[15px] text-muted">{tr('Quanto o gBot gastou do seu limite, em quê, e onde dá para economizar.')}</p>
 
       {/* Filtros: valem para tudo abaixo. */}
       <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -321,42 +341,38 @@ export function UsageView() {
           </Chip>
         ))}
         <span className="mx-2 h-5 w-px bg-line" />
-        <Chip active={measure === 'cost'} onClick={() => setMeasure('cost')} title="Preço equivalente na API: a melhor medida do peso no limite">
-          Peso no limite
-        </Chip>
+        <Chip active={measure === 'cost'} onClick={() => setMeasure('cost')} title={tr('Preço equivalente na API: a melhor medida do peso no limite')}>{tr('Peso no limite')}</Chip>
         <Chip active={measure === 'tokens'} onClick={() => setMeasure('tokens')}>
           Tokens
         </Chip>
       </div>
 
       {empty ? (
-        <Card className="mt-6 p-8 text-center text-[14px] text-muted">
-          Nenhum consumo registrado neste período. Os números aparecem aqui conforme você usa conversas, bots e fluxos.
-        </Card>
+        <Card className="mt-6 p-8 text-center text-[14px] text-muted">{tr('Nenhum consumo registrado neste período. Os números aparecem aqui conforme você usa conversas, bots e fluxos.')}</Card>
       ) : (
         <div className={cn('mt-6 space-y-4 transition-opacity', loading && records && 'opacity-60')}>
           <div className="flex gap-3">
             <Stat
-              label="Peso estimado"
+              label={tr('Peso estimado')}
               value={usd(data.total.cost)}
-              sub="se fosse pela API (na assinatura não é cobrado)"
-              title="Ler do cache custa ~10% de um token novo; gerar texto custa bem mais. Por isso o peso é a melhor comparação."
+              sub={tr('se fosse pela API (na assinatura não é cobrado)')}
+              title={tr('Ler do cache custa ~10% de um token novo; gerar texto custa bem mais. Por isso o peso é a melhor comparação.')}
             />
-            <Stat label="Tokens processados" value={formatTokens(totalTokens(data.total))} sub="entrada, cache e saída" title={usageDetail(data.total)} />
-            <Stat label="Respostas" value={String(data.turns)} sub={`≈ ${formatTokens(totalTokens(data.total) / Math.max(1, data.turns))} tokens cada`} />
+            <Stat label={tr('Tokens processados')} value={formatTokens(totalTokens(data.total))} sub={tr('entrada, cache e saída')} title={usageDetail(data.total)} />
+            <Stat label={tr('Respostas')} value={String(data.turns)} sub={tr('≈ {0} tokens cada', formatTokens(totalTokens(data.total) / Math.max(1, data.turns)))} />
             <Stat
-              label="Lido do cache"
+              label={tr('Lido do cache')}
               value={`${Math.round(cacheShare * 100)}%`}
-              sub="da entrada (quanto maior, mais barato)"
+              sub={tr('da entrada (quanto maior, mais barato)')}
             />
           </div>
 
-          <Panel title="Ao longo do tempo" sub={`${measure === 'cost' ? 'Peso' : 'Tokens'} por ${period === 'today' ? 'hora' : 'dia'}, separado por tipo de uso`}>
+          <Panel title={tr('Ao longo do tempo')} sub={tr('{0} por {1}, separado por tipo de uso', measure === 'cost' ? tr('Peso') : 'Tokens', period === 'today' ? tr('hora') : tr('dia'))}>
             <StackedColumns series={KINDS} columns={columns} format={fmt} />
           </Panel>
 
           <div className="grid grid-cols-2 gap-4">
-            <Panel title="Por modelo" sub="Opus gasta bem mais que Sonnet, que gasta bem mais que Haiku">
+            <Panel title={tr('Por modelo')} sub={tr('Opus gasta bem mais que Sonnet, que gasta bem mais que Haiku')}>
               <HBars
                 color={BAR_COLOR}
                 format={fmt}
@@ -366,7 +382,7 @@ export function UsageView() {
                   .sort((a, b) => b.value - a.value)}
               />
             </Panel>
-            <Panel title="Por tipo de uso" sub="Onde os tokens foram gastos">
+            <Panel title={tr('Por tipo de uso')} sub={tr('Onde os tokens foram gastos')}>
               <HBars
                 color={BAR_COLOR}
                 format={fmt}
@@ -380,14 +396,14 @@ export function UsageView() {
             </Panel>
           </div>
 
-          <Panel title="Para onde vão os tokens" sub="Cada mensagem reenvia instruções, ferramentas e o histórico; o cache barateia a releitura">
+          <Panel title={tr('Para onde vão os tokens')} sub={tr('Cada mensagem reenvia instruções, ferramentas e o histórico; o cache barateia a releitura')}>
             <div className="grid grid-cols-4 gap-3">
               {(
                 [
-                  ['Lido do cache', data.total.cacheRead, 'Histórico e instruções relidos. Pesa ~10% de um token novo.'],
-                  ['Escrito no cache', data.total.cacheWrite, 'Conteúdo novo guardado para reler depois (sessão nova, pausa longa).'],
-                  ['Entrada nova', data.total.input, 'O que entrou sem passar pelo cache.'],
-                  ['Gerados', data.total.output, 'Texto e raciocínio do modelo. É o tipo mais caro por token.']
+                  [tr('Lido do cache'), data.total.cacheRead, tr('Histórico e instruções relidos. Pesa ~10% de um token novo.')],
+                  [tr('Escrito no cache'), data.total.cacheWrite, tr('Conteúdo novo guardado para reler depois (sessão nova, pausa longa).')],
+                  [tr('Entrada nova'), data.total.input, tr('O que entrou sem passar pelo cache.')],
+                  [tr('Gerados'), data.total.output, tr('Texto e raciocínio do modelo. É o tipo mais caro por token.')]
                 ] as const
               ).map(([label, n, hint]) => {
                 const all = Math.max(1, totalTokens(data.total))
@@ -405,7 +421,7 @@ export function UsageView() {
             </div>
           </Panel>
 
-          <Panel title="Onde economizar" sub="Sugestões a partir do consumo deste período">
+          <Panel title={tr('Onde economizar')} sub={tr('Sugestões a partir do consumo deste período')}>
             {tips.length ? (
               <div className="space-y-2">
                 {tips.map((t) => (
@@ -414,28 +430,28 @@ export function UsageView() {
                     <p className="flex-1 text-[13px] leading-relaxed text-fg-2 [&_b]:font-semibold [&_b]:text-fg">{t.text}</p>
                     {t.open && (
                       <button onClick={t.open} className="shrink-0 rounded-full border border-line px-3 py-1 text-[12px] text-fg-2 hover:bg-hover">
-                        {t.action ?? 'Abrir'}
+                        {t.action ?? tr('Abrir')}
                       </button>
                     )}
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-[13px] text-muted">Nada fora do comum neste período.</p>
+              <p className="text-[13px] text-muted">{tr('Nada fora do comum neste período.')}</p>
             )}
           </Panel>
 
           <Panel
-            title="Detalhes"
-            sub="Quem gastou: o fluxo (com os bots consultados nele), senão o bot, senão a conversa"
+            title={tr('Detalhes')}
+            sub={tr('Quem gastou: o fluxo (com os bots consultados nele), senão o bot, senão a conversa')}
             aside={
               <div className="flex gap-1.5">
                 {(
                   [
-                    ['all', 'Tudo'],
+                    ['all', tr('Tudo')],
                     ['bot', 'Bots'],
-                    ['flow', 'Fluxos'],
-                    ['conversation', 'Conversas']
+                    ['flow', tr('Fluxos')],
+                    ['conversation', tr('Conversas')]
                   ] as const
                 ).map(([id, label]) => (
                   <Chip key={id} active={tab === id} onClick={() => setTab(id)} className="h-7 px-3 text-[12px]">
@@ -448,12 +464,12 @@ export function UsageView() {
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="border-b border-line text-left text-[12px] text-muted">
-                  <th className="pb-2 font-medium">Nome</th>
-                  <th className="pb-2 text-right font-medium">Respostas</th>
+                  <th className="pb-2 font-medium">{tr('Nome')}</th>
+                  <th className="pb-2 text-right font-medium">{tr('Respostas')}</th>
                   <th className="pb-2 text-right font-medium">Tokens</th>
-                  <th className="pb-2 text-right font-medium">Peso</th>
-                  <th className="pb-2 text-right font-medium">Média por resposta</th>
-                  <th className="w-[160px] pb-2 pl-4 font-medium">Parte do total</th>
+                  <th className="pb-2 text-right font-medium">{tr('Peso')}</th>
+                  <th className="pb-2 text-right font-medium">{tr('Média por resposta')}</th>
+                  <th className="w-[160px] pb-2 pl-4 font-medium">{tr('Parte do total')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -497,7 +513,7 @@ export function UsageView() {
                 })}
               </tbody>
             </table>
-            {!rows.length && <p className="pt-3 text-[13px] text-muted">Nada nesta categoria.</p>}
+            {!rows.length && <p className="pt-3 text-[13px] text-muted">{tr('Nada nesta categoria.')}</p>}
           </Panel>
         </div>
       )}

@@ -3,20 +3,68 @@ import { BrowserWindow } from 'electron'
 import type { ChatEvent, ChatFile, Flow, FlowEdge, FlowNode, FlowRun, FlowRunStep, SendMessageRequest, TokenUsage } from '@shared/types'
 import { addUsage } from '@shared/usage'
 import { askOnce } from '../providers/claude-code/oneShot'
-import { stableUuid } from '../providers/claude-code/sessions'
+import { killSessions, stableUuid } from '../providers/claude-code/sessions'
 import { runAsBot, waitNotice } from '../botQueue'
 import { requestConfirmation } from '../confirmations'
 import { getProvider } from '../providers/registry'
 import { getBot } from '../store'
-import { saveRun } from './store'
+import { listFlows, listRuns, saveRun } from './store'
 
 /** Tempo máximo de uma caixinha. */
 const STEP_TIMEOUT_MS = 15 * 60_000
 
-/** Fluxos em execução (um fluxo não roda duas vezes ao mesmo tempo). */
-const running = new Set<string>()
+/**
+ * Fluxos em execução (um fluxo não roda duas vezes ao mesmo tempo), com o que é preciso para parar tudo na hora:
+ * o sinal que cancela as caixinhas e as sessões do Claude Code abertas por elas.
+ */
+const running = new Map<string, { run: FlowRun; controller: AbortController; sessions: Set<string> }>()
 
 export const isFlowRunning = (flowId: string) => running.has(flowId)
+
+/** A stopped app cannot resume its old processes; don't leave those flows locked after restarting. */
+export function recoverInterruptedFlows() {
+  for (const flow of listFlows()) {
+    if (isFlowRunning(flow.id)) continue
+    for (const run of listRuns(flow.id)) {
+      if (run.status !== 'running') continue
+      run.status = 'stopped'
+      run.finishedAt = Date.now()
+      for (const step of run.steps) {
+        if (step.status === 'running' || step.status === 'pending' || step.status === 'waiting') {
+          Object.assign(step, { status: 'stopped', error: 'Execução interrompida ao encerrar o app.', finishedAt: run.finishedAt })
+        }
+      }
+      saveRun(run)
+    }
+  }
+}
+
+/** O que uma caixinha precisa para poder ser parada: o sinal e onde registrar as sessões que abrir. */
+interface StopContext {
+  signal: AbortSignal
+  track(sessionKey: string): void
+}
+
+const STOPPED = 'Parado por você.'
+
+/**
+ * Para o fluxo na hora: cancela o que estiver rodando (sessões, processos do Codex, decisões, filas de bots,
+ * confirmações pendentes) e marca a execução como parada, sem esperar ninguém terminar.
+ */
+export function stopFlow(flowId: string) {
+  const active = running.get(flowId)
+  if (!active) return
+  running.delete(flowId)
+  active.controller.abort()
+  for (const key of active.sessions) killSessions(key)
+  const now = Date.now()
+  for (const s of active.run.steps) {
+    if (s.status === 'running' || s.status === 'waiting' || s.status === 'pending') Object.assign(s, { status: 'stopped', error: STOPPED, finishedAt: now })
+  }
+  active.run.status = 'stopped'
+  active.run.finishedAt = now
+  publish(active.run)
+}
 
 function publish(run: FlowRun) {
   saveRun(run)
@@ -139,6 +187,7 @@ async function execute(
   onNotice: (text: string) => void,
   onUsage: (usage: TokenUsage) => void,
   context: string,
+  stop: StopContext,
   textOverride?: string
 ): Promise<{ text: string; files: ChatFile[] }> {
   const text = textOverride ?? compose(flow, node, inputs, context)
@@ -173,10 +222,12 @@ async function execute(
 
   const provider = getProvider(req.providerId)
   if (!provider) throw new Error(`Provedor desconhecido: ${req.providerId}`)
+  stop.track(base.conversationId)
   let out = ''
   let files: ChatFile[] = []
   let error: string | undefined
   const collect = (ev: ChatEvent) => {
+    if (stop.signal.aborted) return
     if (ev.type === 'delta') out += ev.text
     if (ev.type === 'files') files = ev.files
     if (ev.type === 'error') error = ev.message
@@ -185,23 +236,25 @@ async function execute(
   }
   // O limite de tempo só começa quando a caixinha começa de fato (depois da fila do bot, se houver).
   const run = async (stop: AbortSignal) => {
+    stop.throwIfAborted()
     const timeout = AbortSignal.timeout(STEP_TIMEOUT_MS)
     await provider.send(req, collect, AbortSignal.any([stop, timeout]))
     if (error) throw new Error(error)
     if (timeout.aborted) throw new Error('A caixinha demorou demais e foi interrompida.')
-    if (stop.aborted) throw new Error('A tarefa foi cancelada na página do bot.')
+    if (stop.aborted) throw new Error(flowStop.aborted ? STOPPED : 'A tarefa foi cancelada na página do bot.')
   }
+  const flowStop = stop.signal
   const bot = req.bot
   if (bot) {
     await runAsBot(
       bot.id,
       { label: `Fluxo "${flow.name}" · ${nodeLabel(node)}`, origin: 'flow', originId: flow.id },
-      new AbortController().signal,
+      flowStop,
       run,
       (ahead) => onNotice(waitNotice(bot.name, ahead))
     )
   } else {
-    await run(new AbortController().signal)
+    await run(flowStop)
   }
   return { text: out.trim(), files }
 }
@@ -223,7 +276,8 @@ async function decide(
   inputs: string[],
   onNotice: (text: string) => void,
   onUsage: (usage: TokenUsage) => void,
-  context: string
+  context: string,
+  stop: StopContext
 ): Promise<{ optionId: string; label: string }> {
   const options = (node.data.options ?? []).filter((o) => o.label.trim())
   if (options.length < 2) throw new Error('A decisão precisa de pelo menos duas opções.')
@@ -242,11 +296,11 @@ async function decide(
   const providerId = node.data.providerId ?? 'claude-code'
   let answer: string
   if (providerId === 'claude-code') {
-    const res = await askOnce(prompt, node.data.model ?? 'haiku', { kind: 'flow', flowId: flow.id }, STEP_TIMEOUT_MS)
+    const res = await askOnce(prompt, node.data.model ?? 'haiku', { kind: 'flow', flowId: flow.id }, STEP_TIMEOUT_MS, undefined, stop.signal)
     onUsage(res.usage)
     answer = res.text
   } else {
-    answer = (await execute(runId, flow, node, inputs, onNotice, onUsage, context, prompt)).text
+    answer = (await execute(runId, flow, node, inputs, onNotice, onUsage, context, stop, prompt)).text
   }
   const n = Number(answer.match(/\d+/)?.[0])
   const chosen = options[n - 1]
@@ -280,8 +334,16 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
   }
 
   run.steps = order.map((n): FlowRunStep => ({ nodeId: n.id, label: nodeLabel(n), status: 'pending' }))
-  running.add(flow.id)
-  publish(run)
+  const controller = new AbortController()
+  const sessions = new Set<string>()
+  running.set(flow.id, { run, controller, sessions })
+  const stop: StopContext = { signal: controller.signal, track: (key) => sessions.add(key) }
+  const stopped = () => controller.signal.aborted
+  // Depois de parar, nada mais muda a execução: o "parado" já foi gravado por stopFlow.
+  const pub = () => {
+    if (!stopped()) publish(run)
+  }
+  pub()
 
   const step = (id: string) => run.steps.find((s) => s.nodeId === id)!
   const byId = (id: string) => flow.nodes.find((n) => n.id === id)!
@@ -315,15 +377,16 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
             })
           )
           const s = step(node.id)
+          if (stopped()) return { kind: 'fail' }
           if (arriving.some((r) => r.kind === 'fail')) {
             Object.assign(s, { status: 'skipped', error: 'Uma caixinha anterior falhou.' })
-            publish(run)
+            pub()
             return { kind: 'fail' }
           }
           const ok = arriving.filter((r): r is Extract<Result, { kind: 'ok' }> => r.kind === 'ok')
           if (!ok.length) {
             Object.assign(s, { status: 'skipped', error: 'Caminho não escolhido pela decisão.' })
-            publish(run)
+            pub()
             return { kind: 'skip' }
           }
           const inputs = ok.map((r) => r.output).filter(Boolean)
@@ -335,19 +398,22 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
           const label = nodeLabel(node)
 
           Object.assign(s, { status: 'running', startedAt: Date.now() })
-          publish(run)
+          pub()
           const onNotice = (text: string) => {
+            if (stopped()) return
             s.notices = [...(s.notices ?? []), text]
-            publish(run)
+            pub()
           }
           const onUsage = (usage: TokenUsage) => {
+            if (stopped()) return
             s.usage = addUsage(s.usage, usage)
           }
           try {
             if (node.type === 'decision') {
-              const choice = await decide(run.id, flow, node, inputs, onNotice, onUsage, context)
+              const choice = await decide(run.id, flow, node, inputs, onNotice, onUsage, context, stop)
+              if (stopped()) return { kind: 'fail' }
               Object.assign(s, { status: 'done', chosen: choice.label, finishedAt: Date.now() })
-              publish(run)
+              pub()
               const own = { nodeId: node.id, label, chosen: choice.label }
               return { kind: 'ok', output: joinInputs(inputs), chosen: choice.optionId, trail: [...trail, own], files }
             }
@@ -357,7 +423,7 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
               const options = (node.data.options ?? []).filter((o) => o.label.trim())
               if (!options.length) throw new Error('A confirmação precisa de pelo menos uma opção.')
               Object.assign(s, { status: 'waiting' })
-              publish(run)
+              pub()
               const { option, note } = await requestConfirmation({
                 flowId: flow.id,
                 flowName: flow.name,
@@ -368,9 +434,10 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
                 detail: joinInputs(inputs) || undefined,
                 files,
                 options
-              })
+              }, controller.signal)
+              if (stopped()) return { kind: 'fail' }
               Object.assign(s, { status: 'done', chosen: option.label.trim(), note, finishedAt: Date.now() })
-              publish(run)
+              pub()
               const decided = `[Decisão do usuário: ${option.label.trim()}${note ? ` · Comentário: ${note}` : ''}]`
               const own = { nodeId: node.id, label, chosen: `${option.label.trim()}${note ? ` (comentário: ${note})` : ''}` }
               return {
@@ -381,14 +448,16 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
                 files
               }
             }
-            const { text: output, files: made } = await execute(run.id, flow, node, inputs, onNotice, onUsage, context)
+            const { text: output, files: made } = await execute(run.id, flow, node, inputs, onNotice, onUsage, context, stop)
+            if (stopped()) return { kind: 'fail' }
             Object.assign(s, { status: 'done', output, ...(made.length ? { files: made } : {}), finishedAt: Date.now() })
-            publish(run)
+            pub()
             const own = { nodeId: node.id, label, ask: node.data.message, output }
             return { kind: 'ok', output, trail: [...trail, own], files: [...files, ...made.filter((f) => !seenFiles.has(f.path))] }
           } catch (e) {
+            if (stopped()) return { kind: 'fail' }
             Object.assign(s, { status: 'error', error: (e as Error).message, finishedAt: Date.now() })
-            publish(run)
+            pub()
             return { kind: 'fail' }
           }
         })()
@@ -398,11 +467,12 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
   }
 
   void Promise.all(order.map(exec)).finally(() => {
+    if (stopped()) return
     running.delete(flow.id)
     // Caixinha pulada porque a decisão escolheu outro caminho não é erro.
     run.status = run.steps.some((s) => s.status === 'error') ? 'error' : 'done'
     run.finishedAt = Date.now()
-    publish(run)
+    pub()
   })
   return run.id
 }

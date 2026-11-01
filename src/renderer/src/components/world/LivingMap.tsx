@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Bot as BotIcon, Workflow } from 'lucide-react'
 import type { AvatarDef, AvatarMood, Flow, FlowRun } from '@shared/types'
@@ -103,6 +104,7 @@ type Hover = (id?: string) => void
 type Grab = (id: string, e: React.PointerEvent) => void
 
 function NameTag({ name, dot }: { name: string; dot?: 'busy' | 'alert' }) {
+  useLanguage()
   return (
     <span className="pointer-events-none absolute bottom-full left-1/2 mb-1 flex max-w-[150px] -translate-x-1/2 items-center gap-1.5 rounded-full border border-line bg-sidebar/90 px-2.5 py-0.5 text-[11.5px] font-medium whitespace-nowrap text-fg shadow-sm backdrop-blur-sm">
       {dot && <span className={cn('size-1.5 shrink-0 rounded-full', dot === 'alert' ? 'bg-danger' : 'animate-pulse bg-warning')} />}
@@ -112,6 +114,7 @@ function NameTag({ name, dot }: { name: string; dot?: 'busy' | 'alert' }) {
 }
 
 function Bubble({ tone }: { tone: 'chat' | 'work' }) {
+  useLanguage()
   return (
     <span
       className={cn(
@@ -127,6 +130,7 @@ function Bubble({ tone }: { tone: 'chat' | 'work' }) {
 }
 
 function Tooltip({ title, children }: { title: string; children: React.ReactNode }) {
+  useLanguage()
   return (
     <div className="pointer-events-none invisible absolute top-full left-1/2 mt-2 w-60 -translate-x-1/2 rounded-tile border border-line bg-sidebar p-3 text-left opacity-0 shadow-2xl transition-opacity group-hover:visible group-hover:opacity-100 group-data-[dragging=true]/map:hidden">
       <p className="truncate text-[13px] font-semibold">{title}</p>
@@ -200,9 +204,7 @@ const ZoneNode = memo(function ZoneNode({
         {bots + flows === 0 && (
           <span className="absolute inset-x-4 top-1/2 text-center text-[11.5px] text-muted">
             {conversations} {conversations === 1 ? 'conversa' : 'conversas'}
-            <br />
-            arraste bots e fluxos para cá
-          </span>
+            <br />{tr('arraste bots e fluxos para cá')}</span>
         )}
       </button>
     </div>
@@ -249,7 +251,7 @@ const BotNode = memo(function BotNode({
         onPointerDown={(e) => onGrab(id, e)}
       >
         <NameTag name={name} dot={dot} />
-        <button onClick={onOpen} aria-label={`Abrir ${name}`} className="relative block cursor-grab p-1 transition-transform duration-200 hover:scale-115">
+        <button onClick={onOpen} aria-label={tr('Abrir {0}', name)} className="relative block cursor-grab p-1 transition-transform duration-200 hover:scale-115">
           <span className="gbot-float block" style={float}>
             <PixelAvatar avatar={avatar} mood={mood} size={48} seed={Math.round(seed * 100)} />
           </span>
@@ -257,7 +259,7 @@ const BotNode = memo(function BotNode({
         </button>
         {bubble && <Bubble tone={bubble} />}
         <Tooltip title={name}>
-          <p className="line-clamp-3 text-fg-2">{description || 'Sem descrição'}</p>
+          <p className="line-clamp-3 text-fg-2">{description || tr('Sem descrição')}</p>
           <p className="mt-1.5">{status}</p>
         </Tooltip>
       </div>
@@ -301,7 +303,7 @@ const FlowNode = memo(function FlowNode({
         <NameTag name={name} dot={running ? 'busy' : undefined} />
         <button
           onClick={onOpen}
-          aria-label={`Abrir fluxo ${name}`}
+          aria-label={tr('Abrir fluxo {0}', name)}
           className={cn(
             'relative flex size-12 cursor-grab items-center justify-center rounded-tile border-[1.5px] bg-tile transition-transform duration-200 hover:scale-110',
             running ? 'border-warning' : enabled ? 'border-success/60' : 'border-line'
@@ -314,12 +316,12 @@ const FlowNode = memo(function FlowNode({
           )}
         </button>
         <span className="pointer-events-none absolute top-full left-1/2 mt-1 -translate-x-1/2 text-[10.5px] whitespace-nowrap text-muted">
-          {running ? 'rodando…' : enabled ? (next ? `próx. ${next}` : 'ativo') : 'pausado'}
+          {running ? 'rodando…' : enabled ? (next ? tr('próx. {0}', next) : 'ativo') : 'pausado'}
         </span>
         <Tooltip title={name}>
           <p className="text-fg-2">{schedule}</p>
           <p className="mt-1.5">
-            {steps} {steps === 1 ? 'etapa' : 'etapas'} · {running ? 'rodando agora' : enabled ? 'ativo' : 'pausado'}
+            {steps} {steps === 1 ? 'etapa' : 'etapas'} · {running ? tr('rodando agora') : enabled ? 'ativo' : 'pausado'}
           </p>
         </Tooltip>
       </div>
@@ -335,6 +337,7 @@ const FlowNode = memo(function FlowNode({
  * estão fazendo de verdade: respondendo uma conversa, rodando num fluxo ou esperando aprovação.
  */
 export function LivingMap() {
+  useLanguage()
   const app = useApp()
   const appRef = useRef(app)
   appRef.current = app
@@ -714,11 +717,11 @@ export function LivingMap() {
     ? undefined
     : targetProject
       ? target.item.projectId === targetProject.id
-        ? `Já está em ${targetProject.name}`
-        : `Soltar para mover para ${targetProject.name}`
+        ? tr('Já está em {0}', targetProject.name)
+        : tr('Soltar para mover para {0}', targetProject.name)
       : target.item.projectId
-        ? 'Soltar aqui tira do projeto'
-        : 'Solte numa ilha para mover para o projeto'
+        ? tr('Soltar aqui tira do projeto')
+        : tr('Solte numa ilha para mover para o projeto')
 
   return (
     <div
@@ -789,7 +792,7 @@ export function LivingMap() {
         const nFlows = app.flows.filter((f) => f.nodes.some((n) => n.data.botId === b.id)).length
         const status = [
           project?.name,
-          last ? `conversou ${timeAgo(last, now)}` : 'sem conversas ainda',
+          last ? tr('conversou {0}', timeAgo(last, now)) : tr('sem conversas ainda'),
           nFlows ? `${nFlows} ${nFlows === 1 ? 'fluxo' : 'fluxos'}` : undefined
         ]
           .filter(Boolean)
@@ -819,14 +822,10 @@ export function LivingMap() {
           <span className="gbot-float block">
             <PixelAvatar avatarId="brasa" size={64} />
           </span>
-          <p className="text-[15px] font-medium">Ainda não tem ninguém por aqui</p>
-          <p className="max-w-sm text-[13px] text-muted">
-            Crie bots, junte-os em projetos e monte fluxos — eles aparecem aqui, conversando entre si.
-          </p>
+          <p className="text-[15px] font-medium">{tr('Ainda não tem ninguém por aqui')}</p>
+          <p className="max-w-sm text-[13px] text-muted">{tr('Crie bots, junte-os em projetos e monte fluxos — eles aparecem aqui, conversando entre si.')}</p>
           <Button variant="primary" className="mt-1" onClick={() => app.editBot()}>
-            <BotIcon size={15} />
-            Criar o primeiro bot
-          </Button>
+            <BotIcon size={15} />{tr('Criar o primeiro bot')}</Button>
         </div>
       )}
     </div>

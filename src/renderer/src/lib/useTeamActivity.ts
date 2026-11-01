@@ -1,3 +1,4 @@
+import { t as tr, locale } from '@/i18n'
 import { useMemo } from 'react'
 import type { AvatarMood, FlowRun } from '@shared/types'
 import { timeAgo } from '@/lib/format'
@@ -43,7 +44,7 @@ export function useTeamActivity(runs: Record<string, FlowRun[]>): Map<string, Bo
         // A caixinha costuma ter o nome do próprio bot; aí basta o nome do fluxo.
         const bot = app.getBot(botId)
         const step = s.label && s.label !== bot?.name ? ` · ${s.label}` : ''
-        set({ botId, state: 'working', mood: 'thinking', text: `No fluxo "${flow?.name}"${step}`, target: { kind: 'flow', id: run.flowId } })
+        set({ botId, state: 'working', mood: 'thinking', text: tr('No fluxo "{0}"{1}', flow?.name, step), target: { kind: 'flow', id: run.flowId } })
       }
     }
 
@@ -57,14 +58,14 @@ export function useTeamActivity(runs: Record<string, FlowRun[]>): Map<string, Bo
           botId: author.id,
           state: 'working',
           mood: app.mood === 'idle' ? 'thinking' : app.mood,
-          text: `Respondendo em "${conv.title}"`,
+          text: tr('Respondendo em "{0}"', conv.title),
           target: { kind: 'conversation', id: conv.id }
         })
       }
       // Bots consultados por quem está respondendo
       for (const t of last?.tools ?? []) {
         const bot = t.botName && t.status === 'running' ? byName(t.botName) : undefined
-        if (bot) set({ botId: bot.id, state: 'working', mood: 'thinking', text: `Consultado em "${conv.title}"`, target: { kind: 'conversation', id: conv.id } })
+        if (bot) set({ botId: bot.id, state: 'working', mood: 'thinking', text: tr('Consultado em "{0}"', conv.title), target: { kind: 'conversation', id: conv.id } })
       }
     }
 
@@ -76,7 +77,7 @@ export function useTeamActivity(runs: Record<string, FlowRun[]>): Map<string, Bo
           botId: bot.id,
           state: 'waiting',
           mood: 'attention',
-          text: `Esperando você liberar ${req.host}`,
+          text: tr('Esperando você liberar {0}', req.host),
           target: req.conversationId ? { kind: 'conversation', id: req.conversationId } : { kind: 'bot', id: bot.id }
         })
       }
@@ -95,10 +96,10 @@ export function useTeamActivity(runs: Record<string, FlowRun[]>): Map<string, Bo
         botId: bot.id,
         state: 'sleeping',
         mood: 'sleeping',
-        text: last ? `Última atividade ${timeAgo(last)}` : 'Ainda não trabalhou',
+        text: last ? tr('Última atividade {0}', timeAgo(last)) : tr('Ainda não trabalhou'),
         target: { kind: 'bot', id: bot.id }
       })
     }
     return out
-  }, [runs, app.bots, app.flows, app.conversations, app.activeConversation, app.busy, app.mood, app.approvals, app.getBot])
+  }, [runs, app.bots, app.flows, app.conversations, app.activeConversation, app.busy, app.mood, app.approvals, app.getBot, locale()])
 }

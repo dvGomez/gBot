@@ -32,6 +32,7 @@ export interface CallerContext {
   memorySource?: Lesson['source']
   /** Conversa com o arquiteto: ganha a ferramenta `propose_plan`. */
   architect?: boolean
+  signal?: AbortSignal
 }
 
 export interface BotHandlers {
@@ -91,7 +92,9 @@ function buildServer(ctx: CallerContext): McpServer {
     async ({ bot, message }, extra) => {
       if (!handlers) return { content: [{ type: 'text', text: 'Bots indisponíveis.' }], isError: true }
       try {
-        const answer = await handlers.ask(ctx, bot, message, extra.signal)
+        const signal = ctx.signal ? AbortSignal.any([extra.signal, ctx.signal]) : extra.signal
+        signal.throwIfAborted()
+        const answer = await handlers.ask(ctx, bot, message, signal)
         return { content: [{ type: 'text', text: answer }] }
       } catch (e) {
         return { content: [{ type: 'text', text: (e as Error).message }], isError: true }
@@ -115,6 +118,7 @@ function buildServer(ctx: CallerContext): McpServer {
         }
       },
       async (input) => {
+        ctx.signal?.throwIfAborted()
         const owner = ctx.memory!
         const source = ctx.memorySource ?? { kind: 'conversation' as const, id: ctx.conversationId }
         const { updated } = learn(owner, input, source)
@@ -201,6 +205,9 @@ function buildServer(ctx: CallerContext): McpServer {
     },
     get callerName() {
       return ctx.callerName
+    },
+    get signal() {
+      return ctx.signal
     }
   }
   registerBrowserTools(server, caller)
@@ -221,7 +228,7 @@ function start(): Promise<{ server: Server; port: number }> {
     const server = createServer(async (req, res) => {
       const token = (req.headers.authorization ?? '').replace(/^Bearer /, '')
       const ctx = contexts.get(token)
-      if (!ctx || !req.url?.startsWith('/mcp')) {
+      if (!ctx || ctx.signal?.aborted || !req.url?.startsWith('/mcp')) {
         res.writeHead(401).end()
         return
       }
@@ -232,6 +239,7 @@ function start(): Promise<{ server: Server; port: number }> {
       }
       try {
         const body = await readBody(req)
+        ctx.signal?.throwIfAborted()
         const mcp = buildServer(ctx)
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
         res.on('close', () => {

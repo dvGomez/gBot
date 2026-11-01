@@ -1,103 +1,47 @@
+import { t as tr, localized } from '@/i18n'
 import type { AvatarDef, AvatarMood } from '@shared/types'
 import { BUILT_IN_COMPOSED } from './parts'
 
 export type { AvatarDef }
 
 /** Os quatro primeiros foram desenhados à mão; os demais são montados a partir de partes (ver `parts.ts`). */
-export const AVATARS: AvatarDef[] = [
-  {
-    id: 'brasa',
-    name: 'Brasa',
-    personality: 'Energético e direto ao ponto',
-    color: '#F08A4B',
-    shade: '#C9652A',
-    eyeRow: 6,
-    mouthRow: 9,
-    sprite: [
-      '.....b......',
-      '....bb......',
-      '....bbb..b..',
-      '...bbbb.bb..',
-      '..bbbbbbbb..',
-      '..bbbbbbbbb.',
-      '.bbbbbbbbbb.',
-      '.bbbbbbbbbbb',
-      'bbbbbbbbbbbb',
-      'bbbbbbbbbbbd',
-      '.bbbbbbbbdd.',
-      '..ddddddd...'
-    ]
-  },
-  {
-    id: 'nuvem',
-    name: 'Nuvem',
-    personality: 'Calmo e paciente',
-    color: '#5B8DEF',
-    shade: '#3B6BD0',
-    eyeRow: 4,
-    mouthRow: 8,
-    sprite: [
-      '....bbbb....',
-      '..bbbbbbbb..',
-      '.bbbbbbbbbb.',
-      '.bbbbbbbbbb.',
-      'bbbbbbbbbbbb',
-      'bbbbbbbbbbbb',
-      'bbbbbbbbbbbb',
-      'bbbbbbbbbbbd',
-      '.bbbbbbbbbd.',
-      '.bbbbbbbbdd.',
-      '..bbbbbddd..',
-      '....dddd....'
-    ]
-  },
-  {
-    id: 'eco',
-    name: 'Eco',
-    personality: 'Curioso e brincalhão',
-    color: '#3DBE8B',
-    shade: '#259A6C',
-    eyeRow: 4,
-    mouthRow: 8,
-    sprite: [
-      '...bbbbbb...',
-      '.bbbbbbbbbb.',
-      '.bbbbbbbbbb.',
-      'bbbbbbbbbbbb',
-      'bbbbbbbbbbbb',
-      'bbbbbbbbbbbb',
-      'bbbbbbbbbbbb',
-      'bbbbbbbbbbbb',
-      'bbbbbbbbbbbd',
-      'bbbbbbbbbbdd',
-      'bbb.bbbb.bdd',
-      '.b...bb...d.'
-    ]
-  },
-  {
-    id: 'bit',
-    name: 'Bit',
-    personality: 'Metódico e preciso',
-    color: '#9B7BF0',
-    shade: '#7656D6',
-    eyeRow: 5,
-    mouthRow: 9,
-    sprite: [
-      '.....dd.....',
-      '.....bb.....',
-      '.bbbbbbbbbb.',
-      '.bbbbbbbbbb.',
-      'bbbbbbbbbbbb',
-      'bbbbbbbbbbbb',
-      'bbbbbbbbbbbb',
-      'bbbbbbbbbbbb',
-      'bbbbbbbbbbbd',
-      '.bbbbbbbbbd.',
-      '.bbbbbbbbdd.',
-      '..dd....dd..'
-    ]
-  }
-]
+export const AVATARS: AvatarDef[] = localized([{
+  id: 'brasa',
+  name: 'Brasa',
+  personality: tr('Energético e direto ao ponto'),
+  color: '#F08A4B',
+  shade: '#C9652A',
+  eyeRow: 6,
+  mouthRow: 9,
+  sprite: ['.....b......', '....bb......', '....bbb..b..', '...bbbb.bb..', '..bbbbbbbb..', '..bbbbbbbbb.', '.bbbbbbbbbb.', '.bbbbbbbbbbb', 'bbbbbbbbbbbb', 'bbbbbbbbbbbd', '.bbbbbbbbdd.', '..ddddddd...']
+}, {
+  id: 'nuvem',
+  name: 'Nuvem',
+  personality: tr('Calmo e paciente'),
+  color: '#5B8DEF',
+  shade: '#3B6BD0',
+  eyeRow: 4,
+  mouthRow: 8,
+  sprite: ['....bbbb....', '..bbbbbbbb..', '.bbbbbbbbbb.', '.bbbbbbbbbb.', 'bbbbbbbbbbbb', 'bbbbbbbbbbbb', 'bbbbbbbbbbbb', 'bbbbbbbbbbbd', '.bbbbbbbbbd.', '.bbbbbbbbdd.', '..bbbbbddd..', '....dddd....']
+}, {
+  id: 'eco',
+  name: 'Eco',
+  personality: tr('Curioso e brincalhão'),
+  color: '#3DBE8B',
+  shade: '#259A6C',
+  eyeRow: 4,
+  mouthRow: 8,
+  sprite: ['...bbbbbb...', '.bbbbbbbbbb.', '.bbbbbbbbbb.', 'bbbbbbbbbbbb', 'bbbbbbbbbbbb', 'bbbbbbbbbbbb', 'bbbbbbbbbbbb', 'bbbbbbbbbbbb', 'bbbbbbbbbbbd', 'bbbbbbbbbbdd', 'bbb.bbbb.bdd', '.b...bb...d.']
+}, {
+  id: 'bit',
+  name: 'Bit',
+  personality: tr('Metódico e preciso'),
+  color: '#9B7BF0',
+  shade: '#7656D6',
+  eyeRow: 5,
+  mouthRow: 9,
+  sprite: ['.....dd.....', '.....bb.....', '.bbbbbbbbbb.', '.bbbbbbbbbb.', 'bbbbbbbbbbbb', 'bbbbbbbbbbbb', 'bbbbbbbbbbbb', 'bbbbbbbbbbbb', 'bbbbbbbbbbbd', '.bbbbbbbbbd.', '.bbbbbbbbdd.', '..dd....dd..']
+}])
 
 AVATARS.push(...BUILT_IN_COMPOSED)
 
@@ -106,14 +50,14 @@ export function getAvatar(id: string): AvatarDef {
   return AVATARS.find((a) => a.id === id) ?? AVATARS[0]
 }
 
-export const MOOD_LABELS: Record<AvatarMood, string> = {
-  idle: 'Ocioso',
-  thinking: 'Pensando',
-  talking: 'Falando',
-  happy: 'Feliz',
-  attention: 'Atenção',
-  sleeping: 'Dormindo'
-}
+export const MOOD_LABELS: Record<AvatarMood, string> = localized({
+  idle: tr('Ocioso'),
+  thinking: tr('Pensando'),
+  talking: tr('Falando'),
+  happy: tr('Feliz'),
+  attention: tr('Atenção'),
+  sleeping: tr('Dormindo')
+})
 
 const EYE = '#141414'
 const SHINE = '#FFFFFF'

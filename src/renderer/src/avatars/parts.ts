@@ -1,3 +1,4 @@
+import { t as tr, localized } from '@/i18n'
 import type { AvatarDef } from '@shared/types'
 
 /**
@@ -232,24 +233,7 @@ export function composeAvatar(
   }
 }
 
-const COMPOSED: [id: string, name: string, personality: string, body: string, accessory: string, palette: string][] = [
-  ['luma', 'Luma', 'Gentil e cuidadosa', 'round', 'sprout', 'mint'],
-  ['tico', 'Tico', 'Rápido e prestativo', 'box', 'twin', 'sky'],
-  ['nina', 'Nina', 'Criativa e atenta', 'bean', 'ears', 'pink'],
-  ['bolota', 'Bolota', 'Tranquilo e bem-humorado', 'slime', 'none', 'lime'],
-  ['faisca', 'Faísca', 'Cheio de ideias', 'egg', 'antenna', 'gold'],
-  ['zuzu', 'Zuzu', 'Ousado e franco', 'ghost', 'horns', 'red'],
-  ['koda', 'Koda', 'Analítico e calmo', 'box', 'ears', 'slate'],
-  ['miga', 'Miga', 'Elegante e organizada', 'round', 'crown', 'lavender'],
-  ['tuca', 'Tuca', 'Acolhedora e curiosa', 'egg', 'ears', 'peach'],
-  ['rubi', 'Rubi', 'Exigente com detalhes', 'bean', 'crown', 'rose'],
-  ['gele', 'Gelê', 'Flexível e adaptável', 'slime', 'antenna', 'cyan'],
-  ['vento', 'Vento', 'Leve e objetivo', 'ghost', 'sprout', 'teal'],
-  ['bambu', 'Bambu', 'Paciente e persistente', 'bean', 'sprout', 'olive'],
-  ['nox', 'Nox', 'Noturno e reflexivo', 'round', 'horns', 'indigo'],
-  ['pipo', 'Pipo', 'Animado e falante', 'egg', 'twin', 'coral'],
-  ['rei', 'Rei', 'Confiante e decidido', 'box', 'crown', 'amber']
-]
+const COMPOSED: [id: string, name: string, personality: string, body: string, accessory: string, palette: string][] = localized([['luma', 'Luma', tr('Gentil e cuidadosa'), 'round', 'sprout', 'mint'], ['tico', 'Tico', tr('Rápido e prestativo'), 'box', 'twin', 'sky'], ['nina', 'Nina', tr('Criativa e atenta'), 'bean', 'ears', 'pink'], ['bolota', 'Bolota', tr('Tranquilo e bem-humorado'), 'slime', 'none', 'lime'], ['faisca', 'Faísca', tr('Cheio de ideias'), 'egg', 'antenna', 'gold'], ['zuzu', 'Zuzu', tr('Ousado e franco'), 'ghost', 'horns', 'red'], ['koda', 'Koda', tr('Analítico e calmo'), 'box', 'ears', 'slate'], ['miga', 'Miga', tr('Elegante e organizada'), 'round', 'crown', 'lavender'], ['tuca', 'Tuca', tr('Acolhedora e curiosa'), 'egg', 'ears', 'peach'], ['rubi', 'Rubi', tr('Exigente com detalhes'), 'bean', 'crown', 'rose'], ['gele', 'Gelê', tr('Flexível e adaptável'), 'slime', 'antenna', 'cyan'], ['vento', 'Vento', tr('Leve e objetivo'), 'ghost', 'sprout', 'teal'], ['bambu', 'Bambu', tr('Paciente e persistente'), 'bean', 'sprout', 'olive'], ['nox', 'Nox', tr('Noturno e reflexivo'), 'round', 'horns', 'indigo'], ['pipo', 'Pipo', tr('Animado e falante'), 'egg', 'twin', 'coral'], ['rei', 'Rei', tr('Confiante e decidido'), 'box', 'crown', 'amber']])
 
 export const BUILT_IN_COMPOSED: AvatarDef[] = COMPOSED.map(([id, name, personality, body, acc, pal]) =>
   composeAvatar(id, name, personality, body, acc, PALETTES[pal])
@@ -286,5 +270,5 @@ function randomPalette(): Palette {
 /** Cria um avatar inédito: corpo, acessório e cor sorteados. */
 export function generateAvatar(): AvatarDef {
   const id = `gen-${Math.random().toString(36).slice(2, 10)}`
-  return composeAvatar(id, randomName(), 'Gerado para você', pick(Object.keys(BODIES)), pick(Object.keys(ACCESSORIES)), randomPalette())
+  return composeAvatar(id, randomName(), tr('Gerado para você'), pick(Object.keys(BODIES)), pick(Object.keys(ACCESSORIES)), randomPalette())
 }

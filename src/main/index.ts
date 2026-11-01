@@ -3,7 +3,8 @@ import { join } from 'node:path'
 import { app, BrowserWindow, nativeTheme, shell } from 'electron'
 import { setConfirmationWindowOpener } from './confirmations'
 import { startScheduler } from './flows/scheduler'
-import { registerIpc } from './ipc'
+import { hasRunningChats, registerIpc } from './ipc'
+import { startUpdates } from './updates'
 import { createTray } from './tray'
 
 // Garante a mesma pasta de dados (~/Library/Application Support/gBot) em dev e no app instalado.
@@ -63,6 +64,7 @@ app.whenReady().then(() => {
   createTray(openWindow)
   setConfirmationWindowOpener(openWindow)
   startScheduler()
+  startUpdates(openWindow, hasRunningChats)
   app.on('activate', openWindow)
 })
 

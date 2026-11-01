@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { ArrowRight, Check, Gauge, RefreshCw } from 'lucide-react'
 import type { ProviderAccount, UsageLimit } from '@shared/types'
@@ -10,12 +11,13 @@ import { tightestLimit, useAccounts } from '@/state/useAccounts'
 const barColor = (percent: number) => (percent >= 95 ? 'bg-danger' : percent >= 80 ? 'bg-warning' : 'bg-primary')
 
 function LimitBar({ limit }: { limit: UsageLimit }) {
+  useLanguage()
   return (
     <div>
       <div className="flex items-baseline justify-between gap-3 text-[12px]">
-        <span className="font-medium text-fg-2">{limit.label}</span>
+        <span className="font-medium text-fg-2">{tr(limit.label)}</span>
         <span className="shrink-0 text-muted">
-          {limit.resetsAt && `Reinicia ${resetTime(limit.resetsAt)} · `}
+          {limit.resetsAt && tr('Reinicia {0} · ', resetTime(limit.resetsAt))}
           <span className="font-medium text-fg-2">{limit.percent}%</span>
         </span>
       </div>
@@ -27,7 +29,8 @@ function LimitBar({ limit }: { limit: UsageLimit }) {
 }
 
 function AccountLimits({ account, provider, onUse }: { account: ProviderAccount; provider?: string; onUse(): void }) {
-  const sub = [provider, account.label !== account.email && account.email, account.organization !== provider && account.organization, account.plan && `plano ${account.plan}`]
+  useLanguage()
+  const sub = [provider, account.label !== account.email && account.email, account.organization !== provider && account.organization, account.plan && tr('plano {0}', account.plan)]
     .filter(Boolean)
     .join(' · ')
   return (
@@ -39,20 +42,17 @@ function AccountLimits({ account, provider, onUse }: { account: ProviderAccount;
         </div>
         {account.active ? (
           <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary px-2.5 py-0.5 text-[11px] font-medium text-on-primary">
-            <Check size={11} /> Em uso
-          </span>
+            <Check size={11} />{tr(' Em uso')}</span>
         ) : (
           <button
             onClick={onUse}
             disabled={!account.loggedIn}
             className="shrink-0 rounded-full border border-line px-2.5 py-0.5 text-[11px] font-medium text-fg-2 hover:bg-hover disabled:opacity-40"
-          >
-            Usar esta
-          </button>
+          >{tr('Usar esta')}</button>
         )}
       </div>
       {!account.loggedIn ? (
-        <p className="mt-2 text-[12px] text-danger">Sem login. Entre de novo em Provedores.</p>
+        <p className="mt-2 text-[12px] text-danger">{tr('Sem login. Entre de novo em Provedores.')}</p>
       ) : (
         <>
           {account.limits.length > 0 && (
@@ -65,10 +65,10 @@ function AccountLimits({ account, provider, onUse }: { account: ProviderAccount;
           {account.limitsError ? (
             <p className="mt-2 text-[11px] text-muted">
               {account.limitsError}
-              {account.limitsAt && ` Última leitura ${timeAgo(account.limitsAt)}.`}
+              {account.limitsAt && tr(' Última leitura {0}.', timeAgo(account.limitsAt))}
             </p>
           ) : (
-            !account.limitsAt && <p className="mt-2 text-[11px] text-muted">Lendo limites…</p>
+            !account.limitsAt && <p className="mt-2 text-[11px] text-muted">{tr('Lendo limites…')}</p>
           )}
         </>
       )}
@@ -81,6 +81,7 @@ function AccountLimits({ account, provider, onUse }: { account: ProviderAccount;
  * trocar a conta em uso. `placement` diz para que lado o painel abre.
  */
 export function LimitsButton({ placement = 'down', className }: { placement?: 'up' | 'down'; className?: string }) {
+  useLanguage()
   const app = useApp()
   const accounts = useAccounts()
   const [open, setOpen] = useState(false)
@@ -128,14 +129,14 @@ export function LimitsButton({ placement = 'down', className }: { placement?: 'u
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        title={top ? `${active?.label} · ${top.label}: ${top.percent}%` : 'Limites de uso das contas'}
+        title={top ? `${active?.label} · ${top.label}: ${top.percent}%` : tr('Limites de uso das contas')}
         className={cn(
           'inline-flex h-8 items-center gap-1.5 rounded-full border border-line bg-card px-3 text-[13px] font-medium text-fg-2 hover:bg-hover',
           open && 'bg-hover'
         )}
       >
         <Gauge size={14} className={top ? (top.percent >= 95 ? 'text-danger' : top.percent >= 80 ? 'text-warning' : 'text-muted') : 'text-muted'} />
-        {top ? `${top.percent}%` : 'Limites'}
+        {top ? `${top.percent}%` : tr('Limites')}
       </button>
 
       {open && (
@@ -146,13 +147,13 @@ export function LimitsButton({ placement = 'down', className }: { placement?: 'u
           )}
         >
           <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-            <p className="text-[12px] font-medium text-muted">Limites de uso</p>
+            <p className="text-[12px] font-medium text-muted">{tr('Limites de uso')}</p>
             <button
               onClick={() => void refresh()}
               disabled={refreshing}
               className="rounded-full p-1 text-muted hover:bg-hover hover:text-fg"
-              aria-label="Atualizar limites"
-              title="Atualizar agora"
+              aria-label={tr('Atualizar limites')}
+              title={tr('Atualizar agora')}
             >
               <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
             </button>
@@ -173,8 +174,7 @@ export function LimitsButton({ placement = 'down', className }: { placement?: 'u
               app.setView('providers')
             }}
             className="flex w-full items-center justify-between border-t border-line px-4 py-2.5 text-[12px] font-medium text-fg-2 hover:bg-hover"
-          >
-            Gerenciar contas <ArrowRight size={13} />
+          >{tr('Gerenciar contas ')}<ArrowRight size={13} />
           </button>
         </div>
       )}

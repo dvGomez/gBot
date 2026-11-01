@@ -32,6 +32,15 @@ export function closeAllSessions() {
 
 app.on('before-quit', closeAllSessions)
 
+/** Encerra na hora a sessão da chave e as dos bots consultados nela (`<chave>:<bot>`), sem esperar o turno. */
+export function killSessions(key: string) {
+  for (const [k, { session }] of sessions) {
+    if (k !== key && !k.startsWith(`${key}:`)) continue
+    session.kill()
+    sessions.delete(k)
+  }
+}
+
 /** Algum processo do Claude Code está aberto com esta conta? (ele mesmo renova o login dela) */
 export function accountInUse(accountId: string): boolean {
   return [...sessions.values()].some((s) => s.accountId === accountId && !s.session.exited)
@@ -97,6 +106,7 @@ export interface SessionSpec {
   model?: string
   /** Pastas extras que a sessão pode ler. */
   addDirs?: string[]
+  signal?: AbortSignal
 }
 
 /**
@@ -107,6 +117,7 @@ export interface SessionSpec {
 export async function getSession(spec: SessionSpec): Promise<ClaudeSession> {
   const model = spec.model && spec.model !== 'default' ? spec.model : undefined
   const env = await resolveClaudeEnv()
+  spec.signal?.throwIfAborted()
   const signature = JSON.stringify([spec.cwd, spec.systemPrompt, spec.mcpConfig, spec.allowedTools, model, spec.addDirs, env.accountId])
   const existing = sessions.get(spec.key)
   if (existing && !existing.session.exited) {

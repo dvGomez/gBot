@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { BrowserWindow, nativeImage, Notification } from 'electron'
 import type { ChatFile, FlowDecisionOption, PendingConfirmation } from '@shared/types'
+import { uiText } from './localization'
 
 /**
  * Confirmações manuais dos fluxos: a caixinha de confirmação pausa a execução até o usuário escolher uma opção.
@@ -14,7 +15,7 @@ const MAX_THUMBS = 6
 
 const pending = new Map<
   string,
-  { item: PendingConfirmation; resolve(choice: { option: FlowDecisionOption; note?: string }): void; notification?: Notification }
+  { item: PendingConfirmation; resolve(choice: { option: FlowDecisionOption; note?: string }): void; notification?: Notification; cleanup(): void }
 >()
 
 let openWindow: () => void = () => undefined
@@ -58,8 +59,8 @@ function notify(item: PendingConfirmation) {
   const image = item.files.find((f) => IMAGE.test(f.name))
   const others = item.files.length - (image ? 1 : 0)
   const body = [
-    clip(item.message || 'Escolha como o fluxo deve seguir.', 180),
-    item.files.length ? `📎 ${item.files.length === 1 ? '1 arquivo' : `${item.files.length} arquivos`}${others && image ? ' (clique para ver)' : ''}` : ''
+    clip(item.message || uiText('Escolha como o fluxo deve seguir.'), 180),
+    item.files.length ? `📎 ${item.files.length === 1 ? uiText('1 arquivo') : uiText('{0} arquivos', item.files.length)}${others && image ? uiText(' (clique para ver)') : ''}` : ''
   ]
     .filter(Boolean)
     .join('\n')
@@ -89,20 +90,18 @@ export function requestConfirmation(
   req: Omit<PendingConfirmation, 'id' | 'createdAt' | 'files'> & { files: ChatFile[] },
   signal?: AbortSignal
 ): Promise<{ option: FlowDecisionOption; note?: string }> {
+  if (signal?.aborted) return Promise.reject(new Error('A confirmação foi cancelada.'))
   const item: PendingConfirmation = { ...req, id: randomUUID(), files: withThumbs(req.files), createdAt: Date.now() }
   return new Promise((resolve, reject) => {
-    pending.set(item.id, { item, resolve })
+    const abort = () => {
+      if (!pending.has(item.id)) return
+      drop(item.id)
+      reject(new Error('A confirmação foi cancelada.'))
+    }
+    pending.set(item.id, { item, resolve, cleanup: () => signal?.removeEventListener('abort', abort) })
     pending.get(item.id)!.notification = notify(item)
     broadcast('confirmations:changed')
-    signal?.addEventListener(
-      'abort',
-      () => {
-        if (!pending.has(item.id)) return
-        drop(item.id)
-        reject(new Error('A confirmação foi cancelada.'))
-      },
-      { once: true }
-    )
+    signal?.addEventListener('abort', abort, { once: true })
   })
 }
 
@@ -110,6 +109,7 @@ function drop(id: string) {
   const p = pending.get(id)
   if (!p) return
   pending.delete(id)
+  p.cleanup()
   p.notification?.close()
   broadcast('confirmations:changed')
 }

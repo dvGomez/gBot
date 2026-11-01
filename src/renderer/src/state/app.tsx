@@ -1,3 +1,4 @@
+import { t as tr, locale, useLanguage } from '@/i18n'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type {
   ApprovalDecision,
@@ -110,7 +111,7 @@ export interface AppState {
   /** Modelo da conversa ativa (ou do rascunho); undefined = padrão. */
   activeModel?: string
   /** Troca o modelo da conversa ativa (ou do rascunho) e guarda a escolha como padrão para o que for criado depois. */
-  setActiveModel(model?: string): void
+  setActiveModel(model?: string, providerId?: string): void
   /** Último modelo escolhido no provedor (por padrão, o em uso): é o que vem marcado em tudo que for criado. */
   preferredModel(providerId?: string): string | undefined
   /** Guarda o modelo escolhido como padrão para as próximas criações (conversas, bots, caixinhas de fluxo). */
@@ -167,7 +168,7 @@ function withMentionContext(conversation: Conversation, text: string, bots: Bot[
     const m = msgs[i]
     if (m.role !== 'assistant') continue
     if (!m.botId || m.botId === conversation.botId) break
-    const name = bots.find((b) => b.id === m.botId)?.name ?? 'um bot'
+    const name = bots.find((b) => b.id === m.botId)?.name ?? tr('um bot')
     lines.unshift(`Usuário para @${name}: ${msgs[i - 1].text}`, `${name} respondeu: ${m.error ? '(erro)' : m.text}`)
   }
   if (!lines.length) return text
@@ -175,6 +176,7 @@ function withMentionContext(conversation: Conversation, text: string, bots: Bot[
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  useLanguage()
   const [view, setView] = useState<View>('home')
   const [memoryScope, setMemoryScope] = useState<MemoryScope>({})
   const [providerId, setProviderIdState] = useState(() => load('providerId', 'claude-code'))
@@ -401,7 +403,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             patchMessage(
               p.conversationId,
               p.messageId,
-              (m) => ({ ...m, notices: [...(m.notices ?? []), 'Você interrompeu a resposta.'] }),
+              (m) => ({ ...m, notices: [...(m.notices ?? []), tr('Você interrompeu a resposta.')] }),
               true
             )
             settleMood('idle', 0)
@@ -425,7 +427,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (raw: string, attachments?: ChatFile[], opts?: { architect?: { model?: string } }) => {
       const typed = raw.trim()
       if ((!typed && !attachments?.length) || pendingRef.current) return
-      const text = typed || (attachments!.length === 1 ? `Veja o anexo ${attachments![0].name}.` : 'Veja os anexos.')
+      const text = typed || (attachments!.length === 1 ? tr('Veja o anexo {0}.', attachments![0].name) : tr('Veja os anexos.'))
 
       const now = Date.now()
       const fresh = opts?.architect
@@ -528,9 +530,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
 
   const setActiveModel = useCallback(
-    (model?: string) => {
+    (model?: string, providerId?: string) => {
       const value = model === 'default' ? undefined : model
-      rememberModel(value)
+      rememberModel(value, providerId ?? (activeConversation?.mode === 'architect' ? 'claude-code' : undefined))
       if (!activeConversation) {
         setDraftModel(value ?? 'default')
         return
@@ -581,7 +583,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const now = Date.now()
         const flow: Flow = {
           id: uid(),
-          name: 'Novo fluxo',
+          name: tr('Novo fluxo'),
           enabled: false,
           projectId,
           nodes: [
@@ -602,9 +604,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setView('flow-editor')
       },
       saveFlow: async (flow) => {
+        await window.gbot.flows.save(flow)
         // Fluxo novo (ex.: criado pelo plano da página inicial) entra na lista.
         setFlows((fs) => (fs.some((f) => f.id === flow.id) ? fs.map((f) => (f.id === flow.id ? flow : f)) : [...fs, flow]))
-        await window.gbot.flows.save(flow)
       },
       removeFlow: async (id) => {
         await window.gbot.flows.remove(id)
@@ -797,7 +799,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       draftConversationId,
       send,
       cancel
-    ]
+    , locale()]
   )
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

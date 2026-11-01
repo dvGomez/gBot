@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { Check, Dices, Sparkles } from 'lucide-react'
 import type { AvatarDef } from '@shared/types'
 import { AVATARS } from '@/avatars/sprites'
@@ -16,14 +17,13 @@ interface Props {
 
 /** Grade com os 20 avatares prontos + os gerados, com botões para sortear ou gerar um novo. */
 export function AvatarPicker({ value, onChange, generated, onGenerate }: Props) {
+  useLanguage()
   const all = [...generated, ...AVATARS]
   return (
     <div>
       <div className="flex gap-2">
         <Button onClick={() => onChange(AVATARS[Math.floor(Math.random() * AVATARS.length)])} type="button">
-          <Dices size={14} />
-          Sortear
-        </Button>
+          <Dices size={14} />{tr('Sortear')}</Button>
         <Button
           type="button"
           onClick={() => {
@@ -32,9 +32,7 @@ export function AvatarPicker({ value, onChange, generated, onGenerate }: Props) 
             onChange(a)
           }}
         >
-          <Sparkles size={14} />
-          Gerar novo
-        </Button>
+          <Sparkles size={14} />{tr('Gerar novo')}</Button>
       </div>
       <div className="mt-3 grid grid-cols-6 gap-2 xl:grid-cols-8">
         {all.map((a, i) => {

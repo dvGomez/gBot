@@ -1,12 +1,15 @@
+import { t as tr, localized, useLanguage } from '@/i18n'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import type { ProviderStatus } from '@shared/types'
 import { cn } from '@/lib/cn'
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
+  useLanguage()
   return <div className={cn('rounded-card border border-line bg-card', className)}>{children}</div>
 }
 
 export function IconTile({ children, primary }: { children: ReactNode; primary?: boolean }) {
+  useLanguage()
   return (
     <div
       className={cn(
@@ -24,6 +27,7 @@ export function Button({
   className,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' }) {
+  useLanguage()
   return (
     <button
       {...props}
@@ -39,6 +43,7 @@ export function Button({
 }
 
 export function Chip({ active, className, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }) {
+  useLanguage()
   return (
     <button
       {...props}
@@ -51,18 +56,32 @@ export function Chip({ active, className, ...props }: ButtonHTMLAttributes<HTMLB
   )
 }
 
-const STATUS: Record<ProviderStatus, { label: string; dot: string }> = {
-  ready: { label: 'Pronto', dot: 'bg-success' },
-  'not-configured': { label: 'Configurar', dot: 'bg-warning' },
-  unavailable: { label: 'Indisponível', dot: 'bg-danger' },
-  'coming-soon': { label: 'Em breve', dot: 'bg-muted' }
-}
+const STATUS: Record<ProviderStatus, { label: string; dot: string }> = localized({
+  ready: {
+    label: tr('Pronto'),
+    dot: 'bg-success'
+  },
+  'not-configured': {
+    label: tr('Configurar'),
+    dot: 'bg-warning'
+  },
+  unavailable: {
+    label: tr('Indisponível'),
+    dot: 'bg-danger'
+  },
+  'coming-soon': {
+    label: tr('Em breve'),
+    dot: 'bg-muted'
+  }
+})
 
 export function StatusDot({ status }: { status: ProviderStatus }) {
+  useLanguage()
   return <span className={cn('inline-block size-1.5 rounded-full', STATUS[status].dot)} />
 }
 
 export function StatusBadge({ status }: { status: ProviderStatus }) {
+  useLanguage()
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-line px-2.5 py-0.5 text-[12px] font-medium text-fg-2">
       <StatusDot status={status} />
@@ -72,6 +91,7 @@ export function StatusBadge({ status }: { status: ProviderStatus }) {
 }
 
 export function PageHeader({ eyebrow, title, subtitle }: { eyebrow?: string; title: string; subtitle?: string }) {
+  useLanguage()
   return (
     <div>
       {eyebrow && <p className="text-[12px] font-medium tracking-[0.02em] text-muted">{eyebrow}</p>}
@@ -94,6 +114,7 @@ export function Field({
   action?: ReactNode
   children: ReactNode
 }) {
+  useLanguage()
   return (
     <div>
       <span className="flex items-end justify-between gap-3">
@@ -115,6 +136,7 @@ export const inputClass =
 
 /** Interruptor liga/desliga. */
 export function Toggle({ checked, onChange, label }: { checked: boolean; onChange(v: boolean): void; label: string }) {
+  useLanguage()
   return (
     <button
       type="button"

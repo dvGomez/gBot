@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import type { ComponentType, ReactNode } from 'react'
 import { Bot as BotIcon, Brain, ChartColumn, FolderPlus, House, MessageSquarePlus, Pencil, Plug, Plus, Settings, Trash2, Workflow } from 'lucide-react'
 import type { Project } from '@shared/types'
@@ -11,6 +12,7 @@ import { ProjectIcon } from './ProjectBadge'
 
 /** Seção do menu; com `dropKind`, aceita itens desse tipo arrastados de um projeto (tira do projeto). */
 function Section({ title, dropKind, children }: { title: string; dropKind?: ItemRef['kind']; children: ReactNode }) {
+  useLanguage()
   const app = useApp()
   const drop = useDrop(
     (item) => !!dropKind && item.kind === dropKind && !!item.projectId,
@@ -23,7 +25,7 @@ function Section({ title, dropKind, children }: { title: string; dropKind?: Item
     >
       <p className="px-3 pb-1.5 text-[12px] font-medium text-muted">
         {title}
-        {drop.over && <span className="text-fg-2"> · soltar aqui tira do projeto</span>}
+        {drop.over && <span className="text-fg-2">{tr(' · soltar aqui tira do projeto')}</span>}
       </p>
       <div className="flex flex-col gap-0.5">{children}</div>
     </div>
@@ -52,6 +54,7 @@ function NavItem({
   /** Um item arrastado está por cima (destaque de alvo). */
   dropOver?: boolean
 }) {
+  useLanguage()
   return (
     <div
       {...(drag && draggable(drag))}
@@ -83,6 +86,7 @@ function NavItem({
 
 /** Projeto no menu: abre o projeto e aceita conversas, bots e fluxos soltos em cima dele. */
 function ProjectItem({ project, active }: { project: Project; active: boolean }) {
+  useLanguage()
   const app = useApp()
   const drop = useDrop(
     (item) => item.projectId !== project.id,
@@ -102,6 +106,7 @@ function ProjectItem({ project, active }: { project: Project; active: boolean })
 }
 
 export function Sidebar() {
+  useLanguage()
   const app = useApp()
   const isMac = window.gbot.platform === 'darwin'
   const go = (v: View) => () => app.setView(v)
@@ -113,20 +118,20 @@ export function Sidebar() {
 
   const conversationMenu = (id: string): MenuAction[] => [
     {
-      label: 'Excluir conversa',
+      label: tr('Excluir conversa'),
       icon: Trash2,
       danger: true,
-      confirm: 'Excluir esta conversa? Não dá para desfazer.',
+      confirm: tr('Excluir esta conversa? Não dá para desfazer.'),
       onSelect: () => void app.removeConversation(id)
     }
   ]
   const botMenu = (id: string): MenuAction[] => [
-    { label: 'Editar bot', icon: Pencil, onSelect: () => app.editBot(id) },
+    { label: tr('Editar bot'), icon: Pencil, onSelect: () => app.editBot(id) },
     {
-      label: 'Excluir bot',
+      label: tr('Excluir bot'),
       icon: Trash2,
       danger: true,
-      confirm: 'Excluir este bot e as conversas dele? Não dá para desfazer.',
+      confirm: tr('Excluir este bot e as conversas dele? Não dá para desfazer.'),
       onSelect: () => void app.removeBot(id)
     }
   ]
@@ -139,9 +144,9 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 pb-4">
-        <Section title="Conversas" dropKind="conversation">
-          <NavItem icon={House} label="Início" active={app.view === 'home'} onClick={go('home')} />
-          <NavItem icon={MessageSquarePlus} label="Nova conversa" onClick={() => app.newConversation()} />
+        <Section title={tr('Conversas')} dropKind="conversation">
+          <NavItem icon={House} label={tr('Início')} active={app.view === 'home'} onClick={go('home')} />
+          <NavItem icon={MessageSquarePlus} label={tr('Nova conversa')} onClick={() => app.newConversation()} />
           {plainConversations.map((c) => (
             <NavItem
               key={c.id}
@@ -157,7 +162,7 @@ export function Sidebar() {
           ))}
         </Section>
 
-        <Section title="Projetos">
+        <Section title={tr('Projetos')}>
           {app.projects.map((p) => (
             <ProjectItem
               key={p.id}
@@ -171,7 +176,7 @@ export function Sidebar() {
           ))}
           <NavItem
             icon={FolderPlus}
-            label="Novo projeto"
+            label={tr('Novo projeto')}
             active={app.view === 'project-editor' && !app.selectedProject}
             onClick={() => app.editProject()}
           />
@@ -194,13 +199,13 @@ export function Sidebar() {
           ))}
           <NavItem
             icon={looseBots.length ? Plus : BotIcon}
-            label="Novo bot"
+            label={tr('Novo bot')}
             active={app.view === 'bot-editor' && !app.selectedBot}
             onClick={() => app.editBot()}
           />
         </Section>
 
-        <Section title="Fluxos" dropKind="flow">
+        <Section title={tr('Fluxos')} dropKind="flow">
           {looseFlows.map((f) => (
             <NavItem
               key={f.id}
@@ -216,23 +221,23 @@ export function Sidebar() {
               onClick={() => app.openFlow(f.id)}
               menu={[
                 {
-                  label: 'Excluir fluxo',
+                  label: tr('Excluir fluxo'),
                   icon: Trash2,
                   danger: true,
-                  confirm: 'Excluir este fluxo e o histórico dele? Não dá para desfazer.',
+                  confirm: tr('Excluir este fluxo e o histórico dele? Não dá para desfazer.'),
                   onSelect: () => void app.removeFlow(f.id)
                 }
               ]}
             />
           ))}
-          <NavItem icon={Plus} label="Novo fluxo" onClick={() => void app.newFlow()} />
+          <NavItem icon={Plus} label={tr('Novo fluxo')} onClick={() => void app.newFlow()} />
         </Section>
 
-        <Section title="Sistema">
-          <NavItem icon={Brain} label="Regras e memória" active={app.view === 'memory'} onClick={() => app.openMemory()} />
-          <NavItem icon={ChartColumn} label="Consumo" active={app.view === 'usage'} onClick={go('usage')} />
-          <NavItem icon={Plug} label="Provedores" active={app.view === 'providers'} onClick={go('providers')} />
-          <NavItem icon={Settings} label="Configurações" active={app.view === 'settings'} onClick={go('settings')} />
+        <Section title={tr('Sistema')}>
+          <NavItem icon={Brain} label={tr('Regras e memória')} active={app.view === 'memory'} onClick={() => app.openMemory()} />
+          <NavItem icon={ChartColumn} label={tr('Consumo')} active={app.view === 'usage'} onClick={go('usage')} />
+          <NavItem icon={Plug} label={tr('Provedores')} active={app.view === 'providers'} onClick={go('providers')} />
+          <NavItem icon={Settings} label={tr('Configurações')} active={app.view === 'settings'} onClick={go('settings')} />
         </Section>
       </nav>
 

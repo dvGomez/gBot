@@ -1,3 +1,4 @@
+import { t as tr, useLanguage } from '@/i18n'
 import { ExternalLink, LoaderCircle, RefreshCw, SquareTerminal } from 'lucide-react'
 import { PixelAvatar } from '@/components/PixelAvatar'
 import { Button, Card, IconTile, StatusBadge } from '@/components/ui'
@@ -10,6 +11,7 @@ const INSTALL_DOCS = 'https://code.claude.com/docs/en/quickstart'
 
 /** Tela inicial quando nenhum provedor real está conectado. */
 export function LoginView() {
+  useLanguage()
   const app = useApp()
   const claude = app.providers.find((p) => p.id === CLAUDE_CODE)
   const action = useProviderAction(CLAUDE_CODE)
@@ -33,10 +35,8 @@ export function LoginView() {
             ))}
           </div>
 
-          <h1 className="mt-8 text-[36px] leading-tight font-medium tracking-[-0.03em]">Bem-vindo ao gBot</h1>
-          <p className="mt-2 text-[15px] leading-relaxed text-muted">
-            Entre com a sua conta Claude para conversar usando os limites da assinatura que você já tem.
-          </p>
+          <h1 className="mt-8 text-[36px] leading-tight font-medium tracking-[-0.03em]">{tr('Bem-vindo ao gBot')}</h1>
+          <p className="mt-2 text-[15px] leading-relaxed text-muted">{tr('Entre com a sua conta Claude para conversar usando os limites da assinatura que você já tem.')}</p>
 
           <Card className="mt-8 p-5">
             <div className="flex items-center gap-4">
@@ -47,10 +47,10 @@ export function LoginView() {
                 <p className="text-[15px] font-semibold">Claude Code</p>
                 <p className="truncate text-[12px] text-muted">
                   {!claude
-                    ? 'Verificando…'
+                    ? tr('Verificando…')
                     : claude.status === 'unavailable'
-                      ? 'Não encontrado neste computador'
-                      : `${claude.statusDetail?.split(' · ')[0]} instalado neste computador`}
+                      ? tr('Não encontrado neste computador')
+                      : tr('{0} instalado neste computador', claude.statusDetail?.split(' · ')[0])}
                 </p>
               </div>
               {claude && <StatusBadge status={claude.status} />}
@@ -63,13 +63,10 @@ export function LoginView() {
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-primary text-[14px] font-medium text-on-primary"
-                >
-                  Como instalar o Claude Code <ExternalLink size={14} />
+                >{tr('Como instalar o Claude Code ')}<ExternalLink size={14} />
                 </a>
                 <Button onClick={() => void app.refreshProviders()} className="h-11">
-                  <RefreshCw size={14} />
-                  Verificar
-                </Button>
+                  <RefreshCw size={14} />{tr('Verificar')}</Button>
               </div>
             ) : (
               <button
@@ -78,7 +75,7 @@ export function LoginView() {
                 className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-primary text-[14px] font-medium text-on-primary transition-opacity hover:opacity-90 disabled:opacity-60"
               >
                 {waiting && <LoaderCircle size={16} className="animate-spin" />}
-                {waiting ? 'Aguardando o navegador…' : 'Entrar com Claude Code'}
+                {waiting ? tr('Aguardando o navegador…') : tr('Entrar com Claude Code')}
               </button>
             )}
 
@@ -91,8 +88,7 @@ export function LoginView() {
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex shrink-0 items-center gap-1.5 font-medium text-fg underline underline-offset-2"
-                  >
-                    Abrir link <ExternalLink size={12} />
+                  >{tr('Abrir link ')}<ExternalLink size={12} />
                   </a>
                 )}
               </div>
@@ -102,11 +98,8 @@ export function LoginView() {
             )}
           </Card>
 
-          <p className="mt-3 px-1 text-[12px] text-muted">Anthropic API e outros provedores chegam em breve.</p>
-          <p className="mt-8 px-1 text-[12px] leading-relaxed text-muted">
-            O login abre o navegador na página oficial da Anthropic. O gBot usa um perfil próprio do Claude Code: a conta
-            conectada aqui não altera o Claude Code do seu terminal, e o app nunca vê a sua senha.
-          </p>
+          <p className="mt-3 px-1 text-[12px] text-muted">{tr('Anthropic API e outros provedores chegam em breve.')}</p>
+          <p className="mt-8 px-1 text-[12px] leading-relaxed text-muted">{tr('O login abre o navegador na página oficial da Anthropic. O gBot usa um perfil próprio do Claude Code: a conta conectada aqui não altera o Claude Code do seu terminal, e o app nunca vê a sua senha.')}</p>
         </div>
       </div>
     </div>
@@ -115,12 +108,13 @@ export function LoginView() {
 
 /** Enquanto a primeira verificação de provedores não termina. */
 export function SplashView() {
+  useLanguage()
   return (
     <div className="flex h-full flex-col bg-page">
       <div className="drag h-14 shrink-0" />
       <div className="flex flex-1 flex-col items-center justify-center gap-4 pb-14">
         <PixelAvatar avatarId={AVATARS[0].id} mood="thinking" size={64} />
-        <p className="text-[13px] text-muted">Verificando provedores…</p>
+        <p className="text-[13px] text-muted">{tr('Verificando provedores…')}</p>
       </div>
     </div>
   )

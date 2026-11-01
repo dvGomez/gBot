@@ -1,5 +1,6 @@
+import { t as tr, locale, useLanguage } from '@/i18n'
 import { useState } from 'react'
-import { Check, ChevronDown, CircleSlash, Hand, LoaderCircle, Search, X } from 'lucide-react'
+import { Check, ChevronDown, CircleSlash, Hand, LoaderCircle, Search, Square, X } from 'lucide-react'
 import type { FlowRun, FlowStepStatus, TokenUsage } from '@shared/types'
 import { addUsage, totalTokens } from '@shared/usage'
 import { Markdown } from '@/components/Markdown'
@@ -8,19 +9,22 @@ import { formatTokens, usageDetail } from '@/lib/format'
 import { useApp } from '@/state/app'
 
 function StepIcon({ status }: { status: FlowStepStatus | FlowRun['status'] }) {
+  useLanguage()
   if (status === 'running') return <LoaderCircle size={14} className="shrink-0 animate-spin text-warning" />
   if (status === 'done') return <Check size={14} strokeWidth={2.5} className="shrink-0 text-success" />
   if (status === 'error') return <X size={14} strokeWidth={2.5} className="shrink-0 text-danger" />
   if (status === 'skipped') return <CircleSlash size={14} className="shrink-0 text-muted" />
   if (status === 'waiting') return <Hand size={14} className="shrink-0 animate-pulse text-warning" />
+  if (status === 'stopped') return <Square size={14} className="shrink-0 text-muted" />
   return <span className="size-3.5 shrink-0 rounded-full border border-line" />
 }
 
 function when(ts: number) {
-  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(ts)
+  return new Intl.DateTimeFormat(locale(), { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(ts)
 }
 
 function Tokens({ usage, className }: { usage?: TokenUsage; className?: string }) {
+  useLanguage()
   if (!usage || !totalTokens(usage)) return null
   return (
     <span className={cn('shrink-0 text-[11.5px] font-normal text-muted', className)} title={usageDetail(usage)}>
@@ -36,9 +40,10 @@ function duration(run: FlowRun) {
 
 /** Execuções do fluxo, mais recentes primeiro; cada uma abre com o resultado de cada caixinha. */
 export function RunHistory({ runs }: { runs: FlowRun[] }) {
+  useLanguage()
   const app = useApp()
   const [open, setOpen] = useState<string | undefined>(runs[0]?.id)
-  if (!runs.length) return <p className="text-[13px] text-muted">Nenhuma execução ainda. Use "Rodar agora" para testar.</p>
+  if (!runs.length) return <p className="text-[13px] text-muted">{tr('Nenhuma execução ainda. Use "Rodar agora" para testar.')}</p>
 
   return (
     <div className="space-y-2">
@@ -49,7 +54,7 @@ export function RunHistory({ runs }: { runs: FlowRun[] }) {
             <span className="min-w-0 flex-1">
               <span className="block text-[13px] font-medium">{when(run.startedAt)}</span>
               <span className="block text-[12px] text-muted">
-                {run.trigger === 'manual' ? 'Manual' : 'Agendada'} · {duration(run)}
+                {run.trigger === 'manual' ? 'Manual' : tr('Agendada')} · {duration(run)}{run.status === 'stopped' ? tr(' · Parado por você') : ''}
               </span>
             </span>
             <Tokens usage={run.steps.reduce<TokenUsage | undefined>((sum, s) => (s.usage ? addUsage(sum, s.usage) : sum), undefined)} />
@@ -60,10 +65,9 @@ export function RunHistory({ runs }: { runs: FlowRun[] }) {
               <button
                 onClick={() => app.openMemory({ flowId: run.flowId })}
                 className="flex items-center gap-1.5 text-[12px] text-muted hover:text-fg"
-                title="Lições aprendidas e instruções do fluxo e dos bots dele"
+                title={tr('Lições aprendidas e instruções do fluxo e dos bots dele')}
               >
-                <Search size={12} /> Alguma resposta citou uma regra? Ver de onde ela vem
-              </button>
+                <Search size={12} />{tr(' Alguma resposta citou uma regra? Ver de onde ela vem')}</button>
               {run.steps.map((s, i) => (
                 <div key={`${s.nodeId}-${i}`}>
                   <p className="flex items-center gap-2 text-[13px] font-medium">
@@ -77,14 +81,12 @@ export function RunHistory({ runs }: { runs: FlowRun[] }) {
                         if (pending) app.openConfirmation(pending.id)
                       }}
                       className="mt-1 ml-5 text-[12px] font-medium text-warning hover:underline"
-                    >
-                      Esperando sua confirmação · responder
-                    </button>
+                    >{tr('Esperando sua confirmação · responder')}</button>
                   )}
-                  {s.chosen && <p className="mt-1 pl-5 text-[12px] text-warning">Escolheu: {s.chosen}</p>}
-                  {s.note && <p className="mt-0.5 pl-5 text-[12px] text-fg-2">Comentário: {s.note}</p>}
+                  {s.chosen && <p className="mt-1 pl-5 text-[12px] text-warning">{tr('Escolheu: ')}{s.chosen}</p>}
+                  {s.note && <p className="mt-0.5 pl-5 text-[12px] text-fg-2">{tr('Comentário: ')}{s.note}</p>}
                   {s.error && (
-                    <p className={`mt-1 pl-5 text-[12px] ${s.status === 'skipped' ? 'text-muted' : 'text-danger'}`}>{s.error}</p>
+                    <p className={`mt-1 pl-5 text-[12px] ${s.status === 'skipped' ? 'text-muted' : 'text-danger'}`}>{tr(s.error)}</p>
                   )}
                   {s.notices?.map((n, j) => (
                     <p key={j} className="mt-1 pl-5 text-[12px] text-warning">

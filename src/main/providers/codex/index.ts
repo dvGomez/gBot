@@ -6,6 +6,7 @@ import type { ChatProvider, ProviderAccounts } from '../types'
 import { withAttachments } from '../../attachments'
 import { botFilesPrompt } from '../../botFiles'
 import { memoryPrompt } from '../../memory'
+import { languageInstructions } from '../../localization'
 import { getSettings } from '../../settings'
 import { GBOT_EDIT_HINT } from '../claude-code/architect'
 import { sendToBot, TOOLS_HINT } from '../claude-code/bots'
@@ -75,7 +76,7 @@ function instructions(req: SendMessageRequest, work: WorkContext, fullAccess: bo
     GBOT_EDIT_HINT,
     ...memoryPrompt(memoryOf(req))
   )
-  return lines.join('\n')
+  return [...lines, languageInstructions()].join('\n')
 }
 
 /** Contexto MCP do assistente principal de cada conversa (ferramentas do gBot: navegador, bots, perguntas). */
@@ -235,6 +236,7 @@ export const codexProvider: ChatProvider = {
       contexts.set(req.conversationId, entry)
     }
     entry.ctx.projectId = req.projectId
+    entry.ctx.signal = signal
     entry.ctx.memory = memoryOf(req)
     entry.ctx.memorySource = req.origin ?? { kind: 'conversation', id: req.conversationId }
     const work = workContext(req.projectId)
