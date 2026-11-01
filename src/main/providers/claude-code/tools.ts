@@ -15,6 +15,8 @@ export const ASK_USER_TOOL = 'mcp__gbot__ask_user'
 /** Ferramentas internas do Claude Code que não interessam ao usuário (não aparecem no chat). */
 /** Plano proposto pelo arquiteto: vira um cartão no chat. */
 export const PROPOSE_PLAN_TOOL = 'mcp__gbot__propose_plan'
+/** Guia do que existe no gBot e de como montar um plano (para criar ou editar bots, fluxos e projetos). */
+export const GBOT_OVERVIEW_TOOL = 'mcp__gbot__gbot_overview'
 export const HIDDEN_TOOLS = new Set(['ToolSearch', ASK_USER_TOOL, PROPOSE_PLAN_TOOL])
 
 /** Frase curta em português descrevendo o uso de uma ferramenta do Claude Code. */
@@ -22,6 +24,8 @@ export function describeTool(name: string, input: Input = {}): string {
   switch (name) {
     case LIST_BOTS_TOOL:
       return 'Viu a lista de bots'
+    case GBOT_OVERVIEW_TOOL:
+      return 'Viu os bots, fluxos e projetos do gBot'
     case 'mcp__gbot__save_lesson':
       return input.title ? `Aprendeu: ${clip(str(input.title), 50)}` : 'Guardando na memória'
     case 'mcp__gbot__browser_navigate':

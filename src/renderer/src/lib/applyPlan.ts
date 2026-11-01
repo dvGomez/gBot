@@ -45,13 +45,28 @@ function stepNode(step: PlanStep, botId: (ref: string) => string | undefined, mo
   }
 }
 
-/** Cria tudo o que o plano sugere: projeto, bots e fluxos (desligados, para o usuário revisar e ligar). */
+/**
+ * Aplica o plano: cria o que é novo (fluxos novos nascem desligados, para o usuário revisar e ligar) e altera o que
+ * já existe (projeto e bots com `edit`, fluxos com `existingId`, que são refeitos com as etapas do plano).
+ */
 export async function applyPlan(plan: AutomationPlan, avatars: Record<string, AvatarDef>, app: AppState): Promise<AppliedPlan> {
   const now = Date.now()
 
   let projectId: string | undefined
-  if (plan.project && 'existingId' in plan.project) projectId = plan.project.existingId
-  else if (plan.project) {
+  if (plan.project && 'existingId' in plan.project) {
+    const p = plan.project
+    projectId = p.existingId
+    const current = app.getProject(p.existingId)
+    if (p.edit && current) {
+      await app.saveProject({
+        ...current,
+        name: p.name?.slice(0, 60) || current.name,
+        description: p.description ?? current.description,
+        instructions: p.instructions ?? current.instructions,
+        updatedAt: now
+      })
+    }
+  } else if (plan.project) {
     const project: Project = {
       id: uid(),
       name: plan.project.name.slice(0, 60),
@@ -69,6 +84,17 @@ export async function applyPlan(plan: AutomationPlan, avatars: Record<string, Av
   for (const b of plan.bots) {
     if (b.existingId) {
       ids.set(b.ref, b.existingId)
+      const current = app.getBot(b.existingId)
+      if (b.edit && current) {
+        await app.saveBot({
+          ...current,
+          name: b.name || current.name,
+          description: b.description || current.description,
+          instructions: b.instructions.trim() || current.instructions,
+          model: b.model ?? current.model,
+          updatedAt: now
+        })
+      }
       continue
     }
     const bot: Bot = {
@@ -100,7 +126,11 @@ export async function applyPlan(plan: AutomationPlan, avatars: Record<string, Av
       edges.push({ id: uid(), source: prev.id, target: node.id, ...(handle ? { sourceHandle: handle } : {}) })
       nodes.push(node)
     })
-    const flow: Flow = { id: uid(), name: f.name.slice(0, 60), enabled: false, projectId, nodes, edges, createdAt: now, updatedAt: now }
+    // Fluxo existente: o mesmo fluxo refeito com as etapas do plano (continua ligado ou desligado como estava).
+    const current = f.existingId ? app.flows.find((x) => x.id === f.existingId) : undefined
+    const flow: Flow = current
+      ? { ...current, name: f.name.slice(0, 60) || current.name, projectId: projectId ?? current.projectId, nodes, edges, updatedAt: now }
+      : { id: uid(), name: f.name.slice(0, 60), enabled: false, projectId, nodes, edges, createdAt: now, updatedAt: now }
     await app.saveFlow(flow)
     flowIds.push(flow.id)
   }

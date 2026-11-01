@@ -1,6 +1,7 @@
 import { ArrowLeft, MessageSquarePlus, Pencil, Trash2 } from 'lucide-react'
 import { BotFiles } from '@/components/BotFiles'
 import { BotTasks } from '@/components/BotTasks'
+import { FilesPanel, useTouchedFiles } from '@/components/FilesPanel'
 import { LimitsButton } from '@/components/LimitsButton'
 import { ItemMenu } from '@/components/ItemMenu'
 import { ConversationList } from '@/components/ConversationList'
@@ -11,6 +12,12 @@ import { modelLabel } from '@/components/ModelSelect'
 import { useApp } from '@/state/app'
 
 /** Página de um bot: identidade, instruções e as conversas com ele. */
+/** Arquivos que o bot mexeu nas conversas, consultas e fluxos. */
+function BotTouchedFiles({ botId }: { botId: string }) {
+  const files = useTouchedFiles({ botId })
+  return <FilesPanel files={files} empty="Nenhum arquivo mexido por este bot ainda." />
+}
+
 export function BotView() {
   const app = useApp()
   const bot = app.selectedBot
@@ -86,6 +93,10 @@ export function BotView() {
           </Card>
           <Card className="p-5">
             <BotFiles key={bot.id} botId={bot.id} botName={bot.name} />
+          </Card>
+          <Card className="p-5">
+            <p className="pb-2 text-[13px] font-medium text-muted">Arquivos mexidos</p>
+            <BotTouchedFiles botId={bot.id} />
           </Card>
           <Card className="p-5">
             <MemoryPanel owner={{ kind: 'bot', id: bot.id }} />

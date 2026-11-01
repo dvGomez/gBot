@@ -24,9 +24,9 @@ import {
 import { resolveClaudeEnv, runClaude } from './env'
 import { cachedLimits, forgetLimits, refreshLimits } from './limits'
 import { GBOT_TOOLS, mcpConfigFor, type CallerContext } from './mcp'
-import { architectPrompt } from './architect'
+import { architectPrompt, GBOT_EDIT_HINT } from './architect'
 import { askOnce } from './oneShot'
-import type { UsageTag } from './session'
+import { fileContext, type UsageTag } from './session'
 import { closeAllSessions, getSession, workContext, type WorkContext } from './sessions'
 
 interface AuthStatus {
@@ -60,6 +60,7 @@ function systemPrompt(req: SendMessageRequest, work: WorkContext): string {
     ...work.promptLines,
     PERMISSIONS_HINT,
     TOOLS_HINT,
+    GBOT_EDIT_HINT,
     ...memoryPrompt(memoryOf(req))
   )
   return lines.join('\n')
@@ -188,7 +189,7 @@ export const claudeCodeProvider: ChatProvider = {
       req.origin?.kind === 'flow'
         ? { kind: 'flow', flowId: req.origin.id, botId: req.bot?.id }
         : { kind: 'conversation', conversationId: req.conversationId, botId: req.bot?.id }
-    await session.send(text, withOutputFiles(work.cwd, emit), signal, tag)
+    await session.send(text, withOutputFiles(work.cwd, emit, fileContext(tag)), signal, tag)
     reflectIfNeeded(session, entry.ctx.memory)
   }
 }

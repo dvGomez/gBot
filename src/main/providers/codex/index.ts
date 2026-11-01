@@ -7,10 +7,11 @@ import { withAttachments } from '../../attachments'
 import { botFilesPrompt } from '../../botFiles'
 import { memoryPrompt } from '../../memory'
 import { getSettings } from '../../settings'
+import { GBOT_EDIT_HINT } from '../claude-code/architect'
 import { sendToBot, TOOLS_HINT } from '../claude-code/bots'
 import { mcpEndpointFor, type CallerContext } from '../claude-code/mcp'
 import { withOutputFiles } from '../claude-code/outputs'
-import type { UsageTag } from '../claude-code/session'
+import { fileContext, type UsageTag } from '../claude-code/session'
 import { workContext, type WorkContext } from '../claude-code/sessions'
 import {
   accountDir,
@@ -71,6 +72,7 @@ function instructions(req: SendMessageRequest, work: WorkContext, fullAccess: bo
       ? 'Seus comandos rodam direto no computador do usuário, sem sandbox: cuidado com ações irreversíveis.'
       : 'Seus comandos rodam numa sandbox: você cria e edita arquivos na pasta de trabalho e lê o resto do disco.',
     TOOLS_HINT,
+    GBOT_EDIT_HINT,
     ...memoryPrompt(memoryOf(req))
   )
   return lines.join('\n')
@@ -254,7 +256,7 @@ export const codexProvider: ChatProvider = {
         sandbox: fullAccess ? 'danger-full-access' : 'workspace-write',
         tag
       },
-      withOutputFiles(work.cwd, emit),
+      withOutputFiles(work.cwd, emit, fileContext(tag)),
       signal
     )
   }

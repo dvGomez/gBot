@@ -189,7 +189,7 @@ export async function sendToBot(
     ctx.chain = [bot.id]
     ctx.depth = 1
     return session
-      .send(text, withOutputFiles(cwd, emit), signal, { kind: 'mention', conversationId, botId: bot.id })
+      .send(text, withOutputFiles(cwd, emit, { conversationId, botId: bot.id }), signal, { kind: 'mention', conversationId, botId: bot.id })
       .then(() => reflectIfNeeded(session, ctx.memory))
   })
 }

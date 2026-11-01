@@ -23,6 +23,7 @@ import { MemoryPanel } from '@/components/MemoryPanel'
 import { nodeTypes, type CanvasNode } from '@/components/flow/nodes'
 import { LimitsButton } from '@/components/LimitsButton'
 import { BotPickerModal } from '@/components/flow/BotPickerModal'
+import { FilesPanel, useTouchedFiles } from '@/components/FilesPanel'
 import { ItemMenu } from '@/components/ItemMenu'
 import { Button, Chip, Toggle } from '@/components/ui'
 import { uid } from '@/lib/format'
@@ -75,7 +76,9 @@ function Editor({ flow }: { flow: Flow }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>(flow.nodes.map(toCanvas))
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(flow.edges.map(toEdge))
   const [selectedId, setSelectedId] = useState<string>()
-  const [tab, setTab] = useState<'node' | 'runs' | 'memory'>('node')
+  const [tab, setTab] = useState<'node' | 'runs' | 'files' | 'memory'>('node')
+  // Arquivos que as execuções do fluxo mexeram (caixinhas e bots consultados nelas).
+  const files = useTouchedFiles({ flowId: flow.id })
   // O painel lateral só abre ao clicar numa caixinha (ou pelo botão); clicar no canvas fecha.
   const [panelOpen, setPanelOpen] = useState(false)
   const [menu, setMenu] = useState<DropMenu>()
@@ -492,6 +495,9 @@ function Editor({ flow }: { flow: Flow }) {
               <Chip active={tab === 'runs'} onClick={() => setTab('runs')}>
                 Execuções{runs.length ? ` (${runs.length})` : ''}
               </Chip>
+              <Chip active={tab === 'files'} onClick={() => setTab('files')}>
+                Arquivos{files.length ? ` (${files.length})` : ''}
+              </Chip>
               <Chip active={tab === 'memory'} onClick={() => setTab('memory')}>
                 Memória
               </Chip>
@@ -513,6 +519,8 @@ function Editor({ flow }: { flow: Flow }) {
                 </>
               ) : tab === 'runs' ? (
                 <RunHistory runs={runs} />
+              ) : tab === 'files' ? (
+                <FilesPanel files={files} empty="Nenhum arquivo mexido pelas execuções deste fluxo ainda." />
               ) : selected ? (
                 <NodePanel
                   key={selected.id}

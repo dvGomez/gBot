@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { ApprovalRequest, BotTask, ChatEvent, FlowRun, GbotApi, MemoryOwner, ProviderActionProgress, QuestionRequest } from '@shared/types'
+import type { ApprovalRequest, BotTask, ChatEvent, FilesFilter, FlowRun, GbotApi, MemoryOwner, ProviderActionProgress, QuestionRequest } from '@shared/types'
 
 declare const __APP_VERSION__: string
 
@@ -64,7 +64,13 @@ const api: GbotApi = {
   },
   files: {
     open: (path) => ipcRenderer.invoke('files:open', path),
-    reveal: (path) => ipcRenderer.invoke('files:reveal', path)
+    reveal: (path) => ipcRenderer.invoke('files:reveal', path),
+    touched: (filter) => ipcRenderer.invoke('files:touched', filter),
+    onTouched: (listener) => {
+      const handler = (_: unknown, ctx: FilesFilter) => listener(ctx)
+      ipcRenderer.on('files:touched', handler)
+      return () => ipcRenderer.removeListener('files:touched', handler)
+    }
   },
   attachments: {
     add: (conversationId, files) =>

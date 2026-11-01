@@ -4,9 +4,11 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import type { ChatEvent, TokenUsage } from '@shared/types'
 import { totalTokens } from '@shared/usage'
+import { recordFiles } from '../../fileIndex'
 import { recordUsage } from '../../usage'
-import type { UsageTag } from '../claude-code/session'
-import { ASK_BOT_TOOL, describeTool, HIDDEN_TOOLS } from '../claude-code/tools'
+import { fileContext, type UsageTag } from '../claude-code/session'
+import { sanitizePlan } from '../claude-code/architect'
+import { ASK_BOT_TOOL, describeTool, HIDDEN_TOOLS, PROPOSE_PLAN_TOOL } from '../claude-code/tools'
 import { resolveCodexEnv } from './env'
 
 /**
@@ -208,6 +210,22 @@ export async function runCodexTurn(opts: TurnOptions, emit: (ev: ChatEvent) => v
         case 'item.completed': {
           const item = line.item ?? {}
           const done = line.type === 'item.completed'
+          // Arquivos que o Codex mudou entram no painel de arquivos de quem pediu.
+          if (item.type === 'file_change' && done && opts.tag && item.status !== 'failed') {
+            const paths = (item.changes ?? []).map((c) => (c as { path?: string; kind?: string }))
+            recordFiles(
+              paths.filter((c) => c.path && c.kind !== 'delete').map((c) => ({ path: c.path!, action: 'write' as const })),
+              fileContext(opts.tag)
+            )
+          }
+          // Plano aceito pela ferramenta: vira o cartão para aplicar, como no Claude Code.
+          if (item.type === 'mcp_tool_call' && done && `mcp__${item.server}__${item.tool}` === PROPOSE_PLAN_TOOL && !item.error && item.status !== 'failed') {
+            try {
+              emit({ type: 'plan', plan: sanitizePlan(args(item.arguments)) })
+            } catch {
+              // a ferramenta já validou e devolveu o erro ao modelo
+            }
+          }
           if (item.type === 'agent_message') text(item)
           else if (item.type === 'reasoning') emit({ type: 'mood', mood: 'thinking' })
           else if (item.type === 'error' && done && item.text) emit({ type: 'notice', text: item.text })

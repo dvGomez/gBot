@@ -520,6 +520,8 @@ export interface PlanBot {
   /** Apelido usado pelas etapas dos fluxos do plano para apontar para este bot. */
   ref: string
   existingId?: string
+  /** Com `existingId`: o bot existente é atualizado com os campos do plano (sem isso, só é reaproveitado). */
+  edit?: boolean
   name: string
   description: string
   instructions: string
@@ -540,6 +542,8 @@ export type PlanStep =
   | { type: 'confirm'; label?: string; message: string; options: string[] }
 
 export interface PlanFlow {
+  /** Fluxo existente que é refeito com estas etapas (mantém o id e se está ligado). */
+  existingId?: string
   name: string
   why: string
   /** Ausente = só roda quando o usuário mandar. */
@@ -552,11 +556,36 @@ export interface AutomationPlan {
   title: string
   summary: string
   /** Projeto que reúne tudo: um existente ou um novo. */
-  project?: { existingId: string } | { name: string; description: string; instructions: string }
+  project?:
+    | { existingId: string; edit?: boolean; name?: string; description?: string; instructions?: string }
+    | { name: string; description: string; instructions: string }
   bots: PlanBot[]
   flows: PlanFlow[]
   /** O que o usuário precisa fazer antes de ligar (ex.: entrar no WhatsApp Web no navegador do gBot). */
   setup: string[]
+}
+
+/** Um arquivo que uma conversa, bot ou fluxo mexeu (painel de arquivos). */
+export interface TouchedFile {
+  path: string
+  name: string
+  /** O mais forte que aconteceu com ele no contexto: criado > alterado > anexado > lido. */
+  action: 'created' | 'modified' | 'read' | 'attached'
+  /** Última vez que foi mexido. */
+  at: number
+  /** Onde foi mexido (para abrir a conversa ou o fluxo de origem). */
+  conversationId?: string
+  flowId?: string
+  size?: number
+  /** false quando o arquivo não existe mais. */
+  exists?: boolean
+}
+
+/** De quem são os arquivos pedidos: uma conversa (inclui bots chamados nela), um fluxo ou um bot. */
+export interface FilesFilter {
+  conversationId?: string
+  flowId?: string
+  botId?: string
 }
 
 /** Uma caixinha de confirmação esperando o usuário (aparece na notificação do sistema e nas pendências do app). */
@@ -641,6 +670,10 @@ export interface GbotApi {
     /** Abre um arquivo gerado no app padrão (executáveis só são mostrados na pasta). */
     open(path: string): Promise<void>
     reveal(path: string): Promise<void>
+    /** Arquivos mexidos numa conversa, fluxo ou bot, do mais recente ao mais antigo. */
+    touched(filter: FilesFilter): Promise<TouchedFile[]>
+    /** Avisa quando arquivos novos foram mexidos (com o contexto onde aconteceu). */
+    onTouched(listener: (ctx: FilesFilter) => void): () => void
   }
   attachments: {
     /** Copia arquivos (arrastados, colados ou escolhidos) para a pasta de anexos da conversa. */

@@ -1,6 +1,7 @@
 import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ChatEvent, ChatFile } from '@shared/types'
+import { recordFiles, type FileContext } from '../../fileIndex'
 
 /** Pastas que não valem a pena olhar (dependências, builds, git…). */
 const SKIP = new Set(['node_modules', 'dist', 'out', 'build', '.git'])
@@ -41,15 +42,19 @@ function changedFiles(dir: string, since: number): ChatFile[] {
 
 /**
  * Embrulha o `emit` de um turno: quando a resposta termina, anexa à mensagem os arquivos que apareceram ou mudaram
- * na pasta de trabalho durante ela (inclusive os criados por comandos, como um PDF convertido).
+ * na pasta de trabalho durante ela (inclusive os criados por comandos, como um PDF convertido). Com `ctx`, eles
+ * também entram no painel de arquivos da conversa, do fluxo ou do bot.
  */
-export function withOutputFiles(cwd: string, emit: (ev: ChatEvent) => void): (ev: ChatEvent) => void {
+export function withOutputFiles(cwd: string, emit: (ev: ChatEvent) => void, ctx?: FileContext): (ev: ChatEvent) => void {
   // Margem para arquivos gravados no mesmo segundo em que o turno começou.
   const since = Date.now() - 1000
   return (ev) => {
     if (ev.type === 'done') {
       const files = changedFiles(cwd, since)
-      if (files.length) emit({ type: 'files', files })
+      if (files.length) {
+        emit({ type: 'files', files })
+        if (ctx) recordFiles(files.map((f) => ({ path: f.path, action: 'write' as const })), ctx)
+      }
     }
     emit(ev)
   }

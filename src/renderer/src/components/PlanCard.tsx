@@ -13,12 +13,12 @@ const MODEL_LABEL: Record<string, string> = { haiku: 'Haiku', sonnet: 'Sonnet', 
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
-function Badge({ children, tone = 'muted' }: { children: ReactNode; tone?: 'muted' | 'new' }) {
+function Badge({ children, tone = 'muted' }: { children: ReactNode; tone?: 'muted' | 'new' | 'edit' }) {
   return (
     <span
       className={cn(
         'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium',
-        tone === 'new' ? 'bg-primary text-on-primary' : 'border border-line text-muted'
+        tone === 'new' ? 'bg-primary text-on-primary' : tone === 'edit' ? 'border border-warning/60 text-warning' : 'border border-line text-muted'
       )}
     >
       {children}
@@ -67,6 +67,7 @@ function PlanView({ plan, avatars }: { plan: AutomationPlan; avatars: Record<str
   const nameOf = (ref: string) => plan.bots.find((x) => x.ref === ref)?.name
   const project = plan.project
   const existingProject = project && 'existingId' in project ? app.getProject(project.existingId) : undefined
+  const projectEdit = project && 'existingId' in project && project.edit ? project : undefined
 
   return (
     <div className="grid gap-3">
@@ -75,12 +76,16 @@ function PlanView({ plan, avatars }: { plan: AutomationPlan; avatars: Record<str
           <div className="flex items-center gap-3">
             <ProjectTile project={{ color: existingProject?.color ?? PROJECT_COLORS[app.projects.length % PROJECT_COLORS.length] }} size={40} />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[15px] font-semibold">{existingProject?.name ?? ('name' in project ? project.name : '')}</p>
+              <p className="truncate text-[15px] font-semibold">
+                {projectEdit?.name || existingProject?.name || ('name' in project ? project.name : '')}
+              </p>
               <p className="truncate text-[12px] text-muted">
-                {existingProject?.description ?? ('description' in project ? project.description : '')}
+                {projectEdit?.description ?? existingProject?.description ?? ('description' in project ? project.description : '')}
               </p>
             </div>
-            <Badge tone={existingProject ? 'muted' : 'new'}>{existingProject ? 'Já existe' : 'Novo'}</Badge>
+            <Badge tone={projectEdit ? 'edit' : existingProject ? 'muted' : 'new'}>
+              {projectEdit ? 'Alterado' : existingProject ? 'Já existe' : 'Novo'}
+            </Badge>
           </div>
         </Section>
       )}
@@ -97,12 +102,14 @@ function PlanView({ plan, avatars }: { plan: AutomationPlan; avatars: Record<str
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="truncate text-[14px] font-semibold">{b.name}</p>
-                      <Badge tone={b.existingId ? 'muted' : 'new'}>{b.existingId ? 'Reaproveitado' : 'Novo'}</Badge>
+                      <Badge tone={b.edit ? 'edit' : b.existingId ? 'muted' : 'new'}>
+                        {b.edit ? 'Alterado' : b.existingId ? 'Reaproveitado' : 'Novo'}
+                      </Badge>
                       {b.model && <Badge>{MODEL_LABEL[b.model] ?? b.model}</Badge>}
                     </div>
                     <p className="text-[12px] leading-snug text-fg-2">{b.description}</p>
                     {b.why && <p className="mt-1 text-[12px] leading-snug text-muted">{b.why}</p>}
-                    {!b.existingId && b.instructions && (
+                    {(!b.existingId || b.edit) && b.instructions && (
                       <button
                         onClick={() => setOpenBot(openBot === b.ref ? undefined : b.ref)}
                         className="mt-1 inline-flex items-center gap-1 text-[12px] text-fg-2 hover:text-fg"
@@ -131,7 +138,7 @@ function PlanView({ plan, avatars }: { plan: AutomationPlan; avatars: Record<str
               <div key={i}>
                 <div className="flex items-center gap-2">
                   <p className="truncate text-[14px] font-semibold">{f.name}</p>
-                  <Badge tone="new">Novo</Badge>
+                  <Badge tone={f.existingId ? 'edit' : 'new'}>{f.existingId ? 'Alterado' : 'Novo'}</Badge>
                 </div>
                 <p className="mt-0.5 inline-flex items-center gap-1.5 text-[12px] text-fg-2">
                   <Clock size={12} className="text-muted" />
@@ -185,6 +192,12 @@ export function PlanCard({ conversationId, msg }: { conversationId: string; msg:
   if (!msg.plan) return null
   const plan = msg.plan
   const applied = msg.planApplied
+  // O botão diz o que vai acontecer: criar, alterar ou os dois.
+  const edits =
+    plan.bots.some((b) => b.edit) || plan.flows.some((f) => f.existingId) || (!!plan.project && 'existingId' in plan.project && !!plan.project.edit)
+  const news = plan.bots.some((b) => !b.existingId) || plan.flows.some((f) => !f.existingId) || (!!plan.project && !('existingId' in plan.project))
+  const action = edits ? (news ? 'Aplicar tudo' : 'Aplicar alterações') : 'Criar tudo'
+  const newFlows = plan.flows.some((f) => !f.existingId)
 
   const create = async () => {
     setCreating(true)
@@ -210,7 +223,7 @@ export function PlanCard({ conversationId, msg }: { conversationId: string; msg:
         {!applied && (
           <Button variant="primary" onClick={() => void create()} disabled={creating}>
             {creating ? <LoaderCircle size={14} className="animate-spin" /> : <Wand2 size={14} />}
-            {creating ? 'Criando…' : 'Criar tudo'}
+            {creating ? 'Aplicando…' : action}
           </Button>
         )}
       </div>
@@ -219,7 +232,8 @@ export function PlanCard({ conversationId, msg }: { conversationId: string; msg:
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-tile border border-success/40 bg-success/10 px-4 py-3">
           <CircleCheck size={18} className="shrink-0 text-success" />
           <p className="min-w-0 flex-1 text-[13px] text-fg-2">
-            Criado{applied.flowIds.length > 0 && '. Os fluxos ficam desligados até você fazer os passos de preparação e ligar'}.
+            {edits && !news ? 'Alterações aplicadas' : 'Pronto'}
+            {newFlows && '. Os fluxos novos ficam desligados até você fazer os passos de preparação e ligar'}.
           </p>
           {applied.flowIds[0] && (
             <Button className="h-8" onClick={() => app.openFlow(applied.flowIds[0])}>

@@ -7,6 +7,7 @@ import type {
   Bot,
   ChatEvent,
   Conversation,
+  FilesFilter,
   Flow,
   Lesson,
   MemoryOwner,
@@ -15,6 +16,7 @@ import type {
   SendMessageRequest
 } from '@shared/types'
 import { saveAttachments } from './attachments'
+import { listTouchedFiles, pruneFileIndex, recordFiles } from './fileIndex'
 import { addBotFiles, botFilesDir, listBotFiles, removeBotFile, setBotFileNote } from './botFiles'
 import { cancelBotTask, listBotTasks, runAsBot, waitNotice } from './botQueue'
 import { runFlow } from './flows/runner'
@@ -104,15 +106,23 @@ export function registerIpc() {
     }
   })
   ipcMain.handle('files:reveal', (_e, path: string) => shell.showItemInFolder(path))
+  pruneFileIndex()
+  ipcMain.handle('files:touched', (_e, filter: FilesFilter) => listTouchedFiles(filter))
+  // Anexos entram no painel de arquivos da conversa.
+  const attach = (conversationId: string, items: { name: string; path?: string; data?: Uint8Array }[]) => {
+    const saved = saveAttachments(conversationId, items)
+    recordFiles(saved.map((f) => ({ path: f.path, action: 'attached' as const })), { conversationId })
+    return saved
+  }
   ipcMain.handle('attachments:add', (_e, conversationId: string, items: { name: string; path?: string; data?: Uint8Array }[]) =>
-    saveAttachments(conversationId, items.filter((i) => i.path || i.data))
+    attach(conversationId, items.filter((i) => i.path || i.data))
   )
   ipcMain.handle('attachments:pick', async (e, conversationId: string) => {
     const win = BrowserWindow.fromWebContents(e.sender)
     const options: Electron.OpenDialogOptions = { title: 'Anexar arquivos', buttonLabel: 'Anexar', properties: ['openFile', 'multiSelections'] }
     const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
     if (result.canceled) return []
-    return saveAttachments(conversationId, result.filePaths.map((path) => ({ name: basename(path), path })))
+    return attach(conversationId, result.filePaths.map((path) => ({ name: basename(path), path })))
   })
   ipcMain.handle('bots:add-files', async (e, botId: string, paths?: string[]) => {
     if (!paths) {

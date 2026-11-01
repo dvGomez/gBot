@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import type { ChatEvent, TokenUsage, UsageRecord } from '@shared/types'
 import { addUsage, emptyUsage, totalTokens } from '@shared/usage'
+import { recordFiles } from '../../fileIndex'
 import { recordUsage } from '../../usage'
 import { APPROVE_TOOL } from './permissions'
 import { sanitizePlan } from './architect'
@@ -34,6 +35,8 @@ interface Turn {
   interrupted: boolean
   hasText: boolean
   tools: Map<string, { name: string; summary: string; botName?: string }>
+  /** Arquivos que as ferramentas deste turno vão mexer, registrados quando cada uma termina bem. */
+  files: Map<string, { path: string; action: 'write' | 'read' }>
   /** Planos propostos pelo arquiteto neste turno (entrada de `propose_plan`), até o resultado confirmar. */
   plans: Map<string, unknown>
 }
@@ -92,6 +95,18 @@ export function usageByModel(line: Pick<Line, 'modelUsage'>): Map<string, TokenU
   }
   return out
 }
+
+/** Ferramentas do Claude Code que leem ou gravam um arquivo (e em que campo vem o caminho). */
+const FILE_TOOLS: Record<string, 'write' | 'read'> = { Write: 'write', Edit: 'write', MultiEdit: 'write', NotebookEdit: 'write', Read: 'read' }
+
+function fileOf(name: string, input?: Record<string, unknown>): { path: string; action: 'write' | 'read' } | undefined {
+  const action = FILE_TOOLS[name]
+  const path = input?.file_path ?? input?.notebook_path
+  return action && typeof path === 'string' ? { path, action } : undefined
+}
+
+/** Onde o arquivo foi mexido: a conversa, o fluxo e o bot do turno. */
+export const fileContext = (tag: UsageTag) => ({ conversationId: tag.conversationId, flowId: tag.flowId, botId: tag.botId })
 
 /** Diferença entre dois acumulados por modelo (só os modelos que gastaram algo). */
 function usageDelta(now: Map<string, TokenUsage>, before: Map<string, TokenUsage>): Map<string, TokenUsage> {
@@ -186,7 +201,7 @@ export class ClaudeSession {
         }
         this.lastUsed = Date.now()
         this.lastTurnFailed = false
-        this.turn = { emit, tag, done: resolve, interrupted: false, hasText: false, tools: new Map(), plans: new Map() }
+        this.turn = { emit, tag, done: resolve, interrupted: false, hasText: false, tools: new Map(), files: new Map(), plans: new Map() }
         signal.addEventListener('abort', () => this.interrupt(), { once: true })
         emit({ type: 'mood', mood: 'thinking' })
         this.write({ type: 'user', message: { role: 'user', content: text } })
@@ -274,6 +289,10 @@ export class ClaudeSession {
         const blocks = Array.isArray(line.message?.content) ? line.message.content : []
         for (const b of blocks) {
           if (b.type === 'tool_use' && b.id && b.name === PROPOSE_PLAN_TOOL) turn.plans.set(b.id, b.input)
+          if (b.type === 'tool_use' && b.id && b.name) {
+            const file = fileOf(b.name, b.input)
+            if (file) turn.files.set(b.id, file)
+          }
           if (b.type !== 'tool_use' || !b.id || !b.name || HIDDEN_TOOLS.has(b.name)) continue
           const summary = describeTool(b.name, b.input)
           const botName = b.name === ASK_BOT_TOOL ? String(b.input?.bot ?? '') : undefined
@@ -287,6 +306,9 @@ export class ClaudeSession {
         const blocks = Array.isArray(line.message?.content) ? line.message.content : []
         for (const b of blocks) {
           if (b.type !== 'tool_result' || !b.tool_use_id) continue
+          // Arquivo lido ou gravado com sucesso entra no painel de arquivos de quem pediu.
+          const file = turn.files.get(b.tool_use_id)
+          if (file && !b.is_error && turn.tag) recordFiles([file], fileContext(turn.tag))
           // Plano aceito pela ferramenta: vira o cartão com "Criar tudo" na resposta.
           if (turn.plans.has(b.tool_use_id) && !b.is_error) {
             try {

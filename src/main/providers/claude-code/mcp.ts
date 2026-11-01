@@ -9,8 +9,8 @@ import { BROWSER_TOOL_NAMES, registerBrowserTools } from '../../browser/tools'
 import { learn } from '../../memory'
 import { answersText, askUser } from '../../questions'
 import { registerApprovalTool } from './permissions'
-import { planSchema, sanitizePlan } from './architect'
-import { ASK_BOT_TOOL, ASK_USER_TOOL, LIST_BOTS_TOOL, PROPOSE_PLAN_TOOL } from './tools'
+import { overviewText, planSchema, sanitizePlan } from './architect'
+import { ASK_BOT_TOOL, ASK_USER_TOOL, GBOT_OVERVIEW_TOOL, LIST_BOTS_TOOL, PROPOSE_PLAN_TOOL } from './tools'
 
 /**
  * Servidor MCP local do gBot (http://127.0.0.1:<porta>/mcp). Cada sessão do Claude Code recebe um token
@@ -48,6 +48,7 @@ export const GBOT_TOOLS = [
   ASK_BOT_TOOL,
   ASK_USER_TOOL,
   PROPOSE_PLAN_TOOL,
+  GBOT_OVERVIEW_TOOL,
   ...BROWSER_TOOL_NAMES.map((n) => `mcp__gbot__${n}`),
   'mcp__gbot__save_lesson',
   'WebSearch',
@@ -161,19 +162,31 @@ function buildServer(ctx: CallerContext): McpServer {
     }
   )
 
-  if (ctx.architect) {
+  // Criar ou alterar itens do gBot: o arquiteto e o assistente principal das conversas (fluxos e bots consultados não).
+  if (ctx.architect || (ctx.depth === 0 && ctx.memorySource?.kind !== 'flow')) {
+    server.registerTool(
+      'gbot_overview',
+      {
+        description:
+          'Mostra os bots, fluxos e projetos que existem no gBot (com instruções e etapas) e como montar um plano para criar ' +
+          'ou alterar itens. Chame antes de `propose_plan`.',
+        inputSchema: {}
+      },
+      async () => ({ content: [{ type: 'text', text: overviewText() }] })
+    )
     server.registerTool(
       'propose_plan',
       {
         description:
-          'Mostra ao usuário o plano do que criar no gBot (projeto, bots e fluxos), num cartão com o botão "Criar tudo". ' +
-          'Chame depois de testar o que for incerto. Quem cria é o usuário, pelo cartão: não crie nada você mesmo.',
+          'Mostra ao usuário o plano do que criar ou alterar no gBot (projeto, bots e fluxos), num cartão com o botão para ' +
+          'aplicar. Para mudar algo que existe, use "existingId" (edição), nunca um item novo. Quem aplica é o usuário, pelo ' +
+          'cartão: não crie nem altere nada você mesmo.',
         inputSchema: planSchema.shape
       },
       async (input) => {
         try {
           sanitizePlan(input)
-          return { content: [{ type: 'text', text: 'Plano mostrado ao usuário com o botão "Criar tudo". Aguarde a decisão dele.' }] }
+          return { content: [{ type: 'text', text: 'Plano mostrado ao usuário com o botão para aplicar. Aguarde a decisão dele.' }] }
         } catch (e) {
           return { content: [{ type: 'text', text: `Plano inválido, corrija e chame de novo: ${(e as Error).message}` }], isError: true }
         }

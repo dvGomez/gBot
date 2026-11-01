@@ -1,10 +1,10 @@
 import { File, FileImage, FileSpreadsheet, FileText, FolderSearch } from 'lucide-react'
 import type { ChatFile } from '@shared/types'
 
-const size = (bytes: number) =>
+export const fileSize = (bytes: number) =>
   bytes < 1024 ? `${bytes} B` : bytes < 1024 ** 2 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 ** 2).toFixed(1)} MB`
 
-function iconFor(name: string) {
+export function iconFor(name: string) {
   const ext = name.split('.').pop()?.toLowerCase() ?? ''
   if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) return FileImage
   if (['csv', 'xlsx', 'xls'].includes(ext)) return FileSpreadsheet
@@ -29,7 +29,7 @@ export function FileCards({ files }: { files: ChatFile[] }) {
               <Icon size={20} className="shrink-0 text-muted" />
               <span className="min-w-0">
                 <span className="block truncate text-[13px] font-medium">{f.name}</span>
-                <span className="block text-[11px] text-muted">{size(f.size)} · abrir</span>
+                <span className="block text-[11px] text-muted">{fileSize(f.size)} · abrir</span>
               </span>
             </button>
             <button
