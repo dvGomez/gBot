@@ -31,10 +31,28 @@ const INHERITED_AUTH = /^(ANTHROPIC_|CLAUDE|AI_AGENT$)/
 const FALLBACK_BINS = ['.local/bin/claude', '.claude/local/claude', '.npm-global/bin/claude'].map((p) => join(homedir(), p))
 const FALLBACK_PATH = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin']
 
+/**
+ * No Windows não há shell de login para consultar: vale o `claude.exe` do instalador nativo (~/.local/bin)
+ * ou o primeiro que estiver no PATH.
+ */
+function findWindowsClaude(): string {
+  const dirs = [join(homedir(), '.local', 'bin'), ...(process.env.PATH ?? '').split(';').filter(Boolean)]
+  return dirs.map((d) => join(d, 'claude.exe')).find((p) => existsSync(p)) ?? ''
+}
+
 let cached: Promise<ClaudeEnv> | undefined
 
 export function resolveClaudeEnv(): Promise<ClaudeEnv> {
   cached ??= (async () => {
+    if (process.platform === 'win32') {
+      const bin = findWindowsClaude()
+      if (!bin) throw new Error('Claude Code não encontrado')
+      // O PATH do Windows já vem certo (e a chave é "Path"): só tira as variáveis de conta.
+      const env: NodeJS.ProcessEnv = {}
+      for (const [k, v] of Object.entries(process.env)) if (!INHERITED_AUTH.test(k)) env[k] = v
+      env.CLAUDE_CONFIG_DIR = profileDir()
+      return { bin, env }
+    }
     let bin = ''
     let path = ''
     try {

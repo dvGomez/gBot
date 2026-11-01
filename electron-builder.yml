@@ -10,9 +10,17 @@ mac:
   category: public.app-category.productivity
   target:
     - target: dmg
-      arch: [arm64]
+      arch: [arm64, x64]
+  # Sem certificado da Apple por enquanto: o app sai sem assinatura.
   identity: null
 dmg:
-  artifactName: gBot-${version}-${arch}.dmg
+  artifactName: gBot-${version}-mac-${arch}.dmg
 win:
-  target: nsis
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  artifactName: gBot-${version}-windows-setup.exe
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
