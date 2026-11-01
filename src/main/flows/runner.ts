@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { BrowserWindow } from 'electron'
-import type { ChatEvent, Flow, FlowEdge, FlowNode, FlowRun, FlowRunStep, SendMessageRequest, TokenUsage } from '@shared/types'
+import type { ChatEvent, ChatFile, Flow, FlowEdge, FlowNode, FlowRun, FlowRunStep, SendMessageRequest, TokenUsage } from '@shared/types'
 import { addUsage } from '@shared/usage'
 import { askOnce } from '../providers/claude-code/oneShot'
 import { stableUuid } from '../providers/claude-code/sessions'
 import { runAsBot, waitNotice } from '../botQueue'
+import { requestConfirmation } from '../confirmations'
 import { getProvider } from '../providers/registry'
 import { getBot } from '../store'
 import { saveRun } from './store'
@@ -27,6 +28,7 @@ export function nodeLabel(node: FlowNode): string {
   if (node.type === 'bot') return getBot(node.data.botId ?? '')?.name ?? 'Bot'
   if (node.type === 'prompt') return 'Prompt'
   if (node.type === 'decision') return 'Decisão'
+  if (node.type === 'confirm') return 'Confirmação'
   return 'Gatilho'
 }
 
@@ -138,7 +140,7 @@ async function execute(
   onUsage: (usage: TokenUsage) => void,
   context: string,
   textOverride?: string
-): Promise<string> {
+): Promise<{ text: string; files: ChatFile[] }> {
   const text = textOverride ?? compose(flow, node, inputs, context)
   const base = {
     requestId: randomUUID(),
@@ -172,9 +174,11 @@ async function execute(
   const provider = getProvider(req.providerId)
   if (!provider) throw new Error(`Provedor desconhecido: ${req.providerId}`)
   let out = ''
+  let files: ChatFile[] = []
   let error: string | undefined
   const collect = (ev: ChatEvent) => {
     if (ev.type === 'delta') out += ev.text
+    if (ev.type === 'files') files = ev.files
     if (ev.type === 'error') error = ev.message
     if (ev.type === 'notice') onNotice(ev.text)
     if (ev.type === 'usage') onUsage(ev.usage)
@@ -199,7 +203,7 @@ async function execute(
   } else {
     await run(new AbortController().signal)
   }
-  return out.trim()
+  return { text: out.trim(), files }
 }
 
 /** Junta os resultados que chegam numa caixinha. */
@@ -242,7 +246,7 @@ async function decide(
     onUsage(res.usage)
     answer = res.text
   } else {
-    answer = await execute(runId, flow, node, inputs, onNotice, onUsage, context, prompt)
+    answer = (await execute(runId, flow, node, inputs, onNotice, onUsage, context, prompt)).text
   }
   const n = Number(answer.match(/\d+/)?.[0])
   const chosen = options[n - 1]
@@ -282,9 +286,13 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
   const step = (id: string) => run.steps.find((s) => s.nodeId === id)!
   const byId = (id: string) => flow.nodes.find((n) => n.id === id)!
 
-  // Resultado de cada caixinha: ok (com saída e, na decisão, a opção escolhida), pulada ou falhou.
+  // Resultado de cada caixinha: ok (com saída e, na decisão e na confirmação, a opção escolhida), pulada ou falhou.
   // `trail`: as etapas do caminho até aqui (inclusive esta), para o contexto das próximas.
-  type Result = { kind: 'ok'; output: string; chosen?: string; trail: TrailStep[] } | { kind: 'skip' } | { kind: 'fail' }
+  // `files`: arquivos criados no caminho, para a confirmação mostrar ao usuário.
+  type Result =
+    | { kind: 'ok'; output: string; chosen?: string; trail: TrailStep[]; files: ChatFile[] }
+    | { kind: 'skip' }
+    | { kind: 'fail' }
   const results = new Map<string, Promise<Result>>()
 
   const exec = (node: FlowNode): Promise<Result> => {
@@ -298,10 +306,11 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
             (incoming.get(node.id) ?? []).map(async (e): Promise<Result> => {
               const parent = byId(e.source)
               if (!parent) return { kind: 'skip' }
-              if (parent.type === 'trigger') return { kind: 'ok', output: '', trail: [] }
+              if (parent.type === 'trigger') return { kind: 'ok', output: '', trail: [], files: [] }
               if (!order.includes(parent)) return { kind: 'skip' }
               const r = await exec(parent)
-              if (r.kind === 'ok' && parent.type === 'decision' && e.sourceHandle !== r.chosen) return { kind: 'skip' }
+              const branches = parent.type === 'decision' || parent.type === 'confirm'
+              if (r.kind === 'ok' && branches && e.sourceHandle !== r.chosen) return { kind: 'skip' }
               return r
             })
           )
@@ -319,6 +328,8 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
           }
           const inputs = ok.map((r) => r.output).filter(Boolean)
           const trail = mergeTrails(ok.map((r) => r.trail))
+          const seenFiles = new Set<string>()
+          const files = ok.flatMap((r) => r.files).filter((f) => !seenFiles.has(f.path) && seenFiles.add(f.path))
           const parentIds = new Set((incoming.get(node.id) ?? []).map((e) => e.source))
           const context = runContext(trail, parentIds)
           const label = nodeLabel(node)
@@ -338,13 +349,43 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
               Object.assign(s, { status: 'done', chosen: choice.label, finishedAt: Date.now() })
               publish(run)
               const own = { nodeId: node.id, label, chosen: choice.label }
-              return { kind: 'ok', output: joinInputs(inputs), chosen: choice.optionId, trail: [...trail, own] }
+              return { kind: 'ok', output: joinInputs(inputs), chosen: choice.optionId, trail: [...trail, own], files }
             }
-            const output = await execute(run.id, flow, node, inputs, onNotice, onUsage, context)
-            Object.assign(s, { status: 'done', output, finishedAt: Date.now() })
+            if (node.type === 'confirm') {
+              // Pausa até o usuário escolher (pela notificação ou pelas pendências do app). O resultado anterior segue
+              // adiante, com a escolha e o comentário dele para as próximas caixinhas.
+              const options = (node.data.options ?? []).filter((o) => o.label.trim())
+              if (!options.length) throw new Error('A confirmação precisa de pelo menos uma opção.')
+              Object.assign(s, { status: 'waiting' })
+              publish(run)
+              const { option, note } = await requestConfirmation({
+                flowId: flow.id,
+                flowName: flow.name,
+                runId: run.id,
+                nodeId: node.id,
+                title: label,
+                message: node.data.message?.trim() ?? '',
+                detail: joinInputs(inputs) || undefined,
+                files,
+                options
+              })
+              Object.assign(s, { status: 'done', chosen: option.label.trim(), note, finishedAt: Date.now() })
+              publish(run)
+              const decided = `[Decisão do usuário: ${option.label.trim()}${note ? ` · Comentário: ${note}` : ''}]`
+              const own = { nodeId: node.id, label, chosen: `${option.label.trim()}${note ? ` (comentário: ${note})` : ''}` }
+              return {
+                kind: 'ok',
+                output: [joinInputs(inputs), decided].filter(Boolean).join('\n\n'),
+                chosen: option.id,
+                trail: [...trail, own],
+                files
+              }
+            }
+            const { text: output, files: made } = await execute(run.id, flow, node, inputs, onNotice, onUsage, context)
+            Object.assign(s, { status: 'done', output, ...(made.length ? { files: made } : {}), finishedAt: Date.now() })
             publish(run)
             const own = { nodeId: node.id, label, ask: node.data.message, output }
-            return { kind: 'ok', output, trail: [...trail, own] }
+            return { kind: 'ok', output, trail: [...trail, own], files: [...files, ...made.filter((f) => !seenFiles.has(f.path))] }
           } catch (e) {
             Object.assign(s, { status: 'error', error: (e as Error).message, finishedAt: Date.now() })
             publish(run)

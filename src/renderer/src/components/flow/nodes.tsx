@@ -1,5 +1,5 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
-import { Clock, Sparkles, Split } from 'lucide-react'
+import { Clock, Hand, Sparkles, Split } from 'lucide-react'
 import type { FlowNodeData, FlowStepStatus } from '@shared/types'
 import { PixelAvatar } from '@/components/PixelAvatar'
 import { modelLabel } from '@/components/ModelSelect'
@@ -14,6 +14,7 @@ export type CanvasNode = Node<CanvasNodeData>
 const STATUS_RING: Record<FlowStepStatus, string> = {
   pending: 'border-line',
   running: 'border-warning animate-pulse',
+  waiting: 'border-warning',
   done: 'border-success',
   error: 'border-danger',
   skipped: 'border-line opacity-60'
@@ -154,4 +155,51 @@ export function DecisionNode({ data, selected }: NodeProps<CanvasNode>) {
   )
 }
 
-export const nodeTypes = { trigger: TriggerNode, bot: BotNode, prompt: PromptNode, decision: DecisionNode }
+/** Bolinhas de saída, uma por opção (decisão e confirmação). */
+function OptionOutputs({ options, empty }: { options: CanvasNodeData['options']; empty: string }) {
+  return (
+    <div className="mt-3 space-y-1.5">
+      {(options ?? []).map((o) => (
+        <div key={o.id} className="relative rounded-nav border border-line bg-sidebar py-1.5 pr-4 pl-2.5 text-[12px] text-fg-2">
+          <span className="line-clamp-2">{o.label || 'Opção sem texto'}</span>
+          <Handle type="source" id={o.id} position={Position.Right} className="!-right-[19px] !size-3 !border-2 !border-page !bg-warning" />
+        </div>
+      ))}
+      {!options?.length && <p className="text-[12px] text-muted italic">{empty}</p>}
+    </div>
+  )
+}
+
+/** Confirmação: pausa o fluxo, notifica o usuário e segue pela opção que ele escolher. */
+export function ConfirmNode({ id, data, selected }: NodeProps<CanvasNode>) {
+  const app = useApp()
+  const waiting = app.confirmations.find((c) => c.nodeId === id)
+  return (
+    <Box selected={selected} status={data.status} source={false}>
+      <div className="flex items-center gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-tile bg-tile text-warning">
+          <Hand size={17} />
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-[14px] font-semibold">{data.label || 'Confirmação'}</p>
+          <p className="truncate text-[12px] text-muted">Você decide · notificação</p>
+        </div>
+      </div>
+      <Preview text={data.message} />
+      {waiting && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            app.openConfirmation(waiting.id)
+          }}
+          className="nodrag mt-2 w-full rounded-full bg-warning px-3 py-1.5 text-[12px] font-semibold text-page hover:opacity-90"
+        >
+          Esperando você · responder
+        </button>
+      )}
+      <OptionOutputs options={data.options} empty="Adicione as opções (botões) no painel" />
+    </Box>
+  )
+}
+
+export const nodeTypes = { trigger: TriggerNode, bot: BotNode, prompt: PromptNode, decision: DecisionNode, confirm: ConfirmNode }

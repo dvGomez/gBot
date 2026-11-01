@@ -63,6 +63,37 @@ export interface ProviderAction {
   primary?: boolean
 }
 
+/** Um limite de uso da assinatura (ex.: a janela de 5 horas, o semanal). */
+export interface UsageLimit {
+  id: string
+  label: string
+  /** Quanto já foi usado, de 0 a 100. */
+  percent: number
+  /** Quando zera (ISO). */
+  resetsAt?: string
+}
+
+/** Uma conta conectada a um provedor (ex.: uma conta Claude). A ativa atende conversas, bots e fluxos. */
+export interface ProviderAccount {
+  id: string
+  providerId: string
+  /** Apelido dado pelo usuário, senão o e-mail. */
+  label: string
+  /** Apelido dado pelo usuário (vazio = mostra o e-mail). */
+  name?: string
+  email?: string
+  organization?: string
+  /** Plano da assinatura (ex.: pro, max, team). */
+  plan?: string
+  active: boolean
+  loggedIn: boolean
+  limits: UsageLimit[]
+  /** Quando os limites foram lidos (ms); ausente = ainda não leu. */
+  limitsAt?: number
+  /** Por que a última leitura dos limites falhou (os mostrados podem estar desatualizados). */
+  limitsError?: string
+}
+
 /** Progresso de uma ação demorada (ex.: login no navegador). */
 export interface ProviderActionProgress {
   providerId: string
@@ -106,6 +137,12 @@ export interface ChatMessage {
   files?: ChatFile[]
   /** Ordem em que texto e ferramentas aconteceram na resposta (mensagens antigas não têm). */
   steps?: MessageStep[]
+  /** Na conversa com o arquiteto: o plano proposto nesta resposta (cartão com "Criar tudo"). */
+  plan?: AutomationPlan
+  /** Avatares sorteados para os bots novos do plano (para a prévia e a criação baterem). */
+  planAvatars?: Record<string, AvatarDef>
+  /** O que foi criado a partir do plano, depois de "Criar tudo". */
+  planApplied?: { projectId?: string; botIds: string[]; flowIds: string[] }
 }
 
 /** Arquivo gerado numa resposta ou anexado pelo usuário (mostrado como anexo no chat). */
@@ -161,6 +198,8 @@ export interface ConversationMeta {
   projectId?: string
   /** Modelo escolhido para a conversa. Ausente = padrão. */
   model?: string
+  /** `architect`: conversa da página inicial que testa e propõe o que criar (bots, fluxos, projeto). */
+  mode?: 'architect'
   createdAt: number
   updatedAt: number
   messageCount: number
@@ -190,6 +229,8 @@ export interface SendMessageRequest {
   origin?: { kind: 'flow'; id: string }
   /** Arquivos que o usuário anexou nesta mensagem (já copiados para a pasta de anexos da conversa). */
   attachments?: ChatFile[]
+  /** Conversa com o arquiteto (testa e propõe o que criar). */
+  architect?: boolean
 }
 
 // ── Consumo de tokens ───────────────────────────────────────────────
@@ -212,9 +253,10 @@ export interface UsageRecord extends TokenUsage {
   at: number
   /**
    * `conversation`: resposta numa conversa · `mention`: bot chamado com @ · `consult`: bot consultado por outro ·
-   * `flow`: caixinha de fluxo · `reflection`: registro automático de lição · `suggest`: sugestão de nome do bot
+   * `flow`: caixinha de fluxo · `reflection`: registro automático de lição · `suggest`: sugestão de nome do bot ·
+   * `plan`: sugestão do que criar, na página inicial
    */
-  kind: 'conversation' | 'mention' | 'consult' | 'flow' | 'reflection' | 'suggest'
+  kind: 'conversation' | 'mention' | 'consult' | 'flow' | 'reflection' | 'suggest' | 'plan'
   conversationId?: string
   botId?: string
   flowId?: string
@@ -238,6 +280,7 @@ export type ChatEvent =
   | { type: 'notice'; text: string }
   | { type: 'files'; files: ChatFile[] }
   | { type: 'usage'; usage: TokenUsage }
+  | { type: 'plan'; plan: AutomationPlan }
   | { type: 'done' }
   | { type: 'error'; message: string }
 
@@ -359,7 +402,8 @@ export interface BotTask {
   startedAt?: number
 }
 
-export type FlowNodeType = 'trigger' | 'bot' | 'prompt' | 'decision'
+/** `confirm`: pausa o fluxo e pede ao usuário para escolher uma das opções (notificação do sistema + pendências). */
+export type FlowNodeType = 'trigger' | 'bot' | 'prompt' | 'decision' | 'confirm'
 
 /** Uma saída da caixinha de decisão: "quando acontecer X" → segue pela ligação desta opção. */
 export interface FlowDecisionOption {
@@ -379,7 +423,8 @@ export interface FlowNodeData {
   // prompt e decisão
   providerId?: string
   model?: string
-  // decisão: as opções (cada uma com sua bolinha de saída); `message` vira o critério extra
+  // decisão e confirmação: as opções (cada uma com sua bolinha de saída). Na decisão, `message` vira o critério
+  // extra; na confirmação, é o que o usuário precisa confirmar.
   options?: FlowDecisionOption[]
 }
 
@@ -411,7 +456,8 @@ export interface Flow {
   updatedAt: number
 }
 
-export type FlowStepStatus = 'pending' | 'running' | 'done' | 'error' | 'skipped'
+/** `waiting`: caixinha de confirmação esperando a escolha do usuário. */
+export type FlowStepStatus = 'pending' | 'running' | 'waiting' | 'done' | 'error' | 'skipped'
 
 export interface FlowRunStep {
   nodeId: string
@@ -421,8 +467,12 @@ export interface FlowRunStep {
   error?: string
   /** Avisos da execução (ex.: uma ferramenta precisou de permissão e foi negada). */
   notices?: string[]
-  /** Na decisão: a opção escolhida. */
+  /** Na decisão e na confirmação: a opção escolhida. */
   chosen?: string
+  /** Na confirmação: o comentário que o usuário escreveu junto com a escolha. */
+  note?: string
+  /** Arquivos que a caixinha criou ou alterou na pasta de trabalho. */
+  files?: ChatFile[]
   /** Tokens que a caixinha gastou. */
   usage?: TokenUsage
   startedAt?: number
@@ -439,6 +489,95 @@ export interface FlowRun {
   steps: FlowRunStep[]
 }
 
+/**
+ * Pergunta com opções que a IA faz ao usuário para entender melhor o pedido (no plano da página inicial e nas
+ * conversas). O usuário escolhe uma opção (ou várias, com `multiSelect`) ou escreve outra resposta.
+ */
+export interface UserQuestion {
+  question: string
+  /** Rótulo curto da pergunta (ex.: "Envio", "Frequência"). */
+  header: string
+  options: { label: string; description?: string }[]
+  multiSelect?: boolean
+}
+
+export interface QuestionAnswer {
+  question: string
+  answer: string
+}
+
+/** Perguntas da IA esperando resposta numa conversa. */
+export interface QuestionRequest {
+  id: string
+  conversationId: string
+  /** Quem pergunta (nome do bot; vazio = o assistente da conversa). */
+  requester: string
+  questions: UserQuestion[]
+}
+
+/** Um bot do plano sugerido: novo, ou um que já existe (`existingId`) sendo reaproveitado. */
+export interface PlanBot {
+  /** Apelido usado pelas etapas dos fluxos do plano para apontar para este bot. */
+  ref: string
+  existingId?: string
+  name: string
+  description: string
+  instructions: string
+  /** Alias do modelo (ex.: sonnet); ausente = padrão. */
+  model?: string
+  /** Por que este bot entra no plano. */
+  why: string
+}
+
+/**
+ * Etapa de um fluxo do plano. Na decisão e na confirmação, a primeira opção segue para as próximas etapas; as outras
+ * encerram.
+ */
+export type PlanStep =
+  | { type: 'bot'; label?: string; bot: string; message: string }
+  | { type: 'prompt'; label?: string; message: string }
+  | { type: 'decision'; label?: string; message: string; options: string[] }
+  | { type: 'confirm'; label?: string; message: string; options: string[] }
+
+export interface PlanFlow {
+  name: string
+  why: string
+  /** Ausente = só roda quando o usuário mandar. */
+  schedule?: FlowSchedule
+  steps: PlanStep[]
+}
+
+/** O que o gBot sugere criar para atender um pedido do usuário (página inicial). */
+export interface AutomationPlan {
+  title: string
+  summary: string
+  /** Projeto que reúne tudo: um existente ou um novo. */
+  project?: { existingId: string } | { name: string; description: string; instructions: string }
+  bots: PlanBot[]
+  flows: PlanFlow[]
+  /** O que o usuário precisa fazer antes de ligar (ex.: entrar no WhatsApp Web no navegador do gBot). */
+  setup: string[]
+}
+
+/** Uma caixinha de confirmação esperando o usuário (aparece na notificação do sistema e nas pendências do app). */
+export interface PendingConfirmation {
+  id: string
+  flowId: string
+  flowName: string
+  runId: string
+  nodeId: string
+  /** Nome da caixinha. */
+  title: string
+  /** O que o usuário precisa confirmar. */
+  message: string
+  /** Resultado das caixinhas anteriores (o que está sendo confirmado). */
+  detail?: string
+  /** Arquivos das caixinhas anteriores (imagens vêm com miniatura). */
+  files: ChatFile[]
+  options: FlowDecisionOption[]
+  createdAt: number
+}
+
 /** API exposta pelo preload em `window.gbot`. */
 export interface GbotApi {
   platform: string
@@ -448,6 +587,19 @@ export interface GbotApi {
     /** Executa uma ação do provedor; resolve com uma mensagem final ou rejeita com o erro. */
     runAction(providerId: string, actionId: string): Promise<string | undefined>
     onActionProgress(listener: (progress: ProviderActionProgress) => void): () => void
+  }
+  /** Contas dos provedores que aceitam mais de uma (conectar uma nova é a ação `login` do provedor). */
+  accounts: {
+    /** Contas com os últimos limites lidos. */
+    list(): Promise<ProviderAccount[]>
+    /** Lê de novo os limites desatualizados (`force`: todos); avisa por `onChanged` quando terminar. */
+    refreshLimits(force?: boolean): Promise<void>
+    setActive(providerId: string, accountId: string): Promise<void>
+    rename(providerId: string, accountId: string, name: string): Promise<void>
+    /** Sai da conta e tira da lista. */
+    remove(providerId: string, accountId: string): Promise<void>
+    /** Avisa quando a lista, a conta ativa ou os limites mudaram. */
+    onChanged(listener: () => void): () => void
   }
   projects: {
     list(): Promise<Project[]>
@@ -502,6 +654,22 @@ export interface GbotApi {
     list(): Promise<BrowserInfo[]>
     /** Abre (ou traz para frente) a janela do navegador do gBot. */
     open(): Promise<void>
+  }
+  confirmations: {
+    list(): Promise<PendingConfirmation[]>
+    /** Escolhe uma opção (com um comentário opcional, que vai junto para as próximas caixinhas). */
+    respond(id: string, optionId: string, note?: string): Promise<void>
+    /** Avisa quando entra ou sai uma pendência. */
+    onChanged(listener: () => void): () => void
+    /** Pedido para mostrar uma pendência (ex.: o usuário clicou na notificação). */
+    onOpen(listener: (id: string) => void): () => void
+  }
+  questions: {
+    onRequest(listener: (req: QuestionRequest) => void): () => void
+    /** Avisa que as perguntas foram respondidas, expiraram ou o turno foi cancelado. */
+    onResolved(listener: (id: string) => void): () => void
+    /** Responde (sem respostas = deixa a IA decidir). */
+    respond(id: string, answers?: QuestionAnswer[]): Promise<void>
   }
   approvals: {
     onRequest(listener: (req: ApprovalRequest) => void): () => void

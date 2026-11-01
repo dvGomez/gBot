@@ -47,3 +47,14 @@ export function usageDetail(u: TokenUsage): string {
 }
 
 export const uid = () => crypto.randomUUID()
+
+/** Quando um limite zera, ex.: "às 21:09", "amanhã às 08:00", "sáb. às 14:00". */
+export function resetTime(iso: string, now = new Date()): string {
+  const at = new Date(iso)
+  const time = shortTime(at.getTime())
+  const days = Math.round((new Date(at).setHours(0, 0, 0, 0) - new Date(now).setHours(0, 0, 0, 0)) / 86_400_000)
+  if (days <= 0) return `às ${time}`
+  if (days === 1) return `amanhã às ${time}`
+  if (days < 7) return `${new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(at)} às ${time}`
+  return `${new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'short' }).format(at)} às ${time}`
+}

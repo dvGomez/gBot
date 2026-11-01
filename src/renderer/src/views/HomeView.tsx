@@ -5,6 +5,7 @@ import {
   ChevronRight,
   CircleAlert,
   FolderPlus,
+  Hand,
   Clock,
   LoaderCircle,
   MessageSquarePlus,
@@ -13,6 +14,7 @@ import {
 } from 'lucide-react'
 import type { Flow, FlowRun } from '@shared/types'
 import { AgentAvatar } from '@/components/AgentAvatar'
+import { CreateHero } from '@/components/home/CreateHero'
 import { approvalTitle } from '@/components/ApprovalCard'
 import { ProviderNotice } from '@/components/ProviderNotice'
 import { TeamPanel } from '@/components/TeamPanel'
@@ -111,7 +113,7 @@ export function HomeView() {
   const conv = app.activeConversation
   const answering = app.busy && conv
   const answeringBot = answering ? app.getBot(conv.messages.at(-1)?.botId ?? conv.botId) : undefined
-  const nowCount = liveRuns.length + (answering ? 1 : 0) + app.approvals.length
+  const nowCount = liveRuns.length + (answering ? 1 : 0) + app.approvals.length + app.confirmations.length
 
   // ── Próximas execuções ──
   const upcoming = app.flows
@@ -160,11 +162,13 @@ export function HomeView() {
 
   return (
     <div className="mx-auto w-full max-w-[1120px] px-[60px] pt-6 pb-12">
-      <div className="flex flex-wrap items-end justify-between gap-6">
+      <CreateHero />
+
+      <div className="mt-8 flex flex-wrap items-end justify-between gap-6">
         <div>
           <p className="text-[12px] font-medium tracking-[0.02em] text-muted">{longDate()}</p>
-          <h1 className="mt-2 text-[36px] leading-tight font-medium tracking-[-0.03em]">{greeting()}</h1>
-          <p className="mt-2 text-[15px] text-muted">
+          <h1 className="mt-1 text-[24px] leading-tight font-medium tracking-[-0.02em]">{greeting()}</h1>
+          <p className="mt-1 text-[14px] text-muted">
             {plural(app.bots.length, 'bot', 'bots')} · {plural(app.projects.length, 'projeto', 'projetos')} ·{' '}
             {plural(app.flows.length, 'fluxo', 'fluxos')}
             {upcoming.length > 0 && <span className="text-success"> · {plural(upcoming.length, 'ativo', 'ativos')}</span>}
@@ -190,7 +194,7 @@ export function HomeView() {
         </div>
       </div>
 
-      <div className="mt-8">
+      <div className="mt-6">
         <ProviderNotice />
       </div>
 
@@ -215,6 +219,16 @@ export function HomeView() {
               <p className="py-3 text-[14px] text-muted">Tudo tranquilo: nada rodando agora.</p>
             ) : (
               <>
+                {app.confirmations.map((c) => (
+                  <Row
+                    key={c.id}
+                    icon={<Hand size={18} className="text-warning" />}
+                    title={c.title}
+                    detail={`Fluxo ${c.flowName}${c.files.length ? ` · ${c.files.length === 1 ? '1 arquivo' : `${c.files.length} arquivos`}` : ''} · ${timeAgo(c.createdAt)}`}
+                    right={<span className="text-[12px] text-warning">Sua confirmação</span>}
+                    onClick={() => app.openConfirmation(c.id)}
+                  />
+                ))}
                 {app.approvals.map((r) => (
                   <Row
                     key={r.id}

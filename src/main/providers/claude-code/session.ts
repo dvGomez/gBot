@@ -4,7 +4,8 @@ import type { ChatEvent, TokenUsage, UsageRecord } from '@shared/types'
 import { addUsage, emptyUsage, totalTokens } from '@shared/usage'
 import { recordUsage } from '../../usage'
 import { APPROVE_TOOL } from './permissions'
-import { ASK_BOT_TOOL, describeTool, HIDDEN_TOOLS } from './tools'
+import { sanitizePlan } from './architect'
+import { ASK_BOT_TOOL, describeTool, HIDDEN_TOOLS, PROPOSE_PLAN_TOOL } from './tools'
 
 export interface SessionOptions {
   bin: string
@@ -33,6 +34,8 @@ interface Turn {
   interrupted: boolean
   hasText: boolean
   tools: Map<string, { name: string; summary: string; botName?: string }>
+  /** Planos propostos pelo arquiteto neste turno (entrada de `propose_plan`), até o resultado confirmar. */
+  plans: Map<string, unknown>
 }
 
 // Linhas do stream-json do Claude Code (só os campos que usamos).
@@ -146,6 +149,8 @@ export class ClaudeSession {
       // Criar e editar arquivos na pasta de trabalho é livre; o resto pergunta ao usuário pelo gBot.
       '--permission-mode', 'acceptEdits',
       '--permission-prompt-tool', APPROVE_TOOL,
+      // As perguntas ao usuário vão pelo cartão do gBot (ask_user); a do Claude Code não tem onde aparecer aqui.
+      '--disallowedTools', 'AskUserQuestion',
       ...(opts.resume ? ['--resume', opts.sessionId] : ['--session-id', opts.sessionId]),
       ...(opts.appendSystemPrompt ? ['--append-system-prompt', opts.appendSystemPrompt] : []),
       ...(opts.model ? ['--model', opts.model] : []),
@@ -181,7 +186,7 @@ export class ClaudeSession {
         }
         this.lastUsed = Date.now()
         this.lastTurnFailed = false
-        this.turn = { emit, tag, done: resolve, interrupted: false, hasText: false, tools: new Map() }
+        this.turn = { emit, tag, done: resolve, interrupted: false, hasText: false, tools: new Map(), plans: new Map() }
         signal.addEventListener('abort', () => this.interrupt(), { once: true })
         emit({ type: 'mood', mood: 'thinking' })
         this.write({ type: 'user', message: { role: 'user', content: text } })
@@ -268,6 +273,7 @@ export class ClaudeSession {
         // Mensagem completa: agora temos o input das ferramentas para descrevê-las melhor.
         const blocks = Array.isArray(line.message?.content) ? line.message.content : []
         for (const b of blocks) {
+          if (b.type === 'tool_use' && b.id && b.name === PROPOSE_PLAN_TOOL) turn.plans.set(b.id, b.input)
           if (b.type !== 'tool_use' || !b.id || !b.name || HIDDEN_TOOLS.has(b.name)) continue
           const summary = describeTool(b.name, b.input)
           const botName = b.name === ASK_BOT_TOOL ? String(b.input?.bot ?? '') : undefined
@@ -281,6 +287,14 @@ export class ClaudeSession {
         const blocks = Array.isArray(line.message?.content) ? line.message.content : []
         for (const b of blocks) {
           if (b.type !== 'tool_result' || !b.tool_use_id) continue
+          // Plano aceito pela ferramenta: vira o cartão com "Criar tudo" na resposta.
+          if (turn.plans.has(b.tool_use_id) && !b.is_error) {
+            try {
+              emit({ type: 'plan', plan: sanitizePlan(turn.plans.get(b.tool_use_id)) })
+            } catch {
+              // a ferramenta já validou; se falhar aqui, o modelo recebeu o erro e tenta de novo
+            }
+          }
           const t = turn.tools.get(b.tool_use_id)
           if (!t) continue
           if (b.is_error) this.lastTurnFailed = true

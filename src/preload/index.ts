@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { ApprovalRequest, BotTask, ChatEvent, FlowRun, GbotApi, MemoryOwner, ProviderActionProgress } from '@shared/types'
+import type { ApprovalRequest, BotTask, ChatEvent, FlowRun, GbotApi, MemoryOwner, ProviderActionProgress, QuestionRequest } from '@shared/types'
 
 declare const __APP_VERSION__: string
 
@@ -13,6 +13,18 @@ const api: GbotApi = {
       const handler = (_: unknown, progress: ProviderActionProgress) => listener(progress)
       ipcRenderer.on('providers:progress', handler)
       return () => ipcRenderer.removeListener('providers:progress', handler)
+    }
+  },
+  accounts: {
+    list: () => ipcRenderer.invoke('accounts:list'),
+    refreshLimits: (force) => ipcRenderer.invoke('accounts:refreshLimits', force),
+    setActive: (providerId, id) => ipcRenderer.invoke('accounts:setActive', providerId, id),
+    rename: (providerId, id, name) => ipcRenderer.invoke('accounts:rename', providerId, id, name),
+    remove: (providerId, id) => ipcRenderer.invoke('accounts:remove', providerId, id),
+    onChanged: (listener) => {
+      const handler = () => listener()
+      ipcRenderer.on('accounts:changed', handler)
+      return () => ipcRenderer.removeListener('accounts:changed', handler)
     }
   },
   projects: {
@@ -63,6 +75,33 @@ const api: GbotApi = {
   browser: {
     list: () => ipcRenderer.invoke('browser:list'),
     open: () => ipcRenderer.invoke('browser:open')
+  },
+  confirmations: {
+    list: () => ipcRenderer.invoke('confirmations:list'),
+    respond: (id, optionId, note) => ipcRenderer.invoke('confirmations:respond', id, optionId, note),
+    onChanged: (listener) => {
+      const handler = () => listener()
+      ipcRenderer.on('confirmations:changed', handler)
+      return () => ipcRenderer.removeListener('confirmations:changed', handler)
+    },
+    onOpen: (listener) => {
+      const handler = (_: unknown, id: string) => listener(id)
+      ipcRenderer.on('confirmations:open', handler)
+      return () => ipcRenderer.removeListener('confirmations:open', handler)
+    }
+  },
+  questions: {
+    onRequest: (listener) => {
+      const handler = (_: unknown, req: QuestionRequest) => listener(req)
+      ipcRenderer.on('questions:request', handler)
+      return () => ipcRenderer.removeListener('questions:request', handler)
+    },
+    onResolved: (listener) => {
+      const handler = (_: unknown, id: string) => listener(id)
+      ipcRenderer.on('questions:resolved', handler)
+      return () => ipcRenderer.removeListener('questions:resolved', handler)
+    },
+    respond: (id, answers) => ipcRenderer.invoke('questions:respond', id, answers)
   },
   approvals: {
     onRequest: (listener) => {

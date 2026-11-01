@@ -1,6 +1,7 @@
 import { ArrowLeft, MessageSquarePlus, Pencil, Trash2 } from 'lucide-react'
 import { BotFiles } from '@/components/BotFiles'
 import { BotTasks } from '@/components/BotTasks'
+import { LimitsButton } from '@/components/LimitsButton'
 import { ItemMenu } from '@/components/ItemMenu'
 import { ConversationList } from '@/components/ConversationList'
 import { MemoryPanel } from '@/components/MemoryPanel'
@@ -49,6 +50,7 @@ export function BotView() {
           )}
         </div>
         <div className="flex gap-2">
+          <LimitsButton className="self-center" />
           <Button onClick={() => app.editBot(bot.id)}>
             <Pencil size={14} /> Editar
           </Button>

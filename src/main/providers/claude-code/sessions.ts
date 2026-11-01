@@ -3,7 +3,8 @@ import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
 import { getProject } from '../../store'
-import { profileDir, resolveClaudeEnv } from './env'
+import { historyDir } from './accounts'
+import { resolveClaudeEnv } from './env'
 import { ClaudeSession } from './session'
 
 /**
@@ -12,7 +13,7 @@ import { ClaudeSession } from './session'
  *   `<conversa>:<bot>`     um bot consultado (ou @mencionado) dentro daquela conversa
  * Processos parados há muito tempo são encerrados; a sessão continua salva em disco e é retomada.
  */
-const sessions = new Map<string, { session: ClaudeSession; signature: string }>()
+const sessions = new Map<string, { session: ClaudeSession; signature: string; accountId: string }>()
 const IDLE_MS = 15 * 60_000
 
 setInterval(() => {
@@ -30,6 +31,11 @@ export function closeAllSessions() {
 }
 
 app.on('before-quit', closeAllSessions)
+
+/** Algum processo do Claude Code está aberto com esta conta? (ele mesmo renova o login dela) */
+export function accountInUse(accountId: string): boolean {
+  return [...sessions.values()].some((s) => s.accountId === accountId && !s.session.exited)
+}
 
 /** Pasta onde o Claude Code trabalha. Configurável numa etapa futura. */
 export function workspaceDir(): string {
@@ -74,10 +80,9 @@ export function stableUuid(text: string): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`
 }
 
-/** A sessão já foi salva pelo Claude Code neste perfil? (então usa `--resume`) */
+/** A sessão já foi salva pelo Claude Code (em qualquer conta)? (então usa `--resume`) */
 function hasSavedSession(sessionId: string): boolean {
-  const projects = join(profileDir(), 'projects')
-  if (!existsSync(projects)) return false
+  const projects = historyDir()
   return readdirSync(projects).some((dir) => existsSync(join(projects, dir, `${sessionId}.jsonl`)))
 }
 
@@ -95,18 +100,19 @@ export interface SessionSpec {
 }
 
 /**
- * Sessão aberta para a chave, criando se preciso. Se a pasta, o prompt ou as ferramentas mudaram (ex.: a conversa
- * mudou de projeto ou as instruções foram editadas), o processo é reaberto com `--resume`: a memória continua.
+ * Sessão aberta para a chave, criando se preciso. Se a pasta, o prompt, as ferramentas ou a conta ativa mudaram
+ * (ex.: a conversa mudou de projeto ou o usuário trocou de conta), o processo é reaberto com `--resume`: a memória
+ * continua.
  */
 export async function getSession(spec: SessionSpec): Promise<ClaudeSession> {
   const model = spec.model && spec.model !== 'default' ? spec.model : undefined
-  const signature = JSON.stringify([spec.cwd, spec.systemPrompt, spec.mcpConfig, spec.allowedTools, model, spec.addDirs])
+  const env = await resolveClaudeEnv()
+  const signature = JSON.stringify([spec.cwd, spec.systemPrompt, spec.mcpConfig, spec.allowedTools, model, spec.addDirs, env.accountId])
   const existing = sessions.get(spec.key)
   if (existing && !existing.session.exited) {
     if (existing.signature === signature || existing.session.busy) return existing.session
     existing.session.kill()
   }
-  const env = await resolveClaudeEnv()
   const session = new ClaudeSession({
     ...env,
     cwd: spec.cwd,
@@ -118,6 +124,6 @@ export async function getSession(spec: SessionSpec): Promise<ClaudeSession> {
     addDirs: spec.addDirs,
     model
   })
-  sessions.set(spec.key, { session, signature })
+  sessions.set(spec.key, { session, signature, accountId: env.accountId })
   return session
 }

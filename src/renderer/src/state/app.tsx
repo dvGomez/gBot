@@ -2,6 +2,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type {
   ApprovalDecision,
   ApprovalRequest,
+  PendingConfirmation,
+  QuestionAnswer,
+  QuestionRequest,
   AvatarDef,
   AvatarMood,
   Bot,
@@ -17,6 +20,7 @@ import type {
 import { addUsage } from '@shared/usage'
 import type { ItemRef } from '@/lib/dnd'
 import { uid } from '@/lib/format'
+import { avatarsForPlan } from '@/lib/applyPlan'
 import { findMention } from '@/lib/mentions'
 import { load, save } from './storage'
 
@@ -45,7 +49,7 @@ interface Pending {
   messageId: string
 }
 
-interface AppState {
+export interface AppState {
   view: View
   setView(v: View): void
   /** Abre a página de regras e memória, já recortada num fluxo ou bot se informado. */
@@ -105,7 +109,12 @@ interface AppState {
   models: ProviderModel[]
   /** Modelo da conversa ativa (ou do rascunho); undefined = padrão. */
   activeModel?: string
+  /** Troca o modelo da conversa ativa (ou do rascunho) e guarda a escolha como padrão para o que for criado depois. */
   setActiveModel(model?: string): void
+  /** Último modelo escolhido no provedor (por padrão, o em uso): é o que vem marcado em tudo que for criado. */
+  preferredModel(providerId?: string): string | undefined
+  /** Guarda o modelo escolhido como padrão para as próximas criações (conversas, bots, caixinhas de fluxo). */
+  rememberModel(model: string | undefined, providerId?: string): void
   openConversation(id: string): void
   /** Abre um chat vazio; com `botId`, a conversa será com aquele bot; com `projectId`, dentro do projeto. */
   newConversation(botId?: string, projectId?: string): void
@@ -120,11 +129,26 @@ interface AppState {
   /** Pedidos de aprovação esperando resposta (ex.: navegador abrir um site). */
   approvals: ApprovalRequest[]
   respondApproval(id: string, decision: ApprovalDecision): void
+  /** Caixinhas de confirmação dos fluxos esperando você. */
+  confirmations: PendingConfirmation[]
+  /** Confirmação aberta na janela de resposta (ex.: depois de clicar na notificação). */
+  openConfirmationId?: string
+  openConfirmation(id?: string): void
+  respondConfirmation(id: string, optionId: string, note?: string): Promise<void>
+  /** Perguntas com opções que a IA fez nas conversas e esperam resposta. */
+  questions: QuestionRequest[]
+  /** Responde (sem respostas = deixa a IA decidir). */
+  answerQuestions(id: string, answers?: QuestionAnswer[]): void
   mood: AvatarMood
   busy: boolean
   /** Conversa que vai receber a próxima mensagem (a aberta ou a nova, que ganha este id ao enviar). */
   composeConversationId: string
-  send(text: string, attachments?: ChatFile[]): void
+  /** Envia na conversa aberta (ou no rascunho); com `architect`, começa uma conversa nova com o arquiteto. */
+  send(text: string, attachments?: ChatFile[], opts?: { architect?: { model?: string } }): void
+  /** Página inicial: começa a conversa com o arquiteto, que testa e propõe o que criar. */
+  startArchitect(text: string, model?: string): void
+  /** Registra na mensagem o que foi criado a partir do plano dela. */
+  markPlanApplied(conversationId: string, messageId: string, result: NonNullable<ChatMessage['planApplied']>): void
   cancel(): void
 }
 
@@ -171,12 +195,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /** Bot e projeto do rascunho: chat aberto mas ainda sem mensagens. */
   const [draftBotId, setDraftBotId] = useState<string>()
   const [draftProjectId, setDraftProjectId] = useState<string>()
+  // Modelo do rascunho: undefined = o último escolhido; 'default' = o padrão da conta, escolhido de propósito.
   const [draftModel, setDraftModel] = useState<string>()
+  const [preferredModels, setPreferredModels] = useState<Record<string, string>>(() => load('preferredModels', {}))
   // Id da próxima conversa nova: os anexos escolhidos antes da primeira mensagem já vão para a pasta dela.
   const [draftConversationId, setDraftConversationId] = useState(uid)
 
   const [mood, setMood] = useState<AvatarMood>('idle')
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([])
+  const [questions, setQuestions] = useState<QuestionRequest[]>([])
+  const [confirmations, setConfirmations] = useState<PendingConfirmation[]>([])
+  const [openConfirmationId, setOpenConfirmationId] = useState<string>()
   const [pending, setPending] = useState<Pending>()
   const pendingRef = useRef<Pending>(undefined)
   const moodTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -216,14 +245,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [loaded])
 
+  // Bots atuais para quem roda fora do ciclo de renderização (ex.: avatares do plano no evento do chat).
+  const botsRef = useRef(bots)
+  botsRef.current = bots
   const getBot = useCallback((id?: string) => (id ? bots.find((b) => b.id === id) : undefined), [bots])
   const getProject = useCallback((id?: string) => (id ? projects.find((p) => p.id === id) : undefined), [projects])
 
   const activeConversation = activeId ? loaded[activeId] : undefined
   const activeBot = getBot(activeConversation ? activeConversation.botId : draftBotId)
   const activeProject = getProject(activeConversation ? activeConversation.projectId : draftProjectId)
-  const activeModel = activeConversation ? activeConversation.model : draftModel
-  const models = providers.find((p) => p.id === activeProviderId)?.models ?? []
+  // Na conversa com o arquiteto o provedor é sempre o Claude Code.
+  const models =
+    providers.find((p) => p.id === (activeConversation?.mode === 'architect' ? 'claude-code' : activeProviderId))?.models ?? []
+  const preferredModel = useCallback(
+    (provider = activeProviderId) => {
+      const model = preferredModels[provider]
+      // Modelo que o provedor deixou de oferecer volta para o padrão.
+      const offered = providers.find((p) => p.id === provider)?.models
+      return model && (!offered || offered.some((m) => m.id === model)) ? model : undefined
+    },
+    [preferredModels, activeProviderId, providers]
+  )
+  const rememberModel = useCallback(
+    (model: string | undefined, provider = activeProviderId) => {
+      setPreferredModels((all) => {
+        const next = { ...all }
+        if (model && model !== 'default') next[provider] = model
+        else delete next[provider]
+        save('preferredModels', next)
+        return next
+      })
+    },
+    [activeProviderId]
+  )
+  const draftOrPreferred = draftModel ?? preferredModel()
+  const activeModel = activeConversation
+    ? activeConversation.model
+    : draftOrPreferred === 'default'
+      ? undefined
+      : draftOrPreferred
   const visibleBots = useMemo(
     () => bots.filter((b) => !b.projectId || b.projectId === activeProject?.id),
     [bots, activeProject?.id]
@@ -257,9 +317,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMood('attention')
     })
     const offRes = window.gbot.approvals.onResolved((id) => setApprovals((list) => list.filter((a) => a.id !== id)))
+    // Perguntas da IA: mesmo caminho das aprovações.
+    const offAsk = window.gbot.questions.onRequest((req) => {
+      setQuestions((list) => [...list, req])
+      clearTimeout(moodTimer.current)
+      setMood('attention')
+    })
+    const offAsked = window.gbot.questions.onResolved((id) => setQuestions((list) => list.filter((q) => q.id !== id)))
+    // Confirmações dos fluxos: a lista vem do processo principal; a notificação pede para abrir uma delas.
+    const loadConfirmations = () => void window.gbot.confirmations.list().then(setConfirmations)
+    loadConfirmations()
+    const offConfirmations = window.gbot.confirmations.onChanged(loadConfirmations)
+    const offOpen = window.gbot.confirmations.onOpen((id) => {
+      setOpenConfirmationId(id)
+      loadConfirmations()
+    })
     return () => {
       offReq()
       offRes()
+      offAsk()
+      offAsked()
+      offConfirmations()
+      offOpen()
     }
   }, [])
 
@@ -302,6 +381,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         case 'usage':
           patchMessage(p.conversationId, p.messageId, (m) => ({ ...m, usage: addUsage(m.usage, event.usage) }))
           break
+        case 'plan':
+          // Plano do arquiteto: os bots novos já ganham avatar, para a prévia e a criação baterem.
+          patchMessage(p.conversationId, p.messageId, (m) => ({
+            ...m,
+            plan: event.plan,
+            planAvatars: avatarsForPlan(event.plan, botsRef.current),
+            planApplied: undefined
+          }))
+          break
         case 'notice':
           noticed.current = true
           patchMessage(p.conversationId, p.messageId, (m) => ({ ...m, notices: [...(m.notices ?? []), event.text] }))
@@ -334,26 +422,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [patchMessage, settleMood])
 
   const send = useCallback(
-    (raw: string, attachments?: ChatFile[]) => {
+    (raw: string, attachments?: ChatFile[], opts?: { architect?: { model?: string } }) => {
       const typed = raw.trim()
       if ((!typed && !attachments?.length) || pendingRef.current) return
       const text = typed || (attachments!.length === 1 ? `Veja o anexo ${attachments![0].name}.` : 'Veja os anexos.')
 
       const now = Date.now()
-      const conversation: Conversation = activeConversation ?? {
-        id: draftConversationId,
-        title: text.slice(0, 48),
-        botId: draftBotId,
-        projectId: draftProjectId,
-        model: draftModel,
-        createdAt: now,
-        updatedAt: now,
-        messageCount: 0,
-        messages: []
-      }
+      const fresh = opts?.architect
+      const conversation: Conversation =
+        (!fresh && activeConversation) ||
+        (fresh
+          ? {
+              id: uid(),
+              title: text.slice(0, 48),
+              mode: 'architect',
+              model: fresh.model && fresh.model !== 'default' ? fresh.model : undefined,
+              createdAt: now,
+              updatedAt: now,
+              messageCount: 0,
+              messages: []
+            }
+          : {
+              id: draftConversationId,
+              title: text.slice(0, 48),
+              botId: draftBotId,
+              projectId: draftProjectId,
+              model: draftOrPreferred === 'default' ? undefined : draftOrPreferred,
+              createdAt: now,
+              updatedAt: now,
+              messageCount: 0,
+              messages: []
+            })
+      // O arquiteto trabalha no Claude Code (ferramentas do gBot e o plano).
+      const providerId = conversation.mode === 'architect' ? 'claude-code' : activeProviderId
       const bot = getBot(conversation.botId)
       // @menção a outro bot: a mensagem vai direto para ele, e a resposta aparece com o avatar dele.
-      const mentioned = findMention(text, visibleBots)
+      const mentioned = conversation.mode === 'architect' ? undefined : findMention(text, visibleBots)
       const target = mentioned && mentioned.id !== conversation.botId ? mentioned : undefined
       const history = conversation.messages.filter((m) => !m.error).map(({ role, text }) => ({ role, text }))
       const userMsg: ChatMessage = { id: uid(), role: 'user', text: typed, createdAt: now, ...(attachments?.length ? { files: attachments } : {}) }
@@ -362,7 +466,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         role: 'assistant',
         text: '',
         createdAt: now,
-        providerId: activeProviderId,
+        providerId,
         model: target ? target.model : conversation.model,
         botId: target?.id
       }
@@ -374,7 +478,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setDraftBotId(undefined)
       setDraftProjectId(undefined)
       setDraftModel(undefined)
-      if (!activeConversation) setDraftConversationId(uid())
+      if (!activeConversation && !fresh) setDraftConversationId(uid())
       setView('chat')
 
       const p: Pending = { requestId: uid(), conversationId: updated.id, messageId: botMsg.id }
@@ -386,7 +490,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMood('thinking')
       void window.gbot.chat.send({
         requestId: p.requestId,
-        providerId: activeProviderId,
+        providerId,
         conversationId: updated.id,
         text: target ? text : withMentionContext(conversation, text, bots),
         history,
@@ -394,10 +498,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         projectId: updated.projectId,
         model: updated.model,
         bot: bot && { id: bot.id, name: bot.name, description: bot.description, instructions: bot.instructions },
-        attachments
+        attachments,
+        architect: updated.mode === 'architect' || undefined
       })
     },
-    [activeConversation, draftConversationId, draftBotId, draftProjectId, draftModel, getBot, bots, visibleBots, activeProviderId]
+    [activeConversation, draftConversationId, draftBotId, draftProjectId, draftOrPreferred, getBot, bots, visibleBots, activeProviderId]
   )
 
   const cancel = useCallback(() => {
@@ -425,14 +530,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setActiveModel = useCallback(
     (model?: string) => {
       const value = model === 'default' ? undefined : model
+      rememberModel(value)
       if (!activeConversation) {
-        setDraftModel(value)
+        setDraftModel(value ?? 'default')
         return
       }
       toSave.current.add(activeConversation.id)
       setLoaded((all) => ({ ...all, [activeConversation.id]: { ...activeConversation, model: value, updatedAt: Date.now() } }))
     },
-    [activeConversation]
+    [activeConversation, rememberModel]
   )
 
   const moveConversation = useCallback(
@@ -496,7 +602,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setView('flow-editor')
       },
       saveFlow: async (flow) => {
-        setFlows((fs) => fs.map((f) => (f.id === flow.id ? flow : f)))
+        // Fluxo novo (ex.: criado pelo plano da página inicial) entra na lista.
+        setFlows((fs) => (fs.some((f) => f.id === flow.id) ? fs.map((f) => (f.id === flow.id ? flow : f)) : [...fs, flow]))
         await window.gbot.flows.save(flow)
       },
       removeFlow: async (id) => {
@@ -579,11 +686,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       models,
       activeModel,
       setActiveModel,
+      preferredModel,
+      rememberModel,
       openConversation: (id) => void openConversation(id),
       newConversation: (botId, projectId) => {
         setActiveId(undefined)
         setDraftBotId(botId)
-        setDraftModel(getBot(botId)?.model)
+        // Conversa com bot começa no modelo dele; sem bot, no último escolhido.
+        const bot = getBot(botId)
+        setDraftModel(bot ? (bot.model ?? 'default') : undefined)
         setDraftProjectId(projectId ?? getBot(botId)?.projectId)
         setView('chat')
       },
@@ -616,6 +727,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
 
       activeAvatar,
+      confirmations,
+      openConfirmationId,
+      openConfirmation: setOpenConfirmationId,
+      respondConfirmation: async (id, optionId, note) => {
+        setConfirmations((list) => list.filter((c) => c.id !== id))
+        setOpenConfirmationId((open) => (open === id ? undefined : open))
+        await window.gbot.confirmations.respond(id, optionId, note)
+      },
+      questions,
+      answerQuestions: (id, answers) => {
+        setQuestions((list) => list.filter((q) => q.id !== id))
+        setMood(pendingRef.current ? 'thinking' : 'idle')
+        void window.gbot.questions.respond(id, answers)
+      },
       approvals,
       respondApproval: (id, decision) => {
         setApprovals((list) => list.filter((a) => a.id !== id))
@@ -626,6 +751,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       busy: !!pending,
       composeConversationId: activeConversation?.id ?? draftConversationId,
       send,
+      startArchitect: (text, model) => send(text, undefined, { architect: { model } }),
+      markPlanApplied: (conversationId, messageId, result) =>
+        patchMessage(conversationId, messageId, (m) => ({ ...m, planApplied: result }), true),
       cancel
     }),
     [
@@ -654,11 +782,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       models,
       activeModel,
       setActiveModel,
+      preferredModel,
+      rememberModel,
       activeId,
       openConversation,
       moveConversation,
       activeAvatar,
       approvals,
+      questions,
+      confirmations,
+      openConfirmationId,
       mood,
       pending,
       draftConversationId,

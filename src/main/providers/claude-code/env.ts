@@ -1,26 +1,23 @@
 import { execFile } from 'node:child_process'
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { app } from 'electron'
 import { runInUserShell } from '../shell'
+import { accountDir, activeAccountId } from './accounts'
 
 export interface ClaudeEnv {
   /** Caminho absoluto do executável `claude`. */
   bin: string
   /** Ambiente usado em todo processo do Claude Code aberto pelo gBot. */
   env: NodeJS.ProcessEnv
+  /** Conta Claude cujo perfil está no ambiente. */
+  accountId: string
 }
 
-/**
- * Perfil do Claude Code exclusivo do gBot. Tem login, configurações e histórico próprios, separado do
- * `~/.claude` do usuário (que pode apontar para outra conta, um gateway corporativo etc.).
+/*
+ * Os perfis do Claude Code são exclusivos do gBot (um por conta, ver `accounts.ts`), separados do `~/.claude` do
+ * usuário (que pode apontar para outra conta, um gateway corporativo etc.).
  */
-export function profileDir(): string {
-  const dir = join(app.getPath('userData'), 'claude-profile')
-  mkdirSync(dir, { recursive: true })
-  return dir
-}
 
 /*
  * `CLAUDE_CODE_DISABLE_AUTO_MEMORY`: a memória automática do Claude Code fica numa pasta por diretório de trabalho e
@@ -46,9 +43,9 @@ function findWindowsClaude(): string {
   return dirs.map((d) => join(d, 'claude.exe')).find((p) => existsSync(p)) ?? ''
 }
 
-let cached: Promise<ClaudeEnv> | undefined
+let cached: Promise<Omit<ClaudeEnv, 'accountId'>> | undefined
 
-export function resolveClaudeEnv(): Promise<ClaudeEnv> {
+function baseEnv(): Promise<Omit<ClaudeEnv, 'accountId'>> {
   cached ??= (async () => {
     if (process.platform === 'win32') {
       const bin = findWindowsClaude()
@@ -56,7 +53,6 @@ export function resolveClaudeEnv(): Promise<ClaudeEnv> {
       // O PATH do Windows já vem certo (e a chave é "Path"): só tira as variáveis de conta.
       const env: NodeJS.ProcessEnv = {}
       for (const [k, v] of Object.entries(process.env)) if (!INHERITED_AUTH.test(k)) env[k] = v
-      env.CLAUDE_CONFIG_DIR = profileDir()
       env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = '1'
       return { bin, env }
     }
@@ -73,7 +69,6 @@ export function resolveClaudeEnv(): Promise<ClaudeEnv> {
     const env: NodeJS.ProcessEnv = {}
     for (const [k, v] of Object.entries(process.env)) if (!INHERITED_AUTH.test(k)) env[k] = v
     env.PATH = path || [join(homedir(), '.local/bin'), ...FALLBACK_PATH].join(':')
-    env.CLAUDE_CONFIG_DIR = profileDir()
     env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = '1'
     return { bin, env }
   })()
@@ -81,13 +76,29 @@ export function resolveClaudeEnv(): Promise<ClaudeEnv> {
   return cached
 }
 
-/** Roda um subcomando curto do Claude Code (ex.: `--version`, `auth status`) no perfil do gBot. */
-export async function runClaude(args: string[], timeoutMs = 15_000, cwd?: string): Promise<string> {
-  const { bin, env } = await resolveClaudeEnv()
+/** Executável e ambiente do Claude Code no perfil da conta (por padrão, a ativa). */
+export async function resolveClaudeEnv(accountId = activeAccountId()): Promise<ClaudeEnv> {
+  const { bin, env } = await baseEnv()
+  return { bin, env: { ...env, CLAUDE_CONFIG_DIR: accountDir(accountId) }, accountId }
+}
+
+export interface RunOptions {
+  timeoutMs?: number
+  cwd?: string
+  /** Conta (por padrão, a ativa). */
+  accountId?: string
+  /** Texto enviado pela entrada padrão (ex.: o prompt de `-p`, sem limite de tamanho da linha de comando). */
+  input?: string
+}
+
+/** Roda um subcomando curto do Claude Code (ex.: `--version`, `auth status`) no perfil da conta (por padrão, a ativa). */
+export async function runClaude(args: string[], { timeoutMs = 15_000, cwd, accountId, input }: RunOptions = {}): Promise<string> {
+  const { bin, env } = await resolveClaudeEnv(accountId)
   return new Promise((resolve, reject) => {
-    execFile(bin, args, { env, cwd, timeout: timeoutMs }, (error, stdout, stderr) => {
+    const child = execFile(bin, args, { env, cwd, timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error && !stdout) reject(new Error(stderr.trim() || error.message))
       else resolve(stdout.trim())
     })
+    if (input !== undefined) child.stdin?.end(input)
   })
 }

@@ -10,6 +10,7 @@ import type {
   Flow,
   Lesson,
   MemoryOwner,
+  QuestionAnswer,
   Project,
   SendMessageRequest
 } from '@shared/types'
@@ -22,11 +23,13 @@ import { listAutoMemory, removeAutoMemory } from './providers/claude-code/autoMe
 import { conversationUsage, pruneUsage, usageRecords, usageSummary } from './usage'
 import * as flows from './flows/store'
 import { respondApproval } from './approvals'
+import { listConfirmations, respondConfirmation } from './confirmations'
+import { respondQuestions } from './questions'
 import { listBrowsers } from './browser/browsers'
 import { browserController } from './browser/controller'
 import { getSettings, updateSettings } from './settings'
 import { suggestBotIdentity } from './providers/claude-code'
-import { getProvider, listProviders } from './providers/registry'
+import { getProvider, listAccounts, listProviders, providerAccounts, refreshAccountLimits } from './providers/registry'
 import * as store from './store'
 
 const running = new Map<string, AbortController>()
@@ -62,6 +65,9 @@ export function registerIpc() {
   ipcMain.handle('browser:list', () => listBrowsers())
   ipcMain.handle('browser:open', () => browserController.show())
   ipcMain.handle('approvals:respond', (_e, id: string, decision: ApprovalDecision) => respondApproval(id, decision))
+  ipcMain.handle('confirmations:list', () => listConfirmations())
+  ipcMain.handle('confirmations:respond', (_e, id: string, optionId: string, note?: string) => respondConfirmation(id, optionId, note))
+  ipcMain.handle('questions:respond', (_e, id: string, answers?: QuestionAnswer[]) => respondQuestions(id, answers))
 
   ipcMain.handle('projects:list', () => store.listProjects())
   ipcMain.handle('projects:save', (_e, project: Project) => store.saveProject(project))
@@ -132,6 +138,14 @@ export function registerIpc() {
   ipcMain.handle('conversations:remove', (_e, id: string) => store.removeConversation(id))
 
   ipcMain.handle('providers:list', () => listProviders())
+
+  ipcMain.handle('accounts:list', () => listAccounts())
+  ipcMain.handle('accounts:refreshLimits', (_e, force?: boolean) => refreshAccountLimits(force))
+  ipcMain.handle('accounts:setActive', (_e, providerId: string, id: string) => providerAccounts(providerId).setActive(id))
+  ipcMain.handle('accounts:rename', (_e, providerId: string, id: string, name: string) =>
+    providerAccounts(providerId).rename(id, name)
+  )
+  ipcMain.handle('accounts:remove', (_e, providerId: string, id: string) => providerAccounts(providerId).remove(id))
 
   ipcMain.handle('providers:action', async (e, providerId: string, actionId: string) => {
     const provider = getProvider(providerId)

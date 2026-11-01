@@ -1,12 +1,15 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, nativeTheme, shell } from 'electron'
+import { setConfirmationWindowOpener } from './confirmations'
 import { startScheduler } from './flows/scheduler'
 import { registerIpc } from './ipc'
 import { createTray } from './tray'
 
 // Garante a mesma pasta de dados (~/Library/Application Support/gBot) em dev e no app instalado.
 app.setName('gBot')
+// Notificações no Windows precisam de um id de app: o do instalador, ou o do executável em dev.
+if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'com.gbot.desktop' : process.execPath)
 
 const BG = '#141414'
 
@@ -58,6 +61,7 @@ app.whenReady().then(() => {
   registerIpc()
   createWindow()
   createTray(openWindow)
+  setConfirmationWindowOpener(openWindow)
   startScheduler()
   app.on('activate', openWindow)
 })

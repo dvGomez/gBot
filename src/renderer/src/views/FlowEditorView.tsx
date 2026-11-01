@@ -15,12 +15,14 @@ import {
   type XYPosition
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { ArrowLeft, Bot as BotIcon, LoaderCircle, PanelRight, Play, Sparkles, Split, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Bot as BotIcon, Hand, LoaderCircle, PanelRight, Play, Sparkles, Split, Trash2, X } from 'lucide-react'
 import type { Flow, FlowEdge, FlowNode, FlowNodeData, FlowNodeType, FlowRun } from '@shared/types'
 import { NodePanel } from '@/components/flow/NodePanel'
 import { RunHistory } from '@/components/flow/RunHistory'
 import { MemoryPanel } from '@/components/MemoryPanel'
 import { nodeTypes, type CanvasNode } from '@/components/flow/nodes'
+import { LimitsButton } from '@/components/LimitsButton'
+import { BotPickerModal } from '@/components/flow/BotPickerModal'
 import { ItemMenu } from '@/components/ItemMenu'
 import { Button, Chip, Toggle } from '@/components/ui'
 import { uid } from '@/lib/format'
@@ -39,11 +41,12 @@ const fromEdge = (e: Edge): FlowEdge => ({
   ...(e.sourceHandle ? { sourceHandle: e.sourceHandle } : {})
 })
 
-type AddableType = 'bot' | 'prompt' | 'decision'
+type AddableType = 'bot' | 'prompt' | 'decision' | 'confirm'
 const ADDABLE: { type: AddableType; label: string; icon: typeof BotIcon }[] = [
   { type: 'bot', label: 'Bot', icon: BotIcon },
   { type: 'prompt', label: 'Prompt', icon: Sparkles },
-  { type: 'decision', label: 'Decisão', icon: Split }
+  { type: 'decision', label: 'Decisão', icon: Split },
+  { type: 'confirm', label: 'Confirmação', icon: Hand }
 ]
 
 /** De onde uma caixinha nova se liga: a bolinha de onde a linha saiu (saída à direita ou entrada à esquerda). */
@@ -143,16 +146,32 @@ function Editor({ flow }: { flow: Flow }) {
     return node.data.options?.find((o) => !edges.some((e) => e.source === nodeId && e.sourceHandle === o.id))?.id ?? null
   }
 
-  const addNode = (type: AddableType, opts?: { position?: XYPosition; from?: ConnectFrom }) => {
+  type AddOptions = { position?: XYPosition; from?: ConnectFrom }
+  /** Caixinha de bot esperando a escolha do bot (com a posição e a ligação que ela vai ter). */
+  const [pickingBot, setPickingBot] = useState<AddOptions>()
+
+  /** Bot pede antes qual bot é; os outros tipos entram direto. */
+  const requestNode = (type: AddableType, opts?: AddOptions) => (type === 'bot' ? setPickingBot(opts ?? {}) : addNode(type, opts))
+
+  const addNode = (type: AddableType, opts?: AddOptions, botId?: string) => {
     const id = uid()
     const data: FlowNodeData =
       type === 'bot'
-        ? { botId: app.bots[0]?.id, message: '' }
+        ? { botId, message: '' }
         : type === 'prompt'
-          ? { providerId: 'claude-code', message: '' }
-          : {
+          ? { providerId: 'claude-code', model: app.preferredModel('claude-code'), message: '' }
+          : type === 'confirm'
+            ? {
+                message: '',
+                options: [
+                  { id: uid(), label: 'Aprovar' },
+                  { id: uid(), label: 'Recusar' }
+                ]
+              }
+            : {
               providerId: 'claude-code',
-              model: 'haiku',
+              // Decisão é uma escolha curta: sem modelo escolhido antes, vai no Haiku (rápido e econômico).
+              model: app.preferredModel('claude-code') ?? 'haiku',
               message: '',
               options: [
                 { id: uid(), label: '' },
@@ -352,6 +371,7 @@ function Editor({ flow }: { flow: Flow }) {
           <Toggle label="Fluxo ativo" checked={enabled} onChange={setEnabled} />
           {enabled ? 'Ativo' : 'Desligado'}
         </label>
+        <LimitsButton />
         <Button variant="primary" onClick={() => void runNow()} disabled={starting || !!live}>
           {starting || live ? <LoaderCircle size={14} className="animate-spin" /> : <Play size={14} />}
           {live ? 'Rodando…' : 'Rodar agora'}
@@ -431,7 +451,7 @@ function Editor({ flow }: { flow: Flow }) {
           </ReactFlow>
           <div className="absolute top-4 left-4 flex gap-2">
             {ADDABLE.map(({ type, label, icon: Icon }) => (
-              <Button key={type} onClick={() => addNode(type)} className="bg-sidebar">
+              <Button key={type} onClick={() => requestNode(type)} className="bg-sidebar">
                 <Icon size={14} /> {label}
               </Button>
             ))}
@@ -448,7 +468,7 @@ function Editor({ flow }: { flow: Flow }) {
                   key={type}
                   role="menuitem"
                   onClick={() => {
-                    addNode(type, { position: menu.position, from: menu.from })
+                    requestNode(type, { position: menu.position, from: menu.from })
                     setMenu(undefined)
                   }}
                   className="flex w-full items-center gap-2 rounded-nav px-2.5 py-2 text-left text-[13px] hover:bg-hover"
@@ -502,12 +522,22 @@ function Editor({ flow }: { flow: Flow }) {
                   onDelete={selected.type === 'trigger' ? undefined : deleteSelected}
                 />
               ) : (
-                <p className="text-[13px] text-muted">Clique numa caixinha para configurar, ou adicione um Bot, Prompt ou Decisão.</p>
+                <p className="text-[13px] text-muted">Clique numa caixinha para configurar, ou adicione um Bot, Prompt, Decisão ou Confirmação.</p>
               )}
             </div>
           </aside>
         )}
       </div>
+      {pickingBot && (
+        <BotPickerModal
+          projectId={flow.projectId}
+          onClose={() => setPickingBot(undefined)}
+          onPick={(bot) => {
+            addNode('bot', pickingBot, bot.id)
+            setPickingBot(undefined)
+          }}
+        />
+      )}
     </div>
   )
 }

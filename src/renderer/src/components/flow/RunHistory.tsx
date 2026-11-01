@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, ChevronDown, CircleSlash, LoaderCircle, Search, X } from 'lucide-react'
+import { Check, ChevronDown, CircleSlash, Hand, LoaderCircle, Search, X } from 'lucide-react'
 import type { FlowRun, FlowStepStatus, TokenUsage } from '@shared/types'
 import { addUsage, totalTokens } from '@shared/usage'
 import { Markdown } from '@/components/Markdown'
@@ -12,6 +12,7 @@ function StepIcon({ status }: { status: FlowStepStatus | FlowRun['status'] }) {
   if (status === 'done') return <Check size={14} strokeWidth={2.5} className="shrink-0 text-success" />
   if (status === 'error') return <X size={14} strokeWidth={2.5} className="shrink-0 text-danger" />
   if (status === 'skipped') return <CircleSlash size={14} className="shrink-0 text-muted" />
+  if (status === 'waiting') return <Hand size={14} className="shrink-0 animate-pulse text-warning" />
   return <span className="size-3.5 shrink-0 rounded-full border border-line" />
 }
 
@@ -69,7 +70,19 @@ export function RunHistory({ runs }: { runs: FlowRun[] }) {
                     <StepIcon status={s.status} /> <span className="min-w-0 flex-1 truncate">{s.label}</span>
                     <Tokens usage={s.usage} />
                   </p>
+                  {s.status === 'waiting' && (
+                    <button
+                      onClick={() => {
+                        const pending = app.confirmations.find((c) => c.runId === run.id && c.nodeId === s.nodeId)
+                        if (pending) app.openConfirmation(pending.id)
+                      }}
+                      className="mt-1 ml-5 text-[12px] font-medium text-warning hover:underline"
+                    >
+                      Esperando sua confirmação · responder
+                    </button>
+                  )}
                   {s.chosen && <p className="mt-1 pl-5 text-[12px] text-warning">Escolheu: {s.chosen}</p>}
+                  {s.note && <p className="mt-0.5 pl-5 text-[12px] text-fg-2">Comentário: {s.note}</p>}
                   {s.error && (
                     <p className={`mt-1 pl-5 text-[12px] ${s.status === 'skipped' ? 'text-muted' : 'text-danger'}`}>{s.error}</p>
                   )}

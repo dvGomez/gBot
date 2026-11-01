@@ -29,7 +29,8 @@ const KINDS: Series[] = [
   { key: 'consult', label: 'Consultas entre bots', color: '#199e70' },
   { key: 'flow', label: 'Fluxos', color: '#c98500' },
   { key: 'reflection', label: 'Reflexão automática', color: '#d55181' },
-  { key: 'suggest', label: 'Sugestões de nome', color: '#008300' }
+  { key: 'suggest', label: 'Sugestões de nome', color: '#008300' },
+  { key: 'plan', label: 'Planos da página inicial', color: '#8a63d2' }
 ]
 const BAR_COLOR = '#3987e5'
 

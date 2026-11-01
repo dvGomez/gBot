@@ -12,7 +12,9 @@ import { modelLabel } from '@/components/ModelSelect'
 import { ProjectIcon } from '@/components/ProjectBadge'
 import { ItemMenu } from '@/components/ItemMenu'
 import { ApprovalCard } from '@/components/ApprovalCard'
+import { QuestionCard } from '@/components/QuestionCard'
 import { FileCards } from '@/components/FileCards'
+import { PlanCard } from '@/components/PlanCard'
 import { useApp } from '@/state/app'
 
 /** Total gasto na conversa (com os bots consultados e chamados nela), atualizado a cada gasto novo. */
@@ -52,9 +54,12 @@ function SentAttachments({ files }: { files: ChatFile[] }) {
 function LiveStatus({ msg }: { msg: ChatMessage }) {
   const app = useApp()
   const waiting = app.approvals.some((r) => r.conversationId === app.activeConversation?.id)
+  const asking = app.questions.some((q) => q.conversationId === app.activeConversation?.id)
   const running = msg.tools?.filter((t) => t.status === 'running' && !HIDDEN_TOOLS.has(t.name)).at(-1)
   const label = waiting
     ? 'Esperando sua aprovação…'
+    : asking
+      ? 'Esperando suas respostas…'
     : running
       ? `Trabalhando: ${running.summary}…`
       : app.mood === 'talking'
@@ -133,6 +138,7 @@ function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
         )}
         {live && !msg.error && <LiveStatus msg={msg} />}
         {msg.files && msg.files.length > 0 && <FileCards files={msg.files} />}
+        {msg.plan && app.activeConversation && <PlanCard conversationId={app.activeConversation.id} msg={msg} />}
         {msg.notices?.map((n, i) => (
           <p key={i} className="mt-2 text-[13px] text-muted">
             {n}
@@ -262,6 +268,18 @@ export function ChatView() {
           .filter((r) => !r.conversationId || r.conversationId === conv?.id)
           .map((r) => (
             <ApprovalCard key={r.id} req={r} />
+          ))}
+        {app.questions
+          .filter((q) => q.conversationId === conv?.id)
+          .map((q) => (
+            <div key={q.id} className="mb-3">
+              <QuestionCard
+                questions={q.questions}
+                title={q.requester ? `${q.requester} quer saber` : 'Para acertar de primeira'}
+                onSubmit={(answers) => app.answerQuestions(q.id, answers)}
+                onSkip={() => app.answerQuestions(q.id)}
+              />
+            </div>
           ))}
         <Composer autoFocus placeholder={empty ? (bot ? `Mensagem para ${bot.name}…` : 'Mensagem…') : 'Responder…'} />
       </div>

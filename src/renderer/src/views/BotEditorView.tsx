@@ -29,7 +29,8 @@ export function BotEditorView() {
   const [suggestError, setSuggestError] = useState<string>()
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [projectId, setProjectId] = useState(editing ? editing.projectId : app.botDraftProjectId)
-  const [model, setModel] = useState(editing?.model)
+  // Bot novo já vem com o último modelo escolhido.
+  const [model, setModel] = useState(() => (editing ? editing.model : app.preferredModel()))
   const [pickingAvatar, setPickingAvatar] = useState(false)
 
   const suggest = async () => {
@@ -193,7 +194,11 @@ export function BotEditorView() {
             >
               <select
                 value={model ?? 'default'}
-                onChange={(e) => setModel(e.target.value === 'default' ? undefined : e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value === 'default' ? undefined : e.target.value
+                  setModel(value)
+                  app.rememberModel(value)
+                }}
                 className={inputClass}
               >
                 {app.models.map((m) => (

@@ -1,6 +1,6 @@
 import { Plus, Trash2, X } from 'lucide-react'
 import { uid } from '@/lib/format'
-import type { FlowNodeData, FlowNodeType, FlowSchedule } from '@shared/types'
+import type { FlowDecisionOption, FlowNodeData, FlowNodeType, FlowSchedule } from '@shared/types'
 import { Button, Chip, Field, inputClass } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { WEEKDAYS } from '@/lib/schedule'
@@ -108,6 +108,48 @@ function ScheduleEditor({ value, onChange }: { value: FlowSchedule; onChange(s: 
   )
 }
 
+/** Lista editável de opções (cada uma vira uma bolinha de saída na caixinha). */
+function OptionsEditor({
+  options,
+  onChange,
+  placeholder,
+  max
+}: {
+  options: FlowDecisionOption[]
+  onChange(options: FlowDecisionOption[]): void
+  placeholder(index: number, last: boolean): string
+  max?: number
+}) {
+  return (
+    <div className="space-y-2">
+      {options.map((o, i) => (
+        <div key={o.id} className="flex items-center gap-2">
+          <span className="w-5 shrink-0 text-right text-[12px] text-muted">{i + 1}.</span>
+          <input
+            value={o.label}
+            onChange={(e) => onChange(options.map((x) => (x.id === o.id ? { ...x, label: e.target.value } : x)))}
+            placeholder={placeholder(i, i === options.length - 1)}
+            className={inputClass}
+          />
+          <button
+            type="button"
+            onClick={() => onChange(options.filter((x) => x.id !== o.id))}
+            aria-label="Remover opção"
+            className="rounded-full p-2 text-muted hover:bg-hover hover:text-fg"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      ))}
+      {(!max || options.length < max) && (
+        <Button type="button" onClick={() => onChange([...options, { id: uid(), label: '' }])}>
+          <Plus size={14} /> Opção
+        </Button>
+      )}
+    </div>
+  )
+}
+
 /** Painel lateral para configurar a caixinha selecionada. */
 export function NodePanel({
   type,
@@ -129,7 +171,17 @@ export function NodePanel({
         <input
           value={data.label ?? ''}
           onChange={(e) => onChange({ label: e.target.value })}
-          placeholder={type === 'trigger' ? 'Gatilho' : type === 'bot' ? 'Nome do bot' : type === 'decision' ? 'Decisão' : 'Prompt'}
+          placeholder={
+            type === 'trigger'
+              ? 'Gatilho'
+              : type === 'bot'
+                ? 'Nome do bot'
+                : type === 'decision'
+                  ? 'Decisão'
+                  : type === 'confirm'
+                    ? 'Confirmação'
+                    : 'Prompt'
+          }
           className={inputClass}
         />
       </Field>
@@ -182,7 +234,11 @@ export function NodePanel({
               <Field label="Modelo">
                 <select
                   value={data.model ?? 'default'}
-                  onChange={(e) => onChange({ model: e.target.value === 'default' ? undefined : e.target.value })}
+                  onChange={(e) => {
+                    const model = e.target.value === 'default' ? undefined : e.target.value
+                    onChange({ model })
+                    app.rememberModel(model, provider.id)
+                  }}
                   className={inputClass}
                 >
                   {provider.models.map((m) => (
@@ -199,32 +255,11 @@ export function NodePanel({
             label="Opções"
             hint="Cada opção tem sua bolinha de saída: ligue-a ao que deve acontecer nesse caso. Só o caminho escolhido roda."
           >
-            <div className="space-y-2">
-              {(data.options ?? []).map((o, i) => (
-                <div key={o.id} className="flex items-center gap-2">
-                  <span className="w-5 shrink-0 text-right text-[12px] text-muted">{i + 1}.</span>
-                  <input
-                    value={o.label}
-                    onChange={(e) =>
-                      onChange({ options: (data.options ?? []).map((x) => (x.id === o.id ? { ...x, label: e.target.value } : x)) })
-                    }
-                    placeholder={i === (data.options ?? []).length - 1 ? 'Caso contrário' : 'Quando o resultado for…'}
-                    className={inputClass}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => onChange({ options: (data.options ?? []).filter((x) => x.id !== o.id) })}
-                    aria-label="Remover opção"
-                    className="rounded-full p-2 text-muted hover:bg-hover hover:text-fg"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
-              <Button type="button" onClick={() => onChange({ options: [...(data.options ?? []), { id: uid(), label: '' }] })}>
-                <Plus size={14} /> Opção
-              </Button>
-            </div>
+            <OptionsEditor
+              options={data.options ?? []}
+              onChange={(options) => onChange({ options })}
+              placeholder={(i, last) => (last ? 'Caso contrário' : 'Quando o resultado for…')}
+            />
           </Field>
           <Field label="Critério (opcional)" hint="Ajuda a IA a decidir. O resultado das caixinhas anteriores vai junto.">
             <textarea
@@ -233,6 +268,34 @@ export function NodePanel({
               rows={3}
               placeholder="Ex.: Considere urgente se mencionar prazo de hoje."
               className={`${inputClass} resize-y leading-relaxed`}
+            />
+          </Field>
+        </>
+      )}
+
+      {type === 'confirm' && (
+        <>
+          <Field
+            label="O que você precisa confirmar"
+            hint="Vai na notificação do sistema. O resultado das caixinhas anteriores e os arquivos gerados aparecem junto."
+          >
+            <textarea
+              value={data.message ?? ''}
+              onChange={(e) => onChange({ message: e.target.value })}
+              rows={3}
+              placeholder="Ex.: Revise o orçamento antes de enviar ao cliente."
+              className={`${inputClass} resize-y leading-relaxed`}
+            />
+          </Field>
+          <Field
+            label="Botões"
+            hint="Cada botão aparece na notificação e tem sua bolinha de saída: ligue-a ao que deve acontecer. Até 5."
+          >
+            <OptionsEditor
+              options={data.options ?? []}
+              onChange={(options) => onChange({ options })}
+              placeholder={(i) => (i === 0 ? 'Ex.: Aprovar' : i === 1 ? 'Ex.: Recusar' : 'Ex.: Pedir ajuste')}
+              max={5}
             />
           </Field>
         </>
@@ -258,7 +321,11 @@ export function NodePanel({
               <Field label="Modelo">
                 <select
                   value={data.model ?? 'default'}
-                  onChange={(e) => onChange({ model: e.target.value === 'default' ? undefined : e.target.value })}
+                  onChange={(e) => {
+                    const model = e.target.value === 'default' ? undefined : e.target.value
+                    onChange({ model })
+                    app.rememberModel(model, provider.id)
+                  }}
                   className={inputClass}
                 >
                   {provider.models.map((m) => (

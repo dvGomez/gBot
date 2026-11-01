@@ -4,6 +4,7 @@ import type { ChatFile } from '@shared/types'
 import { useApp } from '@/state/app'
 import { cn } from '@/lib/cn'
 import { mentionQuery, normalize } from '@/lib/mentions'
+import { LimitsButton } from './LimitsButton'
 import { ModelSelect } from './ModelSelect'
 import { PixelAvatar } from './PixelAvatar'
 import { ProviderNotice } from './ProviderNotice'
@@ -214,6 +215,8 @@ export function Composer({ autoFocus, placeholder = 'Pergunte qualquer coisa…'
             >
               <Paperclip size={15} />
             </button>
+            {/* O arquiteto trabalha sempre no Claude Code: sem escolha de provedor nessa conversa. */}
+            {app.activeConversation?.mode !== 'architect' && (
             <label className="relative inline-flex items-center">
               <select
                 value={app.providerId}
@@ -229,33 +232,37 @@ export function Composer({ autoFocus, placeholder = 'Pergunte qualquer coisa…'
               </select>
               <ChevronDown size={14} className="pointer-events-none absolute right-3 text-muted" />
             </label>
+            )}
             {app.models.length > 0 && (
               <ModelSelect models={app.models} value={app.activeModel} onChange={app.setActiveModel} disabled={app.busy} />
             )}
             {app.visibleBots.length > 0 && <span className="text-[12px] text-muted">Use @ para chamar um bot</span>}
           </div>
 
-          {app.busy ? (
-            <button
-              onClick={app.cancel}
-              className="flex size-9 items-center justify-center rounded-full bg-primary text-on-primary"
-              aria-label="Parar resposta"
-            >
-              <Square size={13} fill="currentColor" />
-            </button>
-          ) : (
-            <button
-              onClick={submit}
-              disabled={!canSend}
-              className={cn(
-                'flex size-9 items-center justify-center rounded-full bg-primary text-on-primary transition-opacity',
-                !canSend && 'opacity-30'
-              )}
-              aria-label="Enviar"
-            >
-              <ArrowUp size={18} strokeWidth={2} />
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            <LimitsButton placement="up" />
+            {app.busy ? (
+              <button
+                onClick={app.cancel}
+                className="flex size-9 items-center justify-center rounded-full bg-primary text-on-primary"
+                aria-label="Parar resposta"
+              >
+                <Square size={13} fill="currentColor" />
+              </button>
+            ) : (
+              <button
+                onClick={submit}
+                disabled={!canSend}
+                className={cn(
+                  'flex size-9 items-center justify-center rounded-full bg-primary text-on-primary transition-opacity',
+                  !canSend && 'opacity-30'
+                )}
+                aria-label="Enviar"
+              >
+                <ArrowUp size={18} strokeWidth={2} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </>

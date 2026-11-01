@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
-import type { SendMessageRequest } from '@shared/types'
-import type { ChatProvider } from '../types'
+import type { ProviderAccount, SendMessageRequest } from '@shared/types'
+import type { ChatProvider, ProviderAccounts } from '../types'
 import type { MemoryOwner } from '@shared/types'
 import { memoryPrompt } from '../../memory'
 import { attachmentsAccess, withAttachments } from '../../attachments'
@@ -8,8 +8,23 @@ import { botFilesAccess, botFilesPrompt } from '../../botFiles'
 import { PERMISSIONS_HINT, sendToBot, TOOLS_HINT } from './bots'
 import { withOutputFiles } from './outputs'
 import { reflectIfNeeded } from './reflect'
+import {
+  accountDir,
+  activeAccountId,
+  addAccountRecord,
+  discardProfile,
+  getAccountRecord,
+  listAccountRecords,
+  newAccountId,
+  profileInfo,
+  removeAccountRecord,
+  renameAccount,
+  setActiveAccount
+} from './accounts'
 import { resolveClaudeEnv, runClaude } from './env'
+import { cachedLimits, forgetLimits, refreshLimits } from './limits'
 import { GBOT_TOOLS, mcpConfigFor, type CallerContext } from './mcp'
+import { architectPrompt } from './architect'
 import { askOnce } from './oneShot'
 import type { UsageTag } from './session'
 import { closeAllSessions, getSession, workContext, type WorkContext } from './sessions'
@@ -25,6 +40,9 @@ const memoryOf = (req: SendMessageRequest): MemoryOwner | undefined =>
   req.memory ?? (req.bot ? { kind: 'bot', id: req.bot.id } : undefined)
 
 function systemPrompt(req: SendMessageRequest, work: WorkContext): string {
+  if (req.architect) {
+    return [...architectPrompt(), '', ...work.promptLines, PERMISSIONS_HINT, TOOLS_HINT].join('\n')
+  }
   const { bot } = req
   const lines = ['Você está conversando com o usuário pelo gBot, um aplicativo de chat para desktop.']
   if (bot) {
@@ -93,10 +111,12 @@ export const claudeCodeProvider: ChatProvider = {
     }
 
     let auth: AuthStatus = { loggedIn: false }
-    try {
-      auth = JSON.parse(await runClaude(['auth', 'status', '--json'])) as AuthStatus
-    } catch {
-      // sem login ainda: `auth status` pode sair com erro
+    if (listAccountRecords().length) {
+      try {
+        auth = JSON.parse(await runClaude(['auth', 'status', '--json'])) as AuthStatus
+      } catch {
+        // sem login: `auth status` pode sair com erro
+      }
     }
     if (!auth.loggedIn) {
       return {
@@ -105,42 +125,27 @@ export const claudeCodeProvider: ChatProvider = {
         actions: [{ id: 'login', label: 'Entrar com conta Claude', primary: true }]
       }
     }
+    const active = claudeAccounts.list().find((a) => a.active)
     const plan = auth.subscriptionType ? `plano ${auth.subscriptionType}` : auth.authMethod
-    return { status: 'ready', detail: `v${version} · logado (${plan})`, actions: [{ id: 'logout', label: 'Sair' }] }
+    return {
+      status: 'ready',
+      detail: `v${version} · ${active?.label ?? 'logado'} (${plan})`,
+      actions: [{ id: 'login', label: 'Adicionar conta' }]
+    }
   },
 
   async runAction(actionId, progress) {
-    const { bin, env } = await resolveClaudeEnv()
-
     if (actionId === 'logout') {
-      closeAllSessions()
-      await runClaude(['auth', 'logout'])
+      await claudeAccounts.remove(activeAccountId())
       return 'Você saiu da conta Claude no gBot.'
     }
-
     if (actionId !== 'login') throw new Error(`Ação desconhecida: ${actionId}`)
+    return addAccount(progress)
+  },
 
-    // Login oficial do Claude Code: abre o navegador e conclui sozinho quando você autoriza.
-    progress('Abrindo o navegador para você entrar na sua conta Claude…')
-    return new Promise((resolve, reject) => {
-      const proc = spawn(bin, ['auth', 'login', '--claudeai'], { env })
-      let output = ''
-      const onOutput = (chunk: Buffer) => {
-        output += chunk.toString()
-        const url = output.match(/https:\/\/\S+/)?.[0]
-        if (url) progress('Conclua o login no navegador. Se ele não abriu, use o link abaixo.', url)
-      }
-      proc.stdout.on('data', onOutput)
-      proc.stderr.on('data', onOutput)
-      const timer = setTimeout(() => proc.kill('SIGTERM'), 5 * 60_000)
-      proc.on('error', (err) => reject(err))
-      proc.on('exit', (code) => {
-        clearTimeout(timer)
-        closeAllSessions()
-        if (code === 0) resolve('Login concluído.')
-        else reject(new Error(output.trim().split('\n').at(-1) || 'O login não foi concluído.'))
-      })
-    })
+  // Getter: a lista de contas é definida mais abaixo no arquivo.
+  get accounts() {
+    return claudeAccounts
   },
 
   async send(req, emit, signal) {
@@ -162,6 +167,7 @@ export const claudeCodeProvider: ChatProvider = {
       mainContexts.set(req.conversationId, entry)
     }
     entry.ctx.projectId = req.projectId
+    entry.ctx.architect = req.architect
     entry.ctx.memory = memoryOf(req)
     entry.ctx.memorySource = req.origin ?? { kind: 'conversation', id: req.conversationId }
     const work = workContext(req.projectId)
@@ -187,5 +193,103 @@ export const claudeCodeProvider: ChatProvider = {
   }
 }
 
+/**
+ * Conecta uma conta nova: login oficial do Claude Code numa pasta de perfil nova, que abre o navegador e conclui
+ * sozinho quando você autoriza. A mesma conta não entra duas vezes.
+ */
+async function addAccount(progress: (text: string, url?: string) => void): Promise<string> {
+  const id = newAccountId()
+  const { bin, env } = await resolveClaudeEnv(id)
+  progress('Abrindo o navegador para você entrar na sua conta Claude…')
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn(bin, ['auth', 'login', '--claudeai'], { env })
+      let output = ''
+      const onOutput = (chunk: Buffer) => {
+        output += chunk.toString()
+        const url = output.match(/https:\/\/\S+/)?.[0]
+        if (url) progress('Conclua o login no navegador. Se ele não abriu, use o link abaixo.', url)
+      }
+      proc.stdout.on('data', onOutput)
+      proc.stderr.on('data', onOutput)
+      const timer = setTimeout(() => proc.kill('SIGTERM'), 5 * 60_000)
+      proc.on('error', (err) => reject(err))
+      proc.on('exit', (code) => {
+        clearTimeout(timer)
+        if (code === 0) resolve()
+        else reject(new Error(output.trim().split('\n').at(-1) || 'O login não foi concluído.'))
+      })
+    })
+  } catch (e) {
+    discardProfile(id)
+    throw e
+  }
+
+  const info = profileInfo(accountDir(id))
+  if (!info) {
+    discardProfile(id)
+    throw new Error('O login terminou, mas a conta não apareceu no perfil. Tente de novo.')
+  }
+  const same = listAccountRecords().find((a) => {
+    const other = profileInfo(accountDir(a.id))
+    return other?.accountUuid === info.accountUuid && other.organizationUuid === info.organizationUuid
+  })
+  if (same && claudeAccounts.list().find((a) => a.id === same.id)?.loggedIn) {
+    discardProfile(id)
+    throw new Error('Essa conta já está conectada.')
+  }
+  const wasActive = !!same && activeAccountId() === same.id
+  addAccountRecord(id)
+  // Login de novo numa conta que tinha saído: a nova entrada fica no lugar dela, com o mesmo apelido.
+  if (same) {
+    if (same.name) renameAccount(id, same.name)
+    removeAccountRecord(same.id)
+    if (wasActive) setActiveAccount(id)
+  }
+  void refreshLimits(true)
+  return info.email ? `Conta ${info.email} conectada.` : 'Conta conectada.'
+}
+
+const claudeAccounts: ProviderAccounts = {
+  list() {
+    const active = activeAccountId()
+    return listAccountRecords().map((r): ProviderAccount => {
+      const info = profileInfo(accountDir(r.id))
+      const limits = cachedLimits(r.id)
+      return {
+        id: r.id,
+        providerId: 'claude-code',
+        label: r.name || info?.email || 'Conta Claude',
+        name: r.name,
+        email: info?.email,
+        organization: info?.organization,
+        plan: info?.plan,
+        active: r.id === active,
+        loggedIn: !!info,
+        limits: limits?.limits ?? [],
+        limitsAt: limits?.at,
+        limitsError: limits?.error
+      }
+    })
+  },
+  refreshLimits,
+  setActive: setActiveAccount,
+  rename(id, name) {
+    if (!getAccountRecord(id)) throw new Error('Conta não encontrada.')
+    renameAccount(id, name.slice(0, 40))
+  },
+  async remove(id) {
+    if (!getAccountRecord(id)) throw new Error('Conta não encontrada.')
+    // Processos abertos com a conta deixam de valer; as conversas reabrem com a próxima conta ativa.
+    closeAllSessions()
+    try {
+      await runClaude(['auth', 'logout'], { accountId: id })
+    } catch {
+      // já estava sem login
+    }
+    forgetLimits(id)
+    removeAccountRecord(id)
+  }
+}
 /** Contexto MCP do assistente principal de cada conversa. */
 const mainContexts = new Map<string, { ctx: CallerContext; config: string }>()

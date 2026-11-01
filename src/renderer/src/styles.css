@@ -249,6 +249,32 @@ body {
   }
 }
 
+/* Página inicial: exemplos passando em faixas (pausam com o mouse em cima). */
+@keyframes gbot-marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+.gbot-marquee {
+  animation: gbot-marquee 70s linear infinite;
+}
+.gbot-marquee-reverse {
+  animation: gbot-marquee 85s linear infinite reverse;
+}
+.gbot-marquee-row:hover .gbot-marquee,
+.gbot-marquee-row:hover .gbot-marquee-reverse {
+  animation-play-state: paused;
+}
+.gbot-fade-x {
+  mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .gbot-marquee,
+  .gbot-marquee-reverse {
+    animation: none;
+  }
+}
+
 /* Painel da equipe: "z" subindo de quem dorme, pontinhos de quem trabalha e um leve balanço. */
 @keyframes gbot-z {
   0% {

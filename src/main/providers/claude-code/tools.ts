@@ -9,9 +9,13 @@ const file = (input: Input) => basename(str(input.file_path) || str(input.notebo
 /** Nomes das ferramentas do gBot como o Claude Code as vê (`mcp__<servidor>__<ferramenta>`). */
 export const LIST_BOTS_TOOL = 'mcp__gbot__list_bots'
 export const ASK_BOT_TOOL = 'mcp__gbot__ask_bot'
+/** Perguntas com opções ao usuário: viram um cartão no chat, então não aparecem na lista de ferramentas. */
+export const ASK_USER_TOOL = 'mcp__gbot__ask_user'
 
 /** Ferramentas internas do Claude Code que não interessam ao usuário (não aparecem no chat). */
-export const HIDDEN_TOOLS = new Set(['ToolSearch'])
+/** Plano proposto pelo arquiteto: vira um cartão no chat. */
+export const PROPOSE_PLAN_TOOL = 'mcp__gbot__propose_plan'
+export const HIDDEN_TOOLS = new Set(['ToolSearch', ASK_USER_TOOL, PROPOSE_PLAN_TOOL])
 
 /** Frase curta em português descrevendo o uso de uma ferramenta do Claude Code. */
 export function describeTool(name: string, input: Input = {}): string {

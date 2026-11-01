@@ -7,8 +7,10 @@ import { z } from 'zod'
 import type { Lesson, MemoryOwner } from '@shared/types'
 import { BROWSER_TOOL_NAMES, registerBrowserTools } from '../../browser/tools'
 import { learn } from '../../memory'
+import { answersText, askUser } from '../../questions'
 import { registerApprovalTool } from './permissions'
-import { ASK_BOT_TOOL, LIST_BOTS_TOOL } from './tools'
+import { planSchema, sanitizePlan } from './architect'
+import { ASK_BOT_TOOL, ASK_USER_TOOL, LIST_BOTS_TOOL, PROPOSE_PLAN_TOOL } from './tools'
 
 /**
  * Servidor MCP local do gBot (http://127.0.0.1:<porta>/mcp). Cada sessão do Claude Code recebe um token
@@ -28,6 +30,8 @@ export interface CallerContext {
   memory?: MemoryOwner
   /** Origem registrada nas lições aprendidas. */
   memorySource?: Lesson['source']
+  /** Conversa com o arquiteto: ganha a ferramenta `propose_plan`. */
+  architect?: boolean
 }
 
 export interface BotHandlers {
@@ -42,6 +46,8 @@ export interface BotHandlers {
 export const GBOT_TOOLS = [
   LIST_BOTS_TOOL,
   ASK_BOT_TOOL,
+  ASK_USER_TOOL,
+  PROPOSE_PLAN_TOOL,
   ...BROWSER_TOOL_NAMES.map((n) => `mcp__gbot__${n}`),
   'mcp__gbot__save_lesson',
   'WebSearch',
@@ -116,6 +122,65 @@ function buildServer(ctx: CallerContext): McpServer {
     )
   }
 
+  server.registerTool(
+    'ask_user',
+    {
+      description:
+        'Faz ao usuário de 1 a 4 perguntas com opções, mostradas como um cartão no chat, e devolve as respostas. Use quando ' +
+        'faltar uma informação ou decisão que muda o resultado (ex.: qual formato, para quem enviar, qual das abordagens). ' +
+        'Não use para o que dá para decidir com bom senso nem para pedir permissão (o gBot já pergunta isso sozinho).',
+      inputSchema: {
+        questions: z
+          .array(
+            z.object({
+              question: z.string().describe('A pergunta completa, terminando com "?"'),
+              header: z.string().max(16).describe('Rótulo curto, até 12 letras (ex.: "Formato", "Envio")'),
+              options: z
+                .array(
+                  z.object({
+                    label: z.string().describe('Opção curta (1 a 5 palavras); a recomendada vem primeiro, com " (Recomendado)"'),
+                    description: z.string().optional().describe('O que esta opção significa ou implica')
+                  })
+                )
+                .min(2)
+                .max(4),
+              multiSelect: z.boolean().optional().describe('true quando dá para escolher mais de uma opção')
+            })
+          )
+          .min(1)
+          .max(4)
+      }
+    },
+    async ({ questions }, extra) => {
+      // Fluxos e bots consultados por outros não têm ninguém olhando o chat: seguem sozinhos.
+      if (ctx.depth > 0 || ctx.memorySource?.kind === 'flow') {
+        return { content: [{ type: 'text', text: 'Não há ninguém para responder agora. Decida com bom senso e siga, dizendo o que escolheu.' }] }
+      }
+      const answers = await askUser({ conversationId: ctx.conversationId, requester: ctx.callerName, questions }, extra.signal)
+      return { content: [{ type: 'text', text: answersText(questions, answers) }] }
+    }
+  )
+
+  if (ctx.architect) {
+    server.registerTool(
+      'propose_plan',
+      {
+        description:
+          'Mostra ao usuário o plano do que criar no gBot (projeto, bots e fluxos), num cartão com o botão "Criar tudo". ' +
+          'Chame depois de testar o que for incerto. Quem cria é o usuário, pelo cartão: não crie nada você mesmo.',
+        inputSchema: planSchema.shape
+      },
+      async (input) => {
+        try {
+          sanitizePlan(input)
+          return { content: [{ type: 'text', text: 'Plano mostrado ao usuário com o botão "Criar tudo". Aguarde a decisão dele.' }] }
+        } catch (e) {
+          return { content: [{ type: 'text', text: `Plano inválido, corrija e chame de novo: ${(e as Error).message}` }], isError: true }
+        }
+      }
+    )
+  }
+
   // O contexto é mutável (a cadeia muda a cada consulta): navegador e aprovações leem os valores na hora da chamada.
   const caller = {
     get conversationId() {
@@ -173,14 +238,16 @@ function start(): Promise<{ server: Server; port: number }> {
 }
 
 /** Registra quem vai chamar e devolve o JSON para `--mcp-config`, com um token só dessa sessão. */
-export async function mcpConfigFor(ctx: CallerContext): Promise<{ config: string; token: string }> {
+/** Endereço do servidor e token próprio desta sessão (outros provedores, como o Codex, configuram assim). */
+export async function mcpEndpointFor(ctx: CallerContext): Promise<{ url: string; token: string }> {
   const { port } = await start()
   const token = randomBytes(24).toString('hex')
   contexts.set(token, ctx)
-  const config = JSON.stringify({
-    mcpServers: {
-      gbot: { type: 'http', url: `http://127.0.0.1:${port}/mcp`, headers: { Authorization: `Bearer ${token}` } }
-    }
-  })
+  return { url: `http://127.0.0.1:${port}/mcp`, token }
+}
+
+export async function mcpConfigFor(ctx: CallerContext): Promise<{ config: string; token: string }> {
+  const { url, token } = await mcpEndpointFor(ctx)
+  const config = JSON.stringify({ mcpServers: { gbot: { type: 'http', url, headers: { Authorization: `Bearer ${token}` } } } })
   return { config, token }
 }

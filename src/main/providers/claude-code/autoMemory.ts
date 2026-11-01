@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, relative } from 'node:path'
 import type { AutoMemoryNote } from '@shared/types'
-import { profileDir } from './env'
+import { historyDir } from './accounts'
 
 /**
  * Memória automática do Claude Code (antes de o gBot desligá-la): arquivos .md em
@@ -9,7 +9,7 @@ import { profileDir } from './env'
  * mas ficam visíveis no gBot para você apagar ou trazer para a memória de um bot.
  */
 function projectsDir() {
-  return join(profileDir(), 'projects')
+  return historyDir()
 }
 
 /** Separa o cabeçalho (`---` ... `---`) do texto. */
