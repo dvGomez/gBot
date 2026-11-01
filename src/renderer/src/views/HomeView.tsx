@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import type { Flow, FlowRun } from '@shared/types'
 import { AgentAvatar } from '@/components/AgentAvatar'
+import { approvalTitle } from '@/components/ApprovalCard'
 import { ProviderNotice } from '@/components/ProviderNotice'
 import { TeamPanel } from '@/components/TeamPanel'
 import { Button, Card } from '@/components/ui'
@@ -217,7 +218,7 @@ export function HomeView() {
                   <Row
                     key={r.id}
                     icon={<CircleAlert size={18} className="text-warning" />}
-                    title={`${r.requester || 'Uma conversa'} quer usar o navegador em ${r.host}`}
+                    title={approvalTitle(r)}
                     detail={r.action}
                     right={<span className="text-[12px] text-warning">Aguardando você</span>}
                     onClick={() => r.conversationId && app.openConversation(r.conversationId)}

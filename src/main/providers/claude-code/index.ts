@@ -4,7 +4,7 @@ import type { ChatProvider } from '../types'
 import type { MemoryOwner } from '@shared/types'
 import { memoryPrompt } from '../../memory'
 import { botFilesAccess, botFilesPrompt } from '../../botFiles'
-import { sendToBot, TOOLS_HINT } from './bots'
+import { PERMISSIONS_HINT, sendToBot, TOOLS_HINT } from './bots'
 import { reflectIfNeeded } from './reflect'
 import { resolveClaudeEnv, runClaude } from './env'
 import { GBOT_TOOLS, mcpConfigFor, type CallerContext } from './mcp'
@@ -36,7 +36,7 @@ function systemPrompt(req: SendMessageRequest, work: WorkContext): string {
   lines.push(
     'Responda no idioma do usuário, de forma direta e amigável. Use Markdown quando ajudar a leitura.',
     ...work.promptLines,
-    'O gBot ainda não consegue mostrar pedidos de permissão: ações que precisam de aprovação serão negadas. Se precisar de uma, explique ao usuário o que faria.',
+    PERMISSIONS_HINT,
     TOOLS_HINT,
     ...memoryPrompt(memoryOf(req))
   )

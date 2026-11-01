@@ -193,6 +193,13 @@ export interface AppSettings {
   browserApprovals?: boolean
   /** Sites em que o usuário escolheu "Permitir sempre" (só usado com a aprovação ligada). */
   allowedSites: string[]
+  /**
+   * Liberar sem perguntar os comandos e ações do Claude Code que pedem permissão (desligado por padrão).
+   * Criar e editar arquivos na pasta de trabalho nunca pergunta.
+   */
+  autoApproveTools?: boolean
+  /** Ações liberadas com "Sempre permitir" (ex.: `Bash:textutil`, `Write:/Users/x/Documentos`). */
+  allowedTools?: string[]
 }
 
 /** `conversation`: vale para o site nesta conversa; `always`: vale para o site em qualquer conversa. */
@@ -201,13 +208,17 @@ export type ApprovalDecision = 'conversation' | 'always' | 'deny'
 /** Pedido de aprovação de uma ação (ex.: o navegador abrir ou clicar num site). */
 export interface ApprovalRequest {
   id: string
+  /** `site`: o navegador num site; `tool`: um comando ou outra ação do Claude Code fora da pasta de trabalho. */
+  kind?: 'site' | 'tool'
   conversationId?: string
   /** Bot que pediu; vazio quando é o assistente de uma conversa normal. */
   requester: string
-  /** Site afetado (ex.: github.com). */
+  /** O que "Sempre" libera: o site (ex.: github.com) ou a regra da ação (ex.: `Bash:textutil`). */
   host: string
-  /** Descrição curta da ação (ex.: "Abrir https://github.com/login"). */
+  /** Descrição curta da ação (ex.: "Abrir https://github.com/login" ou o comando). */
   action: string
+  /** Texto do botão "Sempre" quando é uma ação (ex.: "Sempre permitir textutil"). */
+  alwaysLabel?: string
 }
 
 // ── Memória (procedimentos aprendidos) ──────────────────────────────

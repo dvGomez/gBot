@@ -7,6 +7,7 @@ import { z } from 'zod'
 import type { Lesson, MemoryOwner } from '@shared/types'
 import { BROWSER_TOOL_NAMES, registerBrowserTools } from '../../browser/tools'
 import { learn } from '../../memory'
+import { registerApprovalTool } from './permissions'
 import { ASK_BOT_TOOL, LIST_BOTS_TOOL } from './tools'
 
 /**
@@ -115,15 +116,17 @@ function buildServer(ctx: CallerContext): McpServer {
     )
   }
 
-  // O contexto é mutável (a cadeia muda a cada consulta): o navegador lê os valores na hora da chamada.
-  registerBrowserTools(server, {
+  // O contexto é mutável (a cadeia muda a cada consulta): navegador e aprovações leem os valores na hora da chamada.
+  const caller = {
     get conversationId() {
       return ctx.conversationId
     },
     get callerName() {
       return ctx.callerName
     }
-  })
+  }
+  registerBrowserTools(server, caller)
+  registerApprovalTool(server, caller)
 
   return server
 }

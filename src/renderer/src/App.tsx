@@ -1,3 +1,4 @@
+import { ApprovalCard, approvalTitle } from '@/components/ApprovalCard'
 import { Sidebar } from '@/components/Sidebar'
 import { BotEditorView } from '@/views/BotEditorView'
 import { BotView } from '@/views/BotView'
@@ -11,22 +12,26 @@ import { ProvidersView } from '@/views/ProvidersView'
 import { SettingsView } from '@/views/SettingsView'
 import { useApp } from '@/state/app'
 
-/** Aviso no topo quando uma conversa que não está aberta pede aprovação. */
+/**
+ * Aviso no topo quando um pedido de aprovação não está na tela. Pedidos de fluxos (sem conversa para abrir)
+ * aparecem já com os botões, para responder dali mesmo.
+ */
 function PendingApprovalsBar() {
   const app = useApp()
   const elsewhere = app.approvals.filter((r) => r.conversationId && !(app.view === 'chat' && app.activeConversation?.id === r.conversationId))
   if (!elsewhere.length) return null
   const first = elsewhere[0]
+  if (!app.conversations.some((c) => c.id === first.conversationId)) {
+    return (
+      <div className="mx-auto w-full max-w-[860px] px-4">
+        <ApprovalCard req={first} />
+      </div>
+    )
+  }
   return (
     <div className="mx-auto mb-2 flex w-full max-w-[860px] items-center gap-3 rounded-tile border border-warning/50 bg-sidebar px-4 py-2.5 text-[13px]">
       <span className="flex-1 text-fg-2">
-        {first.requester ? (
-          <>
-            <span className="font-medium text-fg">{first.requester}</span> quer usar o navegador em {first.host}
-          </>
-        ) : (
-          <>Uma conversa quer usar o navegador em {first.host}</>
-        )}
+        {approvalTitle(first)}
         {elsewhere.length > 1 && ` (+${elsewhere.length - 1})`}
       </span>
       <button

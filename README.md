@@ -178,6 +178,19 @@ CLAUDE_CONFIG_DIR="$HOME/Library/Application Support/gBot/claude-profile" claude
 The default working folder is `<userData>/workspace`. On Windows, gBot looks for the native installer's
 `claude.exe` (`~/.local/bin`) or the first one on the `PATH`.
 
+### Permissions
+
+Claude Code runs with `--permission-mode acceptEdits` and `--permission-prompt-tool mcp__gbot__approve`:
+
+- Creating and editing files inside the working folder (and the bot's reference folder) never asks.
+- Everything else that needs permission (shell commands, files outside the folder…) reaches gBot's `approve` MCP tool
+  and shows a card in the chat with the exact command: **Allow in this chat**, **Always allow** or **Deny**. Requests
+  from workflows show up at the top of the app with the same buttons. No answer in 5 min means deny.
+- "Always" remembers the program for simple commands (`Bash:textutil`) or the folder for files; a chained command
+  (`&&`, `|`, `;`, redirects) is only remembered exactly as it was, so an approval can't smuggle in another program.
+  The list lives in Settings → Commands and files, where it can be cleared.
+- Settings also has **Allow commands without asking** (off by default) for people who prefer no prompts at all.
+
 ### Plain chats and bots
 
 A plain chat has no character: no name, avatar or persona in the prompt. Bots only show up in chats with a bot or
@@ -305,5 +318,5 @@ The installers aren't signed yet (no Apple or Microsoft certificate), so the fir
 5. ✅ Projects: group bots and chats, with an optional working folder and instructions
 6. ✅ Workflows: canvas with time/interval triggers, bot, prompt and decision boxes, history and menu bar icon
 7. ✅ gBot's browser and lesson memory
-8. Approving permissions in the app
+8. ✅ Approving permissions in the app (commands, files outside the working folder)
 9. Actions on the computer

@@ -42,12 +42,17 @@ export const TOOLS_HINT = [
   'Nunca digite senhas nem códigos de verificação: se aparecer login, MFA ou CAPTCHA, peça ao usuário para concluir na janela do navegador e continue quando ele avisar.'
 ].join(' ')
 
+export const PERMISSIONS_HINT =
+  'Você pode criar e editar arquivos na sua pasta de trabalho à vontade. Para comandos e ações fora dela, simplesmente ' +
+  'execute: o gBot mostra o pedido de aprovação ao usuário (com o comando exato) e espera a resposta, então não peça ' +
+  'autorização por texto antes. Se ele negar, não insista nem contorne: explique o que faria.'
+
 function baseLines(work: WorkContext): string[] {
   return [
     'Você está no gBot, um aplicativo de chat para desktop.',
     'Responda no idioma do usuário, de forma direta e amigável. Use Markdown quando ajudar a leitura.',
     ...work.promptLines,
-    'O gBot ainda não consegue mostrar pedidos de permissão: ações que precisam de aprovação serão negadas. Se precisar de uma, explique o que faria.',
+    PERMISSIONS_HINT,
     TOOLS_HINT
   ]
 }

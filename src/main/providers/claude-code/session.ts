@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import type { ChatEvent } from '@shared/types'
+import { APPROVE_TOOL } from './permissions'
 import { ASK_BOT_TOOL, describeTool, HIDDEN_TOOLS } from './tools'
 
 export interface SessionOptions {
@@ -78,7 +79,9 @@ export class ClaudeSession {
       '--output-format', 'stream-json',
       '--verbose',
       '--include-partial-messages',
-      '--permission-mode', 'manual',
+      // Criar e editar arquivos na pasta de trabalho é livre; o resto pergunta ao usuário pelo gBot.
+      '--permission-mode', 'acceptEdits',
+      '--permission-prompt-tool', APPROVE_TOOL,
       ...(opts.resume ? ['--resume', opts.sessionId] : ['--session-id', opts.sessionId]),
       ...(opts.appendSystemPrompt ? ['--append-system-prompt', opts.appendSystemPrompt] : []),
       ...(opts.model ? ['--model', opts.model] : []),
@@ -241,7 +244,7 @@ export class ClaudeSession {
         if (denied.length) {
           emit({
             type: 'notice',
-            text: `Precisou de permissão para ${denied.join(', ')} e foi negado (o gBot ainda não aprova essas ações).`
+            text: `Precisou de permissão para ${denied.join(', ')} e não foi permitido.`
           })
         }
         if (line.subtype === 'success' && !line.is_error) {

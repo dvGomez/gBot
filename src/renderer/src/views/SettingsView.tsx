@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ExternalLink, Globe, LoaderCircle, X } from 'lucide-react'
+import { ExternalLink, Globe, LoaderCircle, SquareTerminal, X } from 'lucide-react'
 import type { AppSettings, BrowserInfo } from '@shared/types'
 import { Button, Card, PageHeader, Toggle, inputClass } from '@/components/ui'
 
@@ -109,6 +109,50 @@ export function SettingsView() {
                       onClick={() => void update({ allowedSites: settings.allowedSites.filter((h) => h !== host) })}
                       aria-label={`Remover ${host}`}
                       className="rounded-full p-0.5 text-muted hover:bg-hover hover:text-fg"
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))
+              ) : (
+                <span className="text-[13px] text-muted">Nenhum ainda.</span>
+              )}
+            </div>
+          </div>
+        )}
+      </Card>
+
+      <p className="mt-8 mb-3 flex items-center gap-2 text-[13px] font-medium text-muted">
+        <SquareTerminal size={14} /> Comandos e arquivos
+      </p>
+      <Card className="px-6 py-2">
+        <Row
+          title="Liberar comandos sem perguntar"
+          subtitle="Criar e editar arquivos na pasta de trabalho é sempre livre. Desligado (recomendado): comandos e ações fora da pasta pedem aprovação no chat. Ligado: o Claude Code roda tudo direto no seu computador."
+        >
+          <Toggle
+            label="Liberar comandos sem perguntar"
+            checked={!!settings?.autoApproveTools}
+            onChange={(v) => void update({ autoApproveTools: v })}
+          />
+        </Row>
+        {!settings?.autoApproveTools && (
+          <div className="py-4">
+            <p className="text-[14px] font-medium">Sempre permitidos</p>
+            <p className="text-[13px] text-muted">Comandos e pastas que você liberou com "Sempre". O resto pede aprovação.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {settings?.allowedTools?.length ? (
+                settings.allowedTools.map((rule) => (
+                  <span
+                    key={rule}
+                    title={rule}
+                    className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-line py-1 pr-1.5 pl-3 font-mono text-[12px] text-fg-2"
+                  >
+                    <span className="truncate">{rule.replace(/^Bash[:=]/, '')}</span>
+                    <button
+                      onClick={() => void update({ allowedTools: settings.allowedTools?.filter((r) => r !== rule) })}
+                      aria-label={`Remover ${rule}`}
+                      className="shrink-0 rounded-full p-0.5 text-muted hover:bg-hover hover:text-fg"
                     >
                       <X size={12} />
                     </button>
