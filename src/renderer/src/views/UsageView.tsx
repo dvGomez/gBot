@@ -2,6 +2,7 @@ import { t as tr, locale, localized, useLanguage } from '@/i18n'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ArrowLeft, Lightbulb, MessageSquareText, Workflow } from 'lucide-react'
 import type { TokenUsage, UsageRecord } from '@shared/types'
+import { activeTriggers } from '@shared/flows'
 import { addUsage, emptyUsage, totalTokens } from '@shared/usage'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { Card, Chip } from '@/components/ui'
@@ -226,11 +227,11 @@ export function UsageView() {
   const nameOf = (o: Owner) => {
     if (o.kind === 'bot') return app.getBot(o.id)?.name ?? tr('Bot excluído')
     if (o.kind === 'flow') {
-      // Rotina: com o nome do bot dono, que é quem a roda.
-      const routine = app.flows.find((f) => f.id === o.id)
-      if (!routine) return tr('Rotina excluída')
-      const bot = app.getBot(routine.botId)
-      return bot ? `${bot.name} · ${routine.name}` : routine.name
+      // Fluxo do bot (todas as rotinas dele): com o nome do bot dono, que é quem as roda.
+      const flow = app.flows.find((f) => f.id === o.id)
+      if (!flow) return tr('Rotina excluída')
+      const bot = app.getBot(flow.botId)
+      return bot ? `${bot.name} · ${tr('rotinas')}` : tr('Rotinas')
     }
     if (o.kind === 'conversation') return app.conversations.find((c) => c.id === o.id)?.title ?? tr('Conversa excluída')
     return KINDS.find((k) => k.key === o.id)?.label ?? tr('Outros')
@@ -289,12 +290,15 @@ export function UsageView() {
     for (const g of data.groups) {
       if (g.owner.kind !== 'flow' || g.usage.cost / cost < 0.25) continue
       const flow = app.flows.find((f) => f.id === g.owner.id)
-      const sched = flow?.nodes.find((n) => n.type === 'trigger')?.data.schedule
-      const perDay = sched?.mode === 'interval' ? Math.round((24 * 60) / sched.everyMinutes) : undefined
+      // Soma dos disparos por intervalo das rotinas ligadas do bot.
+      const perDay =
+        (flow ? activeTriggers(flow) : [])
+          .map((t) => t.data.schedule)
+          .reduce((n, sched) => n + (sched?.mode === 'interval' ? Math.round((24 * 60) / sched.everyMinutes) : 0), 0) || undefined
       out.push({
         key: `flow-${g.owner.id}`,
         text: (
-          <>{tr('A rotina ')}<b>{nameOf(g.owner)}</b>{tr(' responde por ')}{Math.round((g.usage.cost / cost) * 100)}{tr('% do peso')}{perDay ? <>{tr(' e roda cerca de ')}{perDay}{tr(' vezes por dia')}</> : null}{tr('. Veja se dá para rodar menos vezes, juntar caixinhas ou usar um modelo mais leve nelas.')}</>
+          <>{tr('As rotinas de ')}<b>{app.getBot(flow?.botId)?.name ?? nameOf(g.owner)}</b>{tr(' respondem por ')}{Math.round((g.usage.cost / cost) * 100)}{tr('% do peso')}{perDay ? <>{tr(' e rodam cerca de ')}{perDay}{tr(' vezes por dia')}</> : null}{tr('. Veja se dá para rodar menos vezes, juntar caixinhas ou usar um modelo mais leve nelas.')}</>
         ),
         open: openOf(g.owner),
         action: tr('Abrir rotina')

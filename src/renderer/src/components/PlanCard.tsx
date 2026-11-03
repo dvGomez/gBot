@@ -271,6 +271,7 @@ export function PlanCard({ conversationId, msg }: { conversationId: string; msg:
     (!!plan.project && !('existingId' in plan.project))
   const action = edits ? (news ? tr('Aplicar tudo') : tr('Aplicar alterações')) : tr('Criar tudo')
   const newRoutines = routines.some((r) => !r.existingId)
+  const routinesBot = applied?.flowIds?.[0] ? app.flows.find((f) => f.id === applied.flowIds[0])?.botId : undefined
 
   const create = async () => {
     setCreating(true)
@@ -313,7 +314,8 @@ export function PlanCard({ conversationId, msg }: { conversationId: string; msg:
               {tr('Abrir bot')}
             </Button>
           )}
-          {applied.flowIds?.[0] && (
+          {/* As rotinas ficam na página do bot: só vale o atalho se for de outro bot que não o do "Abrir bot". */}
+          {applied.flowIds?.[0] && routinesBot && routinesBot !== applied.botIds?.[0] && (
             <Button className="h-8" onClick={() => app.openFlow(applied.flowIds[0])}>
               <Play size={13} />{tr(' Abrir rotina')}</Button>
           )}

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { AutomationPlan, Flow, FlowSchedule } from '@shared/types'
+import { triggerName, triggersOf } from '@shared/flows'
 import { listFlows } from '../../flows/store'
 import { listBots, listProjects, listSpecializations } from '../../store'
 
@@ -89,11 +90,10 @@ function describeSchedule(s?: FlowSchedule): string {
 }
 
 /** Etapas da rotina na ordem em que rodam a partir do gatilho (e se ela tem ramos, que a edição transforma em linha). */
-function routineSteps(flow: Flow, specName: (id?: string) => string | undefined) {
-  const trigger = flow.nodes.find((n) => n.type === 'trigger')
+function routineSteps(flow: Flow, triggerId: string, specName: (id?: string) => string | undefined) {
   const order: Flow['nodes'] = []
   const seen = new Set<string>()
-  const queue = trigger ? [trigger.id] : []
+  const queue = [triggerId]
   let branched = false
   while (queue.length) {
     const id = queue.shift()!
@@ -142,15 +142,18 @@ function existing() {
       projeto: b.projectId,
       instrucoes: clip(b.instructions, 1500),
       especializacoes: b.specializationIds.map((id) => ({ id, nome: specName(id) })),
+      // Cada gatilho do fluxo do bot é uma rotina.
       rotinas: flows
         .filter((f) => f.botId === b.id)
-        .map((f) => ({
-          id: f.id,
-          nome: f.name,
-          ligada: f.enabled,
-          agenda: describeSchedule(f.nodes.find((n) => n.type === 'trigger')?.data.schedule),
-          ...routineSteps(f, specName)
-        }))
+        .flatMap((f) =>
+          triggersOf(f).map((t) => ({
+            id: t.id,
+            nome: triggerName(t),
+            ligada: !!t.data.enabled,
+            agenda: describeSchedule(t.data.schedule),
+            ...routineSteps(f, t.id, specName)
+          }))
+        )
     }))
   }
 }
@@ -208,7 +211,7 @@ function planGuide(): string[] {
     '  • cria e edita arquivos na pasta de trabalho e roda comandos (com aprovação do usuário);',
     '  • conversa com o usuário e consulta outros bots quando precisa;',
     '  • usa um modelo: haiku (rápido e econômico), sonnet (equilíbrio, bom para a maioria), opus (o mais capaz, gasta mais limite);',
-    '  • tem rotinas: automações que rodam sozinhas por um gatilho:',
+    '  • tem um fluxo (canvas) com uma ou mais rotinas; cada rotina é um gatilho do fluxo com as etapas ligadas a ele:',
     '    - agenda por horários (dias da semana 0=domingo a 6=sábado e horários "HH:MM") ou por intervalo (a cada N minutos, no',
     '      mínimo 5); sem agenda, só roda quando o usuário mandar;',
     '    - etapas em sequência; o resultado de cada etapa vai junto para a próxima:',
@@ -359,7 +362,10 @@ export function sanitizePlan(raw: unknown): AutomationPlan {
         routines: b.routines
           .map((r) => ({
             // Rotina existente só vale se for do próprio bot.
-            existingId: r.existingId && existingId && flows.some((f) => f.id === r.existingId && f.botId === existingId) ? r.existingId : undefined,
+            existingId:
+              r.existingId && existingId && flows.some((f) => f.botId === existingId && triggersOf(f).some((t) => t.id === r.existingId))
+                ? r.existingId
+                : undefined,
             name: r.name,
             why: r.why,
             schedule: r.schedule ?? undefined,

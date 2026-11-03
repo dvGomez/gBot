@@ -5,7 +5,7 @@ const { resolve } = require('node:path')
 const { chromium } = require('playwright-core')
 
 // An isolated browser and fake preload keep this test away from the user's running flows and accounts.
-test('editor bloqueia alterações durante execução e libera depois de Parar tudo', { timeout: 60000 }, async (t) => {
+test('canvas do bot bloqueia alterações durante execução e libera depois de parar a rotina', { timeout: 60000 }, async (t) => {
   const executablePath = process.env.GBOT_TEST_BROWSER || [
     'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
     'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -29,12 +29,12 @@ test('editor bloqueia alterações durante execução e libera depois de Parar t
   page.on('pageerror', (error) => errors.push(error.message))
   await page.addInitScript(() => {
     const bot = { id: 'b1', name: 'Bot de teste', description: '', instructions: '', specializationIds: [], createdAt: 1, updatedAt: 1 }
-    const flow = { id: 'test', botId: 'b1', name: 'Rotina de teste', enabled: false, createdAt: 1, updatedAt: 1,
+    const flow = { id: 'test', botId: 'b1', createdAt: 1, updatedAt: 1,
       nodes: [
-        { id: 't', type: 'trigger', position: { x: 0, y: 0 }, data: {} },
+        { id: 't', type: 'trigger', position: { x: 0, y: 0 }, data: { label: 'Rotina de teste' } },
         { id: 'p', type: 'task', position: { x: 320, y: 0 }, data: { label: 'Etapa de teste', message: 'Mensagem' } }
       ], edges: [{ id: 'e', source: 't', target: 'p' }] }
-    const run = { id: 'run', flowId: 'test', trigger: 'manual', status: 'running', startedAt: Date.now(),
+    const run = { id: 'run', flowId: 'test', triggerId: 't', triggerLabel: 'Rotina de teste', trigger: 'manual', status: 'running', startedAt: Date.now(),
       steps: [{ nodeId: 'p', label: 'Etapa de teste', status: 'running' }] }
     const listeners = new Set()
     window.testFlow = { saves: 0, stops: 0 }
@@ -48,8 +48,9 @@ test('editor bloqueia alterações durante execução e libera depois de Parar t
           if (run.status === 'running') throw new Error('Rotina em execução')
           window.testFlow.saves++
         },
-        stop: async () => {
+        stop: async (_id, triggerId) => {
           window.testFlow.stops++
+          window.testFlow.stoppedTrigger = triggerId
           run.status = 'stopped'; run.finishedAt = Date.now(); run.steps[0].status = 'stopped'
           listeners.forEach((callback) => callback(structuredClone(run)))
         }
@@ -60,12 +61,11 @@ test('editor bloqueia alterações durante execução e libera depois de Parar t
     window.gbot.providers.onActionProgress = () => () => {}
   })
   await page.goto(server.resolvedUrls.local[0])
-  // A rotina fica na página do bot dono dela.
+  // O canvas do fluxo fica direto na página do bot; o gatilho rodando mostra "Parar".
   await page.locator('nav').getByText('Bot de teste', { exact: true }).click()
-  await page.getByRole('button', { name: /^Rotina de teste/ }).first().click()
-  await page.getByRole('button', { name: 'Parar tudo', exact: true }).waitFor()
-  assert(await page.getByRole('textbox', { name: 'Nome da rotina' }).isDisabled())
-  for (const name of ['Tarefa', 'Decisão', 'Confirmação']) {
+  const trigger = page.locator('.react-flow__node[data-id="t"]')
+  await trigger.getByRole('button', { name: 'Parar', exact: true }).waitFor()
+  for (const name of ['Gatilho', 'Tarefa', 'Decisão', 'Confirmação']) {
     assert(await page.getByRole('button', { name, exact: true }).isDisabled(), name)
   }
   await page.locator('.react-flow__node[data-id="p"]').click()
@@ -74,15 +74,23 @@ test('editor bloqueia alterações durante execução e libera depois de Parar t
   await page.locator('.react-flow__node[data-id="p"]').dragTo(page.locator('.react-flow__node[data-id="t"]'))
   assert.equal(await page.locator('.react-flow__node[data-id="p"]').getAttribute('style'), position)
   assert.equal(await page.evaluate(() => window.testFlow.saves), 0)
-  await page.getByRole('button', { name: 'Parar tudo', exact: true }).click()
-  await page.getByRole('button', { name: 'Rodar agora', exact: true }).waitFor()
+  await trigger.getByRole('button', { name: 'Parar', exact: true }).click()
+  await trigger.getByRole('button', { name: 'Rodar', exact: true }).waitFor()
   assert.equal(await page.evaluate(() => window.testFlow.stops), 1)
-  assert(await page.getByRole('textbox', { name: 'Nome da rotina' }).isEnabled())
+  assert.equal(await page.evaluate(() => window.testFlow.stoppedTrigger), 't')
   assert(await page.getByRole('button', { name: 'Tarefa', exact: true }).isEnabled())
   await page.getByRole('button', { name: 'Execuções (1)', exact: true }).click()
   await page.getByText(/Parado por você/).first().waitFor()
   await page.getByRole('button', { name: 'Tarefa', exact: true }).click()
   await page.waitForFunction(() => window.testFlow.saves > 0)
   assert.equal(await page.locator('.react-flow__node').count(), 3)
+  // Chat flutuante: abre a conversa com o bot por cima do canvas, sem sair da página do bot.
+  await page.getByRole('button', { name: 'Chat', exact: true }).click()
+  await page.getByText('Converse com Bot de teste').waitFor()
+  assert(await page.locator('.react-flow').isVisible())
+  assert(await page.getByPlaceholder('Mensagem para Bot de teste…').isVisible())
+  await page.screenshot({ path: process.env.GBOT_TEST_SHOT || require('node:os').tmpdir() + '/gbot-dock.png' })
+  await page.getByRole('button', { name: 'Fechar chat', exact: true }).click()
+  await page.getByRole('button', { name: 'Chat', exact: true }).waitFor()
   assert.deepEqual(errors, [])
 })

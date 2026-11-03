@@ -20,5 +20,8 @@ export const enHome: Record<string, string> = {
   'Nada por aqui ainda. Comece uma conversa ou crie um bot.': 'Nothing here yet. Start a chat or create a bot.',
   'Nenhuma rotina ativa. Ligue uma rotina para ela rodar sozinha no horário.': 'No routines enabled. Enable one to run automatically on schedule.',
   'Rotinas desligadas': 'Disabled routines',
-  'Rotinas agendadas rodam enquanto o gBot estiver aberto (inclusive na barra de menu).': 'Scheduled routines run while gBot is open, including in the system tray.'
+  'Rotinas agendadas rodam enquanto o gBot estiver aberto (inclusive na barra de menu).': 'Scheduled routines run while gBot is open, including in the system tray.',
+  // Rotinas como gatilhos do fluxo do bot (memória e consumo)
+  'nas rotinas de {0}': "in {0}'s routines",
+  'As rotinas de': 'The routines of', 'respondem por': 'account for', 'e rodam cerca de': 'and run about'
 }

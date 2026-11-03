@@ -1,9 +1,10 @@
+import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
-import type { Flow, FlowRun } from '@shared/types'
+import type { Flow, FlowNode, FlowRun } from '@shared/types'
 
-/** Rotinas dos bots em data/flows.json; execuções em data/flow-runs/<rotina>.json (as 50 mais recentes). */
+/** Fluxos dos bots (um por bot) em data/flows.json; execuções em data/flow-runs/<fluxo>.json (as 50 mais recentes). */
 const MAX_RUNS = 50
 
 function dir(...parts: string[]) {
@@ -48,7 +49,36 @@ export function removeFlow(id: string) {
   rmSync(runsFile(id), { force: true })
 }
 
-/** Remove as rotinas de um bot que foi excluído. */
+/** Fluxo do bot (cada bot tem um). */
+export const botFlow = (botId: string): Flow | undefined => listFlows().find((f) => f.botId === botId)
+
+/** Gatilho novo, desligado: segunda a sexta às 9h. */
+export function newTrigger(position = { x: 0, y: 0 }): FlowNode {
+  return { id: randomUUID(), type: 'trigger', position, data: { enabled: false, schedule: { mode: 'times', days: [1, 2, 3, 4, 5], times: ['09:00'] } } }
+}
+
+/** Cria o fluxo do bot se ele ainda não tem um. */
+export function ensureBotFlow(botId: string): Flow {
+  const existing = botFlow(botId)
+  if (existing) return existing
+  const now = Date.now()
+  const flow: Flow = { id: randomUUID(), botId, nodes: [newTrigger()], edges: [], createdAt: now, updatedAt: now }
+  saveFlow(flow)
+  return flow
+}
+
+/** Liga ou desliga a agenda de um gatilho direto no arquivo (a execução em andamento usa a cópia dela). */
+export function setTriggerEnabled(flowId: string, triggerId: string, enabled: boolean) {
+  const flow = getFlow(flowId)
+  if (!flow) throw new Error('Rotina não encontrada.')
+  saveFlow({
+    ...flow,
+    nodes: flow.nodes.map((n) => (n.id === triggerId && n.type === 'trigger' ? { ...n, data: { ...n.data, enabled } } : n)),
+    updatedAt: Date.now()
+  })
+}
+
+/** Remove o fluxo de um bot que foi excluído. */
 export function removeBotFlows(botId: string) {
   for (const flow of listFlows()) if (flow.botId === botId) removeFlow(flow.id)
 }

@@ -14,6 +14,7 @@ module.exports = {
   getProvider: () => ({ send: (...args) => state.send(...args) }),
   getBot: (id) => state.bots.get(id) ?? ({ id, name: 'Bot de teste', description: '', instructions: '', specializationIds: [] }),
   getSpecialization: (id) => state.specializations.get(id),
+  listBots: () => [...state.bots.values()],
   saveRun: (run) => state.runs.set(run.id, structuredClone(run)),
   listFlows: () => [...new Set([...state.runs.values()].map((run) => run.flowId))].map((id) => ({ id })),
   listRuns: (flowId) => [...state.runs.values()].filter((run) => run.flowId === flowId),

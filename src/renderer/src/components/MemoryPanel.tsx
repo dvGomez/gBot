@@ -63,9 +63,11 @@ function SourceLabel({ lesson: l }: { lesson: Lesson }) {
   const app = useApp()
   if (l.source.kind === 'manual') return <>{tr('adicionado por você')}</>
   if (l.source.kind === 'flow') {
-    const routine = app.flows.find((f) => f.id === l.source.id)
-    return routine ? (
-      <button onClick={() => app.openFlow(routine.id)} className="inline text-left underline underline-offset-2 hover:text-fg">{tr('na rotina "')}{routine.name}"
+    // A lição guarda só o fluxo do bot (que reúne as rotinas dele).
+    const flow = app.flows.find((f) => f.id === l.source.id)
+    const bot = app.getBot(flow?.botId)
+    return flow && bot ? (
+      <button onClick={() => app.openFlow(flow.id)} className="inline text-left underline underline-offset-2 hover:text-fg">{tr('nas rotinas de {0}', bot.name)}
       </button>
     ) : (
       <>{tr('numa rotina')}</>

@@ -23,7 +23,7 @@ import { addUsage } from '@shared/usage'
 import type { ItemRef } from '@/lib/dnd'
 import { uid } from '@/lib/format'
 import { avatarsForPlan, freeAvatars } from '@/lib/applyPlan'
-import { findMention, findSlashes } from '@/lib/mentions'
+import { findSlashes, leadingMention } from '@/lib/mentions'
 import { load, save } from './storage'
 
 export type View =
@@ -34,7 +34,6 @@ export type View =
   | 'specialization-editor'
   | 'project'
   | 'project-editor'
-  | 'flow-editor'
   | 'providers'
   | 'usage'
   | 'memory'
@@ -70,15 +69,17 @@ export interface AppState {
   connected: boolean
   refreshProviders(): Promise<void>
 
-  /** Rotinas de todos os bots. */
+  /** Fluxos dos bots (um por bot; cada gatilho dele é uma rotina). */
   flows: Flow[]
-  /** Rotina aberta no canvas. */
+  /** Fluxo do bot aberto na página do bot (o canvas fica nela). */
   selectedFlow?: Flow
+  /** Fluxo de um bot. */
+  botFlow(botId?: string): Flow | undefined
+  /** Abre a página do bot dono do fluxo, onde fica o canvas. */
   openFlow(id: string): void
-  /** Cria uma rotina nova para o bot (com o gatilho) e abre no canvas. */
-  newFlow(botId: string): Promise<void>
   saveFlow(flow: Flow): Promise<void>
-  removeFlow(id: string): Promise<void>
+  /** Liga ou desliga a agenda de um gatilho (vale mesmo com o fluxo rodando). */
+  setTriggerEnabled(flowId: string, triggerId: string, enabled: boolean): Promise<void>
 
   projects: Project[]
   /** Projeto aberto na página do projeto ou no editor (ausente no editor = criando um novo). */
@@ -132,9 +133,10 @@ export interface AppState {
   preferredModel(providerId?: string): string | undefined
   /** Guarda o modelo escolhido como padrão para as próximas criações (conversas, bots, caixinhas de rotina). */
   rememberModel(model: string | undefined, providerId?: string): void
-  openConversation(id: string): void
+  /** Abre a conversa; com `inPlace`, fica na tela atual (ex.: o chat flutuante da página do bot). */
+  openConversation(id: string, opts?: { inPlace?: boolean }): void
   /** Abre um chat vazio; com `botId`, a conversa será com aquele bot; com `projectId`, dentro do projeto. */
-  newConversation(botId?: string, projectId?: string): void
+  newConversation(botId?: string, projectId?: string, opts?: { inPlace?: boolean }): void
   /** Move a conversa para um projeto (ou para fora de projetos, com undefined). */
   moveConversation(id: string, projectId?: string): Promise<void>
   /** Move uma conversa, bot ou especialização para um projeto (ou para fora, com undefined). */
@@ -200,7 +202,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [providersLoaded, setProvidersLoaded] = useState(false)
 
   const [flows, setFlows] = useState<Flow[]>([])
-  const [selectedFlowId, setSelectedFlowId] = useState<string>()
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>()
   const [specializations, setSpecializations] = useState<Specialization[]>([])
@@ -493,8 +494,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             })
       const providerId = activeProviderId
       const bot = getBot(conversation.botId)
-      // @menção a outro bot: a mensagem vai direto para ele, e a resposta aparece com o avatar dele.
-      const mentioned = conversation.mode === 'architect' ? undefined : findMention(text, visibleBots)
+      // @Bot no começo da mensagem: ela vai direto para ele, e a resposta aparece com o avatar dele.
+      const mentioned = conversation.mode === 'architect' ? undefined : leadingMention(text, visibleBots)
       const target = mentioned && mentioned.id !== conversation.botId ? mentioned : undefined
       // /Especialização: as instruções dela vão junto nesta mensagem.
       const slashed = conversation.mode === 'architect' ? [] : findSlashes(text, visibleSpecializations).map((sp) => sp.id)
@@ -518,7 +519,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setDraftProjectId(undefined)
       setDraftModel(undefined)
       if (!activeConversation && !fresh) setDraftConversationId(uid())
-      setView('chat')
+      // Na página do bot a conversa acontece no chat flutuante: a tela não muda.
+      if (view !== 'bot') setView('chat')
 
       const p: Pending = { requestId: uid(), conversationId: updated.id, messageId: botMsg.id }
       pendingRef.current = p
@@ -542,7 +544,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         architect: updated.mode === 'architect' || undefined
       })
     },
-    [activeConversation, draftConversationId, draftBotId, draftProjectId, draftOrPreferred, getBot, bots, visibleBots, visibleSpecializations, activeProviderId]
+    [activeConversation, draftConversationId, draftBotId, draftProjectId, draftOrPreferred, getBot, bots, visibleBots, visibleSpecializations, activeProviderId, view]
   )
 
   const cancel = useCallback(() => {
@@ -552,7 +554,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const openConversation = useCallback(
-    async (id: string) => {
+    async (id: string, inPlace?: boolean) => {
       if (!loaded[id]) {
         const conv = await window.gbot.conversations.get(id)
         if (!conv) return
@@ -562,7 +564,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setDraftBotId(undefined)
       setDraftProjectId(undefined)
       setDraftModel(undefined)
-      setView('chat')
+      if (!inPlace) setView('chat')
     },
     [loaded]
   )
@@ -612,50 +614,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refreshProviders,
 
       flows,
-      selectedFlow: flows.find((f) => f.id === selectedFlowId),
+      selectedFlow: flows.find((f) => f.botId === selectedBotId),
+      botFlow: (botId) => (botId ? flows.find((f) => f.botId === botId) : undefined),
       openFlow: (id) => {
-        setSelectedFlowId(id)
-        setView('flow-editor')
-      },
-      newFlow: async (botId) => {
-        const now = Date.now()
-        const flow: Flow = {
-          id: uid(),
-          botId,
-          name: tr('Nova rotina'),
-          enabled: false,
-          nodes: [
-            {
-              id: uid(),
-              type: 'trigger',
-              position: { x: 0, y: 0 },
-              data: { schedule: { mode: 'times', days: [1, 2, 3, 4, 5], times: ['09:00'] } }
-            }
-          ],
-          edges: [],
-          createdAt: now,
-          updatedAt: now
-        }
-        await window.gbot.flows.save(flow)
-        setFlows((fs) => [...fs, flow])
-        setSelectedFlowId(flow.id)
-        setView('flow-editor')
+        const botId = flows.find((f) => f.id === id)?.botId
+        if (!botId) return
+        setSelectedBotId(botId)
+        setView('bot')
       },
       saveFlow: async (flow) => {
         await window.gbot.flows.save(flow)
-        // Rotina nova (ex.: criada pelo plano da página inicial) entra na lista.
+        // Fluxo novo entra na lista.
         setFlows((fs) => (fs.some((f) => f.id === flow.id) ? fs.map((f) => (f.id === flow.id ? flow : f)) : [...fs, flow]))
       },
-      removeFlow: async (id) => {
-        const botId = flows.find((f) => f.id === id)?.botId
-        await window.gbot.flows.remove(id)
-        setFlows((fs) => fs.filter((f) => f.id !== id))
-        if (view === 'flow-editor' && selectedFlowId === id) {
-          setSelectedFlowId(undefined)
-          // Volta para a página do bot dono da rotina.
-          if (botId) setSelectedBotId(botId)
-          setView(botId ? 'bot' : 'home')
-        }
+      setTriggerEnabled: async (flowId, triggerId, enabled) => {
+        await window.gbot.flows.setTriggerEnabled(flowId, triggerId, enabled)
+        setFlows((fs) =>
+          fs.map((f) =>
+            f.id === flowId ? { ...f, nodes: f.nodes.map((n) => (n.id === triggerId ? { ...n, data: { ...n.data, enabled } } : n)) } : f
+          )
+        )
       },
 
       projects,
@@ -737,6 +715,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       saveBot: async (bot) => {
         await window.gbot.bots.save(bot)
         setBots((bs) => (bs.some((b) => b.id === bot.id) ? bs.map((b) => (b.id === bot.id ? bot : b)) : [...bs, bot]))
+        // Bot novo ganha o fluxo dele no processo principal.
+        if (!flows.some((f) => f.botId === bot.id)) setFlows(await window.gbot.flows.list())
       },
       removeBot: async (id) => {
         await window.gbot.bots.remove(id)
@@ -745,8 +725,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setMetas((ms) => ms.filter((m) => m.botId !== id))
         // Só sai da tela atual se ela mostrava o bot excluído (ou uma conversa dele).
         const showingBot = (view === 'bot' || view === 'bot-editor') && selectedBotId === id
-        const showingRoutine = view === 'flow-editor' && flows.find((f) => f.id === selectedFlowId)?.botId === id
-        if (showingBot || showingRoutine || (view === 'chat' && activeBot?.id === id)) {
+        if (showingBot || (view === 'chat' && activeBot?.id === id)) {
           setSelectedBotId(undefined)
           setActiveId(undefined)
           setView('home')
@@ -765,8 +744,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActiveModel,
       preferredModel,
       rememberModel,
-      openConversation: (id) => void openConversation(id),
-      newConversation: (botId, projectId) => {
+      openConversation: (id, opts) => void openConversation(id, opts?.inPlace),
+      newConversation: (botId, projectId, opts) => {
         setActiveId(undefined)
         setDraftBotId(botId)
         // Conversa com bot começa no modelo dele; sem bot, no último escolhido.
@@ -778,7 +757,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         setDraftModel(bot ? (bot.model ?? 'default') : undefined)
         setDraftProjectId(projectId ?? getBot(botId)?.projectId)
-        setView('chat')
+        if (!opts?.inPlace) setView('chat')
       },
       moveConversation,
       moveItem: async (item, projectId) => {
@@ -848,7 +827,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       connected,
       refreshProviders,
       flows,
-      selectedFlowId,
       projects,
       selectedProjectId,
       getProject,

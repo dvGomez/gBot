@@ -9,7 +9,6 @@ import { BotView } from '@/views/BotView'
 import { ChatView } from '@/views/ChatView'
 import { HomeView } from '@/views/HomeView'
 import { LoginView, SplashView } from '@/views/LoginView'
-import { FlowEditorView } from '@/views/FlowEditorView'
 import { ProjectEditorView } from '@/views/ProjectEditorView'
 import { ProjectView } from '@/views/ProjectView'
 import { ProvidersView } from '@/views/ProvidersView'
@@ -65,7 +64,7 @@ export function App() {
         <PendingApprovalsBar />
         <PendingConfirmationsBar />
         <UpdateNotice />
-        <div className={view === 'chat' || view === 'flow-editor' ? 'min-h-0 flex-1' : 'min-h-0 flex-1 overflow-y-auto'}>
+        <div className={view === 'chat' || view === 'bot' ? 'min-h-0 flex-1' : 'min-h-0 flex-1 overflow-y-auto'}>
           {view === 'home' && <HomeView />}
           {view === 'chat' && <ChatView />}
           {view === 'bot' && <BotView />}
@@ -74,7 +73,6 @@ export function App() {
             <SpecializationEditorView key={app.selectedSpecialization?.id ?? `new-${app.specializationDraftProjectId ?? ''}`} />
           )}
           {view === 'project' && <ProjectView />}
-          {view === 'flow-editor' && <FlowEditorView />}
           {view === 'project-editor' && <ProjectEditorView key={app.selectedProject?.id ?? 'new'} />}
           {view === 'providers' && <ProvidersView />}
           {view === 'usage' && <UsageView />}

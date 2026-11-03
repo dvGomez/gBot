@@ -88,5 +88,32 @@ export const enTeam: Record<string, string> = {
   'A rotina não tem gatilho.': 'The routine has no trigger.',
   'A rotina tem um ciclo (uma caixinha volta para o gatilho).': 'The routine has a loop (a step leads back to the trigger).',
   'A rotina tem um ciclo entre caixinhas.': 'The routine has a loop between steps.',
-  'Viu os bots, especializações e projetos do gBot': 'Checked gBot bots, specializations and projects'
+  'Viu os bots, especializações e projetos do gBot': 'Checked gBot bots, specializations and projects',
+  // Fluxo do bot (canvas na página do bot, um gatilho por rotina)
+  'Nenhuma conversa ainda. Pergunte a {0} o que quiser, inclusive sobre o que as rotinas encontraram.':
+    'No chats yet. Ask {0} anything, including what the routines found.',
+  'Nenhum arquivo mexido pelas execuções das rotinas ainda.': 'No files accessed by routine runs yet.',
+  'Clique numa caixinha para configurar, ou adicione um Gatilho, Tarefa, Decisão ou Confirmação.':
+    'Click a step to configure it, or add a Trigger, Task, Decision or Confirmation.',
+  'Só manual': 'Manual only', 'Esta rotina só roda quando você mandar (botão Rodar no gatilho).': 'This routine only runs when you start it (Run button on the trigger).',
+  'Aparece no histórico e nas notificações.': 'Shown in the run history and notifications.',
+  'Ligada: roda pela agenda': 'On: runs on schedule', 'Desligada: só roda quando você mandar': 'Off: only runs when you start it',
+  ' Parar': ' Stop', 'Parar': 'Stop', 'Rodar': 'Run', 'Desligada': 'Off',
+  'Escolher especializações': 'Choose specializations', 'Carregando o fluxo…': 'Loading the flow…',
+  'Viu o histórico das rotinas': 'Checked the routine history', 'Viu os detalhes de uma execução': 'Checked a run’s details',
+  'Este bot já tem um fluxo.': 'This bot already has a flow.',
+  // Menções com @
+  'Mencionar um bot': 'Mention a bot',
+  'Use @ para envolver outro bot: o bot desta etapa pergunta a ele e segue de acordo com a resposta.':
+    'Use @ to involve another bot: this step’s bot asks it and acts on the answer.',
+  'Ex.: Pergunte ao @Fulano sobre o pedido de hoje e, se estiver atrasado, avise o cliente.':
+    'E.g. Ask @Someone about today’s order and, if it is late, notify the customer.',
+  'Tom, prioridades e o que evitar. Vale em tudo o que o bot faz, junto com as especializações. Use @ para citar outro bot.':
+    'Tone, priorities and what to avoid. Applies to everything the bot does, along with its specializations. Use @ to mention another bot.',
+  'O passo a passo, os cuidados e o formato da resposta. Vale para todo bot que usar esta especialização. Use @ para envolver outro bot.':
+    'The steps, precautions and answer format. Applies to every bot that uses this specialization. Use @ to involve another bot.',
+  // Chat flutuante da página do bot
+  'Chat': 'Chat', 'Abrir em tela cheia': 'Open full screen', 'Fechar chat': 'Close chat',
+  'Pergunte o que quiser, inclusive sobre o que as rotinas encontraram, ou peça mudanças no fluxo: {0} propõe e você aplica.':
+    'Ask anything, including what the routines found, or ask for changes to the flow: {0} proposes and you apply.'
 }

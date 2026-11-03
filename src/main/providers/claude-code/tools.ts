@@ -26,6 +26,10 @@ export function describeTool(name: string, input: Input = {}): string {
       return 'Viu a lista de bots'
     case GBOT_OVERVIEW_TOOL:
       return 'Viu os bots, especializações e projetos do gBot'
+    case 'mcp__gbot__routine_history':
+      return 'Viu o histórico das rotinas'
+    case 'mcp__gbot__routine_run':
+      return 'Viu os detalhes de uma execução'
     case 'mcp__gbot__save_lesson':
       return input.title ? `Aprendeu: ${clip(str(input.title), 50)}` : 'Guardando na memória'
     case 'mcp__gbot__browser_navigate':

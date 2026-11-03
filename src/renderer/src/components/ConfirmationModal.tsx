@@ -8,10 +8,10 @@ import { FileCards } from './FileCards'
 import { Markdown } from './Markdown'
 import { Button, inputClass } from './ui'
 
-/** Nome da rotina com o bot dono na frente (ex.: "Ana · Resumo do dia"), quando ela ainda existe. */
+/** Nome da rotina com o bot dono na frente (ex.: "Ana · Resumo do dia"), sem repetir o bot se já vier no nome. */
 function withBot(item: PendingConfirmation, app: AppState): string {
   const bot = app.getBot(app.flows.find((f) => f.id === item.flowId)?.botId)
-  return bot ? `${bot.name} · ${item.flowName}` : item.flowName
+  return bot && !item.flowName.startsWith(`${bot.name} · `) ? `${bot.name} · ${item.flowName}` : item.flowName
 }
 
 /** Botões das opções: a primeira em destaque, como na notificação. */

@@ -16,7 +16,7 @@ const jiti = createJiti(__filename, {
   }
 })
 const { state } = require(mock)
-const { runFlow, stopFlow, isFlowRunning, recoverInterruptedFlows } = jiti('../src/main/flows/runner.ts')
+const { runFlow, stopFlow, isFlowRunning, isTriggerRunning, recoverInterruptedFlows } = jiti('../src/main/flows/runner.ts')
 const { listConfirmations, requestConfirmation } = jiti('../src/main/confirmations.ts')
 const { runAsBot, listBotTasks } = jiti('../src/main/botQueue.ts')
 const tick = () => new Promise((r) => setImmediate(r))
@@ -26,7 +26,7 @@ const deferred = () => {
   return { promise, resolve }
 }
 const node = (id, type = 'task', data = {}) => ({ id, type, position: { x: 0, y: 0 }, data: { message: 'Teste', ...data } })
-const flow = (id, nodes, edges, botId = 'bot') => ({ id, botId, name: id, enabled: false, createdAt: 1, updatedAt: 1,
+const flow = (id, nodes, edges, botId = 'bot') => ({ id, botId, createdAt: 1, updatedAt: 1,
   nodes: [node('trigger', 'trigger'), ...nodes],
   edges: edges.map(([source, target]) => ({ id: `${source}-${target}`, source, target })) })
 const blocking = (signal) => new Promise((_, reject) => {
@@ -45,7 +45,7 @@ test('parar fluxos cancela trabalho e impede novas etapas', async (t) => {
     }
     const f = flow('parallel', [node('first', 'task', { message: 'primeira' }), node('a'), node('b'), node('last')],
       [['trigger', 'first'], ['first', 'a'], ['first', 'b'], ['a', 'last'], ['b', 'last']])
-    const id = await runFlow(f, 'manual')
+    const id = await runFlow(f, 'trigger', 'manual')
     await tick()
     await tick()
     assert.equal(signals.length, 1)
@@ -64,11 +64,11 @@ test('parar fluxos cancela trabalho e impede novas etapas', async (t) => {
     const old = deferred()
     state.send = () => old.promise
     const f = flow('late', [node('a')], [['trigger', 'a']])
-    const id = await runFlow(f, 'manual')
+    const id = await runFlow(f, 'trigger', 'manual')
     await tick()
     stopFlow(f.id)
     state.send = (_req, _emit, signal) => blocking(signal)
-    const next = await runFlow(f, 'manual')
+    const next = await runFlow(f, 'trigger', 'manual')
     old.resolve()
     await tick()
     assert.equal(state.runs.get(id).status, 'stopped')
@@ -83,7 +83,7 @@ test('parar fluxos cancela trabalho e impede novas etapas', async (t) => {
     state.send = async () => { calls++ }
     const f = flow('confirm', [node('c', 'confirm', { options: [{ id: 'ok', label: 'Aprovar' }] }), node('last')],
       [['trigger', 'c'], ['c', 'last']])
-    const id = await runFlow(f, 'manual')
+    const id = await runFlow(f, 'trigger', 'manual')
     await tick()
     assert.equal(listConfirmations().length, 1)
     stopFlow(f.id)
@@ -98,7 +98,7 @@ test('parar fluxos cancela trabalho e impede novas etapas', async (t) => {
     let signal
     state.decision = (...args) => { signal = args[5]; return blocking(signal) }
     const f = flow('decision', [node('d', 'decision', { options: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }] })], [['trigger', 'd']])
-    const id = await runFlow(f, 'manual')
+    const id = await runFlow(f, 'trigger', 'manual')
     await tick()
     stopFlow(f.id)
     assert(signal.aborted)
@@ -113,7 +113,7 @@ test('parar fluxos cancela trabalho e impede novas etapas', async (t) => {
     let calls = 0
     state.send = async () => { calls++ }
     const f = flow('queued', [node('b')], [['trigger', 'b']])
-    await runFlow(f, 'manual')
+    await runFlow(f, 'trigger', 'manual')
     await tick()
     assert.equal(listBotTasks().length, 2)
     stopFlow(f.id)
@@ -146,7 +146,7 @@ test('routine steps run as the owning bot, with its provider and model unless th
     node('a', 'task', { specializationId: 'sp' }),
     node('b', 'task', { providerId: 'claude-code', model: 'haiku' })
   ], [['trigger', 'a'], ['a', 'b']], 'codex-bot')
-  await runFlow(f, 'manual')
+  await runFlow(f, 'trigger', 'manual')
   await tick()
   assert.deepEqual(requests.map(({ providerId, model, bot, specializationIds }) => ({ providerId, model, bot: bot.id, specializationIds })), [
     { providerId: 'codex', model: 'gpt-test', bot: 'codex-bot', specializationIds: ['sp'] },
@@ -155,9 +155,64 @@ test('routine steps run as the owning bot, with its provider and model unless th
   assert.match(requests[0].text, /especialização "Revisar PRs"/)
   // Bot sem provedor salvo (legado) usa o Claude Code com o modelo padrão.
   requests.length = 0
-  await runFlow(flow('legacy', [node('c')], [['trigger', 'c']], 'legacy-bot'), 'manual')
+  await runFlow(flow('legacy', [node('c')], [['trigger', 'c']], 'legacy-bot'), 'trigger', 'manual')
   await tick()
   assert.deepEqual(requests.map(({ providerId, model }) => ({ providerId, model })), [{ providerId: 'claude-code', model: undefined }])
   state.bots.clear()
   state.specializations.clear()
+})
+
+test('each trigger runs only its own lane, independently of the other triggers', async () => {
+  const sent = []
+  const hold = deferred()
+  state.send = async (req, emit, signal) => {
+    // A mensagem da caixinha vem depois do contexto das etapas anteriores (que cita o que elas pediram).
+    const own = req.text.split('</contexto_da_execucao>').at(-1)
+    sent.push(own.match(/Etapa ([A-C])/)?.[1])
+    if (own.includes('Etapa A')) await Promise.race([hold.promise, blocking(signal)])
+    emit({ type: 'delta', text: 'ok' })
+  }
+  // Dois gatilhos no mesmo fluxo; a etapa C recebe dos dois, mas só roda pelo gatilho que disparou.
+  const f = { id: 'lanes', botId: 'bot', createdAt: 1, updatedAt: 1,
+    nodes: [node('t1', 'trigger', { label: 'Manhã' }), node('t2', 'trigger', { label: 'Tarde' }),
+      node('a', 'task', { message: 'Etapa A' }), node('b', 'task', { message: 'Etapa B' }), node('c', 'task', { message: 'Etapa C' })],
+    edges: [['t1', 'a'], ['t2', 'b'], ['a', 'c'], ['b', 'c']].map(([source, target]) => ({ id: `${source}-${target}`, source, target })) }
+  const morning = await runFlow(f, 't1', 'manual')
+  await tick()
+  assert(isTriggerRunning('lanes', 't1'))
+  assert(!isTriggerRunning('lanes', 't2'))
+  await assert.rejects(runFlow(f, 't1', 'manual'), /já está rodando/)
+  // O outro gatilho roda ao mesmo tempo (as etapas entram na fila do bot).
+  const afternoon = await runFlow(f, 't2', 'manual')
+  stopFlow('lanes', 't1')
+  await tick(); await tick(); await tick()
+  assert.equal(state.runs.get(morning).status, 'stopped')
+  assert.equal(state.runs.get(morning).triggerLabel, 'Manhã')
+  const run = state.runs.get(afternoon)
+  assert.equal(run.status, 'done')
+  assert.equal(run.triggerId, 't2')
+  assert.deepEqual(run.steps.map((s) => s.nodeId), ['b', 'c'])
+  assert.deepEqual(sent, ['A', 'B', 'C'])
+  hold.resolve()
+})
+
+test('a step that mentions another bot tells the routine bot to consult it with ask_bot', async () => {
+  const requests = []
+  state.send = async (req, emit) => { requests.push(req); emit({ type: 'delta', text: 'ok' }) }
+  state.decision = async () => { throw new Error('decisão com menção não deve usar a pergunta avulsa') }
+  state.bots.set('owner', { id: 'owner', name: 'Lia', description: '', instructions: '', specializationIds: [] })
+  state.bots.set('fin', { id: 'fin', name: 'Financeiro Ana', description: 'Cuida das cobranças', instructions: '', specializationIds: [] })
+  const f = flow('mentions', [
+    node('a', 'task', { message: 'Pergunte ao @Financeiro Ana se o pedido 42 foi pago e trate de acordo.' }),
+    node('d', 'decision', { message: 'Confirme com @financeiro ana.', options: [{ id: 'y', label: 'Pago' }, { id: 'n', label: 'Não pago' }] })
+  ], [['trigger', 'a'], ['a', 'd']], 'owner')
+  const id = await runFlow(f, 'trigger', 'manual')
+  await tick(); await tick(); await tick()
+  assert.match(requests[0].text, /Bots mencionados nesta etapa: @Financeiro Ana \(Cuida das cobranças\)/)
+  assert.match(requests[0].text, /ask_bot/)
+  // A decisão com menção roda como etapa do bot (com ferramentas), não como pergunta avulsa.
+  assert.equal(requests.length, 2)
+  assert.match(requests[1].text, /consulte os bots mencionados/)
+  assert.equal(state.runs.get(id).steps.find((s) => s.nodeId === 'd').status, 'error')
+  state.bots.clear()
 })

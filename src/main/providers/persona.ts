@@ -41,7 +41,23 @@ export function botPromptLines(bot: BotRef): string[] {
           'Suas especializações (o que você sabe fazer; siga as instruções da que combinar com o pedido):',
           ...specs.flatMap(specializationBlock)
         ]
-      : [])
+      : []),
+    'Você tem rotinas que rodam sozinhas: para responder sobre o que elas fizeram ou encontraram, consulte o histórico com',
+    '`routine_history` e os detalhes de uma execução com `routine_run` (não invente: use os dados das execuções).'
+  ]
+}
+
+/**
+ * Na conversa com o bot: ele pode mudar o próprio fluxo e as especializações quando o usuário pedir, propondo um plano
+ * que o usuário aplica no cartão (como o arquiteto da página inicial).
+ */
+export function botEditLines(bot: BotRef): string[] {
+  return [
+    'O usuário pode pedir mudanças em você: nas suas rotinas (gatilhos, agenda, etapas), nas suas especializações ou nos',
+    `seus dados. Para isso, chame \`gbot_overview\` e depois \`propose_plan\` com você mesmo em "bots" ("existingId": "${bot.id}")`,
+    'e, em "routines", cada rotina como deve ficar ("existingId" = o id do gatilho dela; rotina nova sem "existingId").',
+    'Mude só o que foi pedido e explique em poucas linhas o que vai mudar. Se faltar algo que muda o resultado, pergunte com',
+    '`ask_user`. Quem aplica é o usuário, pelo cartão do plano.'
   ]
 }
 

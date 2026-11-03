@@ -5,6 +5,7 @@ import type { Project } from '@shared/types'
 import { PROJECT_COLORS, ProjectTile } from '@/components/ProjectBadge'
 import { Button, Card, Field, PageHeader, inputClass } from '@/components/ui'
 import { uid } from '@/lib/format'
+import { MentionTextarea } from '@/components/MentionTextarea'
 import { useApp } from '@/state/app'
 
 /** Criar ou editar um projeto. Só o nome é obrigatório; pasta e instruções podem vir depois. */
@@ -128,9 +129,10 @@ export function ProjectEditorView() {
         </Field>
 
         <Field label={tr('Instruções do projeto')} hint={tr('Opcional. Valem para todas as conversas e bots deste projeto, somadas às de cada bot.')}>
-          <textarea
+          <MentionTextarea
             value={instructions}
-            onChange={(e) => setInstructions(e.target.value)}
+            onValueChange={setInstructions}
+            bots={app.bots.filter((b) => !b.projectId || b.projectId === editing?.id)}
             rows={5}
             placeholder={tr('Ex.: Este projeto é sobre o app MagmaFit (React + Angular). Responda em português e cite os arquivos que usar.')}
             className={`${inputClass} resize-y leading-relaxed`}

@@ -451,8 +451,9 @@ export interface FlowDecisionOption {
 export interface FlowNodeData {
   /** Nome da caixinha no canvas (opcional; senão usa o padrão do tipo). */
   label?: string
-  // gatilho
+  // gatilho: agenda (ausente = só roda quando o usuário mandar) e se dispara sozinho pela agenda
   schedule?: FlowSchedule
+  enabled?: boolean
   // tarefa: especialização usada nesta etapa (ausente = o bot faz com o que já sabe)
   specializationId?: string
   // tarefa: texto enviado (o resultado das caixinhas anteriores vai junto; {{anterior}} posiciona)
@@ -481,16 +482,14 @@ export interface FlowEdge {
 }
 
 /**
- * Rotina de um bot: um gatilho (agenda) e um canvas de caixinhas. O bot executa as tarefas; a pasta e as instruções
- * vêm do projeto dele.
+ * Fluxo de um bot (um por bot): o canvas com as caixinhas e um ou mais gatilhos. Cada gatilho é uma rotina: tem agenda
+ * e liga/desliga próprios e, quando dispara, roda só as caixinhas ligadas a ele. O bot executa as tarefas; a pasta e as
+ * instruções vêm do projeto dele.
  */
 export interface Flow {
   id: string
-  /** Bot dono da rotina. */
+  /** Bot dono do fluxo. */
   botId: string
-  name: string
-  /** Só rotinas ativas disparam pelo gatilho (o "Rodar agora" funciona sempre). */
-  enabled: boolean
   nodes: FlowNode[]
   edges: FlowEdge[]
   createdAt: number
@@ -523,6 +522,9 @@ export interface FlowRunStep {
 export interface FlowRun {
   id: string
   flowId: string
+  /** Gatilho que iniciou a execução, e o nome dele na hora (continua no histórico se o gatilho mudar). */
+  triggerId: string
+  triggerLabel: string
   trigger: 'schedule' | 'manual'
   /** `stopped`: o usuário parou no meio. */
   status: 'running' | 'done' | 'error' | 'stopped'
@@ -821,10 +823,15 @@ export interface GbotApi {
     list(): Promise<Flow[]>
     save(flow: Flow): Promise<void>
     remove(id: string): Promise<void>
-    /** Roda a rotina agora (sem esperar o gatilho); resolve com o id da execução. */
-    run(id: string): Promise<string>
-    /** Para a execução na hora (sessões, processos, decisões e confirmações pendentes). */
-    stop(id: string): Promise<void>
+    /** Roda agora a partir de um gatilho (sem esperar a agenda); resolve com o id da execução. */
+    run(id: string, triggerId: string): Promise<string>
+    /**
+     * Para na hora (sessões, processos, decisões e confirmações pendentes) a execução de um gatilho, ou todas do fluxo
+     * sem `triggerId`.
+     */
+    stop(id: string, triggerId?: string): Promise<void>
+    /** Liga ou desliga a agenda de um gatilho (vale mesmo com o fluxo rodando). */
+    setTriggerEnabled(id: string, triggerId: string, enabled: boolean): Promise<void>
     runs(flowId: string): Promise<FlowRun[]>
     /** Atualizações ao vivo das execuções (início, cada caixinha, fim). */
     onRunUpdate(listener: (run: FlowRun) => void): () => void

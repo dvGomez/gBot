@@ -16,17 +16,14 @@ import {
   type XYPosition
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { ArrowLeft, Hand, ListTodo, LoaderCircle, PanelRight, Play, Square, Split, Trash2, X } from 'lucide-react'
+import { Clock, Hand, ListTodo, PanelRight, Square, Split, X } from 'lucide-react'
 import type { Flow, FlowEdge, FlowNode, FlowNodeData, FlowNodeType, FlowRun } from '@shared/types'
-import { NodePanel } from '@/components/flow/NodePanel'
+import { NodePanel, TriggerControls } from '@/components/flow/NodePanel'
 import { RunHistory } from '@/components/flow/RunHistory'
 import { MemoryPanel } from '@/components/MemoryPanel'
-import { nodeTypes, type CanvasNode } from '@/components/flow/nodes'
-import { LimitsButton } from '@/components/LimitsButton'
+import { CanvasActions, nodeTypes, type CanvasNode } from '@/components/flow/nodes'
 import { FilesPanel, useTouchedFiles } from '@/components/FilesPanel'
-import { ItemMenu } from '@/components/ItemMenu'
-import { PixelAvatar } from '@/components/PixelAvatar'
-import { Button, Chip, Toggle } from '@/components/ui'
+import { Button, Chip } from '@/components/ui'
 import { uid } from '@/lib/format'
 import { useApp } from '@/state/app'
 
@@ -35,6 +32,9 @@ const fromCanvas = (n: CanvasNode): FlowNode => {
   const { status: _status, ...data } = n.data
   return { id: n.id, type: n.type as FlowNodeType, position: n.position, data: data as FlowNodeData }
 }
+/** Mensagem de erro do processo principal sem o prefixo do Electron. */
+const cleanError = (e: unknown) => (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+
 const toEdge = (e: FlowEdge): Edge => ({ ...e, animated: false })
 const fromEdge = (e: Edge): FlowEdge => ({
   id: e.id,
@@ -43,8 +43,12 @@ const fromEdge = (e: Edge): FlowEdge => ({
   ...(e.sourceHandle ? { sourceHandle: e.sourceHandle } : {})
 })
 
-type AddableType = 'task' | 'decision' | 'confirm'
+type AddableType = 'trigger' | 'task' | 'decision' | 'confirm'
 const ADDABLE: { type: AddableType; label: string; icon: typeof ListTodo }[] = localized([{
+  type: 'trigger',
+  label: tr('Gatilho'),
+  icon: Clock
+}, {
   type: 'task',
   label: tr('Tarefa'),
   icon: ListTodo
@@ -73,32 +77,31 @@ interface DropMenu {
   from: ConnectFrom
 }
 
-/** Caixinhas copiadas com Cmd/Ctrl+C; valem entre rotinas enquanto o app estiver aberto. */
+/** Caixinhas copiadas com Cmd/Ctrl+C; valem entre os fluxos dos bots enquanto o app estiver aberto. */
 let clipboard: { nodes: CanvasNode[]; edges: Edge[] } | undefined
 
 function Editor({ flow }: { flow: Flow }) {
   useLanguage()
   const app = useApp()
   const rf = useReactFlow()
-  const [name, setName] = useState(flow.name)
-  const [enabled, setEnabled] = useState(flow.enabled)
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>(flow.nodes.map(toCanvas))
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(flow.edges.map(toEdge))
   const [selectedId, setSelectedId] = useState<string>()
   const [tab, setTab] = useState<'node' | 'runs' | 'files' | 'memory'>('node')
-  // Arquivos que as execuções da rotina mexeram (caixinhas e bots consultados nelas).
+  // Arquivos que as execuções das rotinas mexeram (caixinhas e bots consultados nelas).
   const files = useTouchedFiles({ flowId: flow.id })
   // O painel lateral só abre ao clicar numa caixinha (ou pelo botão); clicar no canvas fecha.
   const [panelOpen, setPanelOpen] = useState(false)
   const [menu, setMenu] = useState<DropMenu>()
   const canvasRef = useRef<HTMLDivElement>(null)
   const [runs, setRuns] = useState<FlowRun[]>([])
-  const [starting, setStarting] = useState(false)
+  /** Gatilho sendo iniciado agora (salva e manda rodar). */
+  const [starting, setStarting] = useState<string>()
   const [loadingRuns, setLoadingRuns] = useState(true)
   const [stopping, setStopping] = useState(false)
   const [runError, setRunError] = useState<string>()
 
-  // Histórico + atualizações ao vivo das execuções desta rotina
+  // Histórico + atualizações ao vivo das execuções das rotinas do fluxo
   useEffect(() => {
     let updated = false
     void window.gbot.flows.runs(flow.id).then((history) => {
@@ -116,22 +119,28 @@ function Editor({ flow }: { flow: Flow }) {
     })
   }, [flow.id])
 
-  const live = runs[0]?.status === 'running' ? runs[0] : undefined
+  // Cada gatilho roda por conta própria: pode haver mais de uma execução ao vivo.
+  const live = useMemo(() => runs.filter((r) => r.status === 'running'), [runs])
+  const liveTriggers = useMemo(() => new Set(live.map((r) => r.triggerId)), [live])
   const bot = app.getBot(flow.botId)
-  const locked = loadingRuns || starting || stopping || !!live
+  const locked = loadingRuns || !!starting || stopping || live.length > 0
 
-  // Cor de status em cada caixinha durante a execução
+  // Cor de status em cada caixinha durante as execuções
   useEffect(() => {
     setNodes((ns) =>
       ns.map((n) => {
-        const status = live?.steps.find((s) => s.nodeId === n.id)?.status ?? (live && n.type === 'trigger' ? 'done' : undefined)
+        const status =
+          live.map((r) => r.steps.find((s) => s.nodeId === n.id)?.status).find(Boolean) ??
+          (n.type === 'trigger' && liveTriggers.has(n.id) ? 'running' : undefined)
         return n.data.status === status ? n : { ...n, data: { ...n.data, status } }
       })
     )
-  }, [live, setNodes])
+  }, [live, liveTriggers, setNodes])
 
   // Salva sozinho (com um pequeno atraso) quando algo muda
   const first = useRef(true)
+  /** Data da última versão que o canvas gravou ou carregou. */
+  const savedAt = useRef(flow.updatedAt)
   useEffect(() => {
     if (locked) return
     if (first.current) {
@@ -139,27 +148,38 @@ function Editor({ flow }: { flow: Flow }) {
       return
     }
     const t = setTimeout(() => {
-      void app.saveFlow({
-        ...flow,
-        name: name.trim() || tr('Rotina sem nome'),
-        enabled,
-        nodes: nodes.map(fromCanvas),
-        edges: edges.map(fromEdge),
-        updatedAt: Date.now()
-      }).catch((e) => setRunError((e as Error).message))
+      void app.saveFlow(current()).catch((e) => setRunError(cleanError(e)))
     }, 500)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locked, name, enabled, nodes.map((n) => JSON.stringify([n.position, fromCanvas(n).data])).join(), edges])
+  }, [locked, nodes.map((n) => JSON.stringify([n.position, fromCanvas(n).data])).join(), edges])
 
-  const triggerId = useMemo(() => nodes.find((n) => n.type === 'trigger')?.id, [nodes])
+  const current = (): Flow => {
+    const updatedAt = Date.now()
+    savedAt.current = updatedAt
+    return { ...flow, nodes: nodes.map(fromCanvas), edges: edges.map(fromEdge), updatedAt }
+  }
+
+  // Fluxo mudado por fora (ex.: plano aplicado pelo chat do bot): o canvas recarrega. As gravações do próprio canvas
+  // não contam (são reconhecidas pela data que ele mesmo gravou).
+  useEffect(() => {
+    if (flow.updatedAt === savedAt.current) return
+    savedAt.current = flow.updatedAt
+    setNodes(flow.nodes.map(toCanvas))
+    setEdges(flow.edges.map(toEdge))
+    requestAnimationFrame(() => void rf.fitView({ maxZoom: 1, padding: 0.3, duration: 250 }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flow.updatedAt])
+  const triggers = useMemo(() => nodes.filter((n) => n.type === 'trigger'), [nodes])
+  /** Gatilho de cima: de onde saem as caixinhas novas quando nada está selecionado. */
+  const triggerId = useMemo(() => [...triggers].sort((a, b) => a.position.y - b.position.y)[0]?.id, [triggers])
 
   const onConnect = useCallback((c: Connection) => {
     if (!locked) setEdges((es) => addEdge({ ...c, id: uid() }, es))
   }, [locked, setEdges])
   const isValidConnection = useCallback(
-    (c: Connection | Edge) => c.source !== c.target && c.target !== triggerId,
-    [triggerId]
+    (c: Connection | Edge) => c.source !== c.target && !triggers.some((t) => t.id === c.target),
+    [triggers]
   )
 
   const openPanel = (t: typeof tab) => {
@@ -181,7 +201,9 @@ function Editor({ flow }: { flow: Flow }) {
     if (locked) return
     const id = uid()
     const data: FlowNodeData =
-      type === 'task'
+      type === 'trigger'
+        ? { enabled: false, schedule: { mode: 'times', days: [1, 2, 3, 4, 5], times: ['09:00'] } }
+        : type === 'task'
         ? { message: '' }
         : type === 'confirm'
             ? {
@@ -202,6 +224,15 @@ function Editor({ flow }: { flow: Flow }) {
               ]
             }
 
+    // Gatilho novo é uma rotina nova: entra numa faixa própria, abaixo de tudo, sem ligação.
+    if (type === 'trigger') {
+      const position = opts?.position ?? { x: 0, y: Math.max(0, ...nodes.map((n) => n.position.y)) + 360 }
+      setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), { id, type, position, data: data as CanvasNode['data'], selected: true }])
+      setSelectedId(id)
+      openPanel('node')
+      requestAnimationFrame(() => requestAnimationFrame(() => void rf.fitView({ maxZoom: 1, padding: 0.3, duration: 250 })))
+      return
+    }
     // Sem origem explícita: entra à direita da caixinha selecionada (ou do gatilho), já ligada a ela.
     let from = opts?.from
     if (!from) {
@@ -345,42 +376,49 @@ function Editor({ flow }: { flow: Flow }) {
       setEdges((es) => es.filter((e) => e.source !== selectedId || !e.sourceHandle || ids.has(e.sourceHandle)))
     }
   }
+  // O último gatilho não sai: todo fluxo tem pelo menos uma rotina.
+  const canDelete = (n?: CanvasNode) => !!n && (n.type !== 'trigger' || triggers.length > 1)
   const deleteSelected = () => {
-    if (locked || !selected || selected.type === 'trigger') return
+    if (locked || !selected || !canDelete(selected)) return
     setNodes((ns) => ns.filter((n) => n.id !== selected.id))
     setEdges((es) => es.filter((e) => e.source !== selected.id && e.target !== selected.id))
     setSelectedId(undefined)
     setPanelOpen(false)
   }
 
-  const runNow = async () => {
-    if (locked) return
-    setStarting(true)
+  const runNow = async (triggerId: string) => {
+    if (liveTriggers.has(triggerId) || starting) return
+    setStarting(triggerId)
     setRunError(undefined)
     try {
-      // Garante que a versão atual (mesmo antes do salvamento automático) é a que roda.
-      await app.saveFlow({
-        ...flow,
-        name: name.trim() || tr('Rotina sem nome'),
-        enabled,
-        nodes: nodes.map(fromCanvas),
-        edges: edges.map(fromEdge),
-        updatedAt: Date.now()
-      })
-      await window.gbot.flows.run(flow.id)
+      // Garante que a versão atual (mesmo antes do salvamento automático) é a que roda. Com outra rotina rodando, o fluxo
+      // não muda: roda o que já está salvo.
+      if (!live.length) await app.saveFlow(current())
+      await window.gbot.flows.run(flow.id, triggerId)
       openPanel('runs')
     } catch (e) {
-      setRunError((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
+      setRunError(cleanError(e))
     } finally {
-      setStarting(false)
+      setStarting(undefined)
     }
   }
 
-  const stopNow = async () => {
+  const setTriggerEnabled = async (triggerId: string, enabled: boolean) => {
+    setRunError(undefined)
+    setNodes((ns) => ns.map((n) => (n.id === triggerId ? { ...n, data: { ...n.data, enabled } } : n)))
+    try {
+      // Vale na hora, mesmo com outra rotina rodando (não passa pelo salvamento do canvas).
+      await app.setTriggerEnabled(flow.id, triggerId, enabled)
+    } catch (e) {
+      setRunError(cleanError(e))
+    }
+  }
+
+  const stopNow = async (triggerId?: string) => {
     setStopping(true)
     setRunError(undefined)
     try {
-      await window.gbot.flows.stop(flow.id)
+      await window.gbot.flows.stop(flow.id, triggerId)
     } catch (e) {
       setRunError((e as Error).message)
     } finally {
@@ -388,73 +426,12 @@ function Editor({ flow }: { flow: Flow }) {
     }
   }
 
-  return (
-    <div className="flex h-full flex-col">
-      <div className="flex min-w-0 items-center gap-3 px-6 pb-4">
-        <button
-          onClick={() => (bot ? app.openBot(bot.id) : app.setView('home'))}
-          className="rounded-full p-1.5 text-muted hover:bg-hover hover:text-fg"
-          aria-label={tr('Voltar')}
-        >
-          <ArrowLeft size={16} />
-        </button>
-        {bot && (
-          <button
-            onClick={() => app.openBot(bot.id)}
-            title={tr('Rotina de {0}', bot.name)}
-            className="flex max-w-[200px] min-w-0 shrink items-center gap-2 rounded-full py-1 pr-3 pl-1.5 text-[13px] text-fg-2 hover:bg-hover"
-          >
-            <PixelAvatar avatar={bot.avatar} size={22} animated={!!live} mood={live ? 'thinking' : 'idle'} />
-            <span className="truncate">{bot.name}</span>
-            <span className="text-muted">/</span>
-          </button>
-        )}
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          aria-label={tr('Nome da rotina')}
-          disabled={locked}
-          className="selectable min-w-0 flex-1 rounded-nav border border-transparent bg-transparent px-2 py-1 text-[20px] font-medium tracking-[-0.02em] outline-none hover:border-line focus:border-muted/60"
-        />
-        <div className="flex items-center gap-2 text-[13px] text-fg-2">
-          <fieldset disabled={locked}><Toggle label={tr('Rotina ligada')} checked={enabled} onChange={setEnabled} /></fieldset>
-          {enabled ? tr('Ativo') : tr('Desligado')}
-        </div>
-        <LimitsButton />
-        <Button variant="primary" onClick={() => void runNow()} disabled={locked}>
-          {starting || live ? <LoaderCircle size={14} className="animate-spin" /> : <Play size={14} />}
-          {live ? tr('Rodando…') : tr('Rodar agora')}
-        </Button>
-        {live && (
-          <Button onClick={() => void stopNow()} disabled={stopping} className="border-danger text-danger">
-            <Square size={14} fill="currentColor" /> {stopping ? tr('Parando…') : tr('Parar tudo')}
-          </Button>
-        )}
-        <button
-          onClick={() => setPanelOpen((o) => !o)}
-          className={`rounded-full p-2 hover:bg-hover hover:text-fg ${panelOpen ? 'text-fg' : 'text-muted'}`}
-          aria-label={panelOpen ? tr('Fechar painel') : tr('Abrir painel')}
-          title={panelOpen ? tr('Fechar painel') : tr('Abrir painel')}
-        >
-          <PanelRight size={16} />
-        </button>
-        {!locked && (
-          <ItemMenu
-            actions={[
-              {
-                label: tr('Excluir rotina'),
-                icon: Trash2,
-                danger: true,
-                confirm: tr('Excluir esta rotina e o histórico dela? Não dá para desfazer.'),
-                onSelect: () => void app.removeFlow(flow.id)
-              }
-            ]}
-          />
-        )}
-      </div>
-      {runError && <p className="px-6 pb-2 text-[13px] text-danger">{runError}</p>}
-      {live && <p className="px-6 pb-2 text-[13px] text-warning">{tr('Rotina em execução · edição bloqueada até terminar ou parar.')}</p>}
+  // Ações dos gatilhos (rodar, parar, ligar), usadas pelas caixinhas de gatilho no canvas e pelo painel.
+  const actions = { run: runNow, stop: stopNow, setEnabled: setTriggerEnabled, live: liveTriggers, starting, stopping }
 
+  return (
+    <CanvasActions.Provider value={actions}>
+    <div className="flex h-full flex-col">
       <div
         className={`grid min-h-0 flex-1 border-t border-line ${
           panelOpen ? 'grid-cols-[minmax(0,1fr)_minmax(300px,380px)]' : 'grid-cols-1'
@@ -494,10 +471,10 @@ function Editor({ flow }: { flow: Flow }) {
               setMenu(undefined)
             }}
             deleteKeyCode={locked ? null : ['Backspace', 'Delete']}
-            onNodesDelete={(deleted) => {
-              // O gatilho não pode ser removido.
-              const trig = deleted.find((n) => n.type === 'trigger')
-              if (trig) setNodes((ns) => (ns.some((n) => n.id === trig.id) ? ns : [...ns, trig]))
+            onBeforeDelete={async ({ nodes: gone, edges: lines }) => {
+              // O último gatilho não sai: todo fluxo tem pelo menos uma rotina.
+              const left = triggers.filter((t) => !gone.some((n) => n.id === t.id))
+              return left.length ? { nodes: gone, edges: lines } : { nodes: gone.filter((n) => n.type !== 'trigger'), edges: lines }
             }}
             colorMode="dark"
             fitView
@@ -509,12 +486,28 @@ function Editor({ flow }: { flow: Flow }) {
             <Background variant={BackgroundVariant.Dots} gap={22} size={1.5} color="var(--line)" />
             <Controls showInteractive={false} />
           </ReactFlow>
-          <div className="absolute top-4 left-4 flex gap-2">
+          <div className="absolute top-4 right-4 left-4 flex flex-wrap items-start gap-2">
             {ADDABLE.map(({ type, label, icon: Icon }) => (
               <Button key={type} onClick={() => requestNode(type)} disabled={locked} className="bg-sidebar">
                 <Icon size={14} /> {label}
               </Button>
             ))}
+            <span className="ml-auto flex gap-2">
+              {live.length > 1 && (
+                <Button onClick={() => void stopNow()} disabled={stopping} className="border-danger bg-sidebar text-danger">
+                  <Square size={14} fill="currentColor" /> {stopping ? tr('Parando…') : tr('Parar tudo')}
+                </Button>
+              )}
+              <Button
+                onClick={() => (panelOpen ? setPanelOpen(false) : openPanel(selected ? 'node' : 'runs'))}
+                aria-label={panelOpen ? tr('Fechar painel') : tr('Abrir painel')}
+                title={panelOpen ? tr('Fechar painel') : tr('Abrir painel')}
+                className="bg-sidebar"
+              >
+                <PanelRight size={14} />
+              </Button>
+            </span>
+            {runError && <p className="w-full text-[13px] text-danger">{runError}</p>}
           </div>
           {menu && !locked && (
             <div
@@ -561,7 +554,7 @@ function Editor({ flow }: { flow: Flow }) {
                 <X size={15} />
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-20">
               {tab === 'memory' ? (
                 <>
                   <fieldset disabled={locked}><MemoryPanel owner={{ kind: 'bot', id: flow.botId }} compact /></fieldset>
@@ -570,33 +563,35 @@ function Editor({ flow }: { flow: Flow }) {
               ) : tab === 'runs' ? (
                 <RunHistory runs={runs} />
               ) : tab === 'files' ? (
-                <FilesPanel files={files} empty={tr('Nenhum arquivo mexido pelas execuções desta rotina ainda.')} />
+                <FilesPanel files={files} empty={tr('Nenhum arquivo mexido pelas execuções das rotinas ainda.')} />
               ) : selected ? (
+                <>
                 <fieldset disabled={locked} className="min-w-0">
                   <NodePanel
                     key={selected.id}
                     type={selected.type as FlowNodeType}
                     data={selected.data}
                     onChange={patchSelected}
-                    onDelete={selected.type === 'trigger' ? undefined : deleteSelected}
+                    onDelete={canDelete(selected) ? deleteSelected : undefined}
                   />
                 </fieldset>
+                {selected.type === 'trigger' && <TriggerControls nodeId={selected.id} data={selected.data} />}
+                </>
               ) : (
-                <p className="text-[13px] text-muted">{tr('Clique numa caixinha para configurar, ou adicione uma Tarefa, Decisão ou Confirmação.')}</p>
+                <p className="text-[13px] text-muted">{tr('Clique numa caixinha para configurar, ou adicione um Gatilho, Tarefa, Decisão ou Confirmação.')}</p>
               )}
             </div>
           </aside>
         )}
       </div>
     </div>
+    </CanvasActions.Provider>
   )
 }
 
-export function FlowEditorView() {
+/** Canvas do fluxo de um bot: gatilhos (rotinas), caixinhas e o painel com conversas, execuções, arquivos e memória. */
+export function FlowCanvas({ flow }: { flow: Flow }) {
   useLanguage()
-  const app = useApp()
-  const flow = app.selectedFlow
-  if (!flow) return null
   return (
     <ReactFlowProvider>
       <Editor key={flow.id} flow={flow} />

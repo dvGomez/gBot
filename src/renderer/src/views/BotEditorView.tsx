@@ -9,6 +9,7 @@ import { Button, Card, Field, PageHeader, inputClass } from '@/components/ui'
 import { randomName } from '@/avatars/parts'
 import { freeAvatars } from '@/lib/applyPlan'
 import { uid } from '@/lib/format'
+import { MentionTextarea } from '@/components/MentionTextarea'
 import { useApp } from '@/state/app'
 
 const EXAMPLE = tr('Exemplo:\nVocê é calma e caprichosa. Fala de um jeito simples e direto.\n- Antes de enviar algo a clientes, peça minha confirmação.\n- Prefira respostas curtas, em tópicos.')
@@ -167,11 +168,12 @@ export function BotEditorView() {
 
         <Field
           label={tr('Personalidade e orientações (opcional)')}
-          hint={tr('Tom, prioridades e o que evitar. Vale em tudo o que o bot faz, junto com as especializações.')}
+          hint={tr('Tom, prioridades e o que evitar. Vale em tudo o que o bot faz, junto com as especializações. Use @ para citar outro bot.')}
         >
-          <textarea
+          <MentionTextarea
             value={instructions}
-            onChange={(e) => setInstructions(e.target.value)}
+            onValueChange={setInstructions}
+            bots={app.bots.filter((b) => b.id !== editing?.id && (!b.projectId || b.projectId === projectId))}
             rows={5}
             placeholder={tr(EXAMPLE)}
             className={`${inputClass} resize-y leading-relaxed`}

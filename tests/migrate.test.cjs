@@ -53,6 +53,10 @@ test('migração v2 transforma bots em especializações e fluxos em bots com ro
   const [flow] = read('flows.json')
   assert.equal(flow.botId, bot.id)
   assert.equal(flow.projectId, undefined)
+  // v3: o nome e o liga/desliga da rotina passam para o gatilho.
+  assert.equal(flow.name, undefined)
+  assert.equal(flow.enabled, undefined)
+  assert.deepEqual([flow.nodes[0].data.label, flow.nodes[0].data.enabled], ['Resumo diário', true])
   assert.deepEqual(flow.nodes.map((n) => [n.type, n.data.specializationId, n.data.model, n.data.botId]), [
     ['trigger', undefined, undefined, undefined],
     ['task', 'old-a', 'sonnet', undefined],
@@ -67,9 +71,48 @@ test('migração v2 transforma bots em especializações e fluxos em bots com ro
   const usage = readFileSync(join(data, 'usage.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
   assert.deepEqual(usage, [{ at: 1, kind: 'flow', flowId: 'f1', botId: bot.id }, { at: 2, kind: 'conversation' }])
   assert(readdirSync(data).some((d) => d.startsWith('backup-v1-')))
-  assert.equal(read('schema.json').version, 2)
+  assert(readdirSync(data).some((d) => d.startsWith('backup-v2-')))
+  assert.equal(read('schema.json').version, 3)
 
   // Rodar de novo não muda nada.
   migrateData()
   assert.deepEqual(read('team.json'), [bot])
+})
+
+// v2 → v3: as rotinas de um bot viram faixas do mesmo fluxo, e as execuções vão junto.
+test('migração v3 junta as rotinas de um bot num fluxo com um gatilho por rotina', () => {
+  const userData = mkdtempSync(join(tmpdir(), 'gbot-migrate-v3-'))
+  const data = join(userData, 'data')
+  mkdirSync(join(data, 'flow-runs'), { recursive: true })
+  const write = (path, value) => writeFileSync(join(data, path), JSON.stringify(value))
+  const read = (path) => JSON.parse(readFileSync(join(data, path), 'utf8'))
+  write('schema.json', { version: 2 })
+  write('team.json', [{ id: 'b1', name: 'Lia' }, { id: 'b2', name: 'Sem rotina' }])
+  const lane = (id, name, enabled, createdAt) => ({ id, botId: 'b1', name, enabled, createdAt, updatedAt: createdAt,
+    nodes: [{ id: `${id}-t`, type: 'trigger', position: { x: 0, y: 0 }, data: { schedule: { mode: 'interval', everyMinutes: 60 } } },
+      { id: `${id}-a`, type: 'task', position: { x: 320, y: 0 }, data: { message: name } }],
+    edges: [{ id: `${id}-e`, source: `${id}-t`, target: `${id}-a` }] })
+  write('flows.json', [lane('f1', 'Manhã', true, 1), lane('f2', 'Tarde', false, 2)])
+  write('flow-runs/f2.json', [{ id: 'r2', flowId: 'f2', trigger: 'manual', status: 'done', startedAt: 20, steps: [] }])
+  writeFileSync(join(data, 'usage.jsonl'), `${JSON.stringify({ at: 1, kind: 'flow', flowId: 'f2', botId: 'b1' })}\n`)
+
+  const jiti = createJiti(__filename, { alias: { electron: resolve(__dirname, 'helpers/electron-userdata.cjs'), '@shared': resolve(__dirname, '../src/shared') } })
+  require('./helpers/electron-userdata.cjs').setUserData(userData)
+  jiti('../src/main/migrate.ts').migrateData()
+
+  const flows = read('flows.json')
+  assert.equal(flows.length, 2)
+  const lia = flows.find((f) => f.botId === 'b1')
+  assert.equal(lia.id, 'f1')
+  const triggers = lia.nodes.filter((n) => n.type === 'trigger')
+  assert.deepEqual(triggers.map((t) => [t.data.label, t.data.enabled]), [['Manhã', true], ['Tarde', false]])
+  // A segunda faixa fica abaixo da primeira.
+  assert(triggers[1].position.y > triggers[0].position.y)
+  assert.equal(lia.edges.length, 2)
+  const empty = flows.find((f) => f.botId === 'b2')
+  assert.deepEqual(empty.nodes.map((n) => [n.type, n.data.enabled]), [['trigger', false]])
+  assert(!existsSync(join(data, 'flow-runs', 'f2.json')))
+  assert.deepEqual(read('flow-runs/f1.json').map((r) => [r.id, r.flowId, r.triggerId, r.triggerLabel]), [['r2', 'f1', 'f2-t', 'Tarde']])
+  assert.equal(JSON.parse(readFileSync(join(data, 'usage.jsonl'), 'utf8')).flowId, 'f1')
+  assert.equal(read('schema.json').version, 3)
 })

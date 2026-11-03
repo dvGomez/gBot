@@ -161,6 +161,76 @@ function Message({ msg, live }: { msg: ChatMessage; live: boolean }) {
   )
 }
 
+/**
+ * A conversa ativa: mensagens, pedidos de aprovação e perguntas pendentes e o campo de mensagem. `compact` é a versão
+ * do chat flutuante da página do bot (sem margens largas).
+ */
+export function ChatThread({ compact, emptyHint }: { compact?: boolean; emptyHint?: string }) {
+  useLanguage()
+  const app = useApp()
+  const conv = app.activeConversation
+  const avatar = app.activeAvatar
+  const bot = app.activeBot
+  const empty = !conv || conv.messages.length === 0
+  const bottom = useRef<HTMLDivElement>(null)
+  const lastText = conv?.messages.at(-1)?.text
+  const width = compact ? 'px-4' : 'mx-auto max-w-[860px] px-8'
+
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ block: 'end' })
+  }, [conv?.messages.length, lastText])
+
+  return (
+    <>
+      <div className={`min-h-0 flex-1 overflow-y-auto ${compact ? '' : 'border-t border-line'}`}>
+        <div className={`flex flex-col gap-6 ${width} ${compact ? 'py-4' : 'py-8'}`}>
+          {empty && (
+            <div className={`flex flex-col items-center text-center ${compact ? 'pt-6' : 'pt-16'}`}>
+              {avatar && <PixelAvatar avatar={avatar} mood={app.mood} size={compact ? 56 : 96} />}
+              <p className={`${avatar ? 'mt-5' : ''} ${compact ? 'text-[17px]' : 'text-[22px]'} font-medium tracking-[-0.02em]`}>
+                {bot ? tr('Converse com {0}', bot.name) : tr('Nova conversa')}
+              </p>
+              <p className="mt-1 max-w-[460px] text-[14px] text-muted">
+                {emptyHint ??
+                  (bot
+                    ? bot.description || tr('Este bot usa as especializações e a personalidade que você definiu.')
+                    : app.visibleBots.length || app.visibleSpecializations.length
+                      ? tr('Pergunte o que quiser. Mencione um bot com @ ou use uma especialização com /.')
+                      : tr('Pergunte o que quiser.'))}
+              </p>
+            </div>
+          )}
+          {conv?.messages.map((m, i) => (
+            <Message key={m.id} msg={m} live={app.busy && i === conv.messages.length - 1} />
+          ))}
+          <div ref={bottom} />
+        </div>
+      </div>
+
+      <div className={`w-full ${width} pt-2 ${compact ? 'pb-4' : 'pb-6'}`}>
+        {app.approvals
+          .filter((r) => !r.conversationId || r.conversationId === conv?.id)
+          .map((r) => (
+            <ApprovalCard key={r.id} req={r} />
+          ))}
+        {app.questions
+          .filter((q) => q.conversationId === conv?.id)
+          .map((q) => (
+            <div key={q.id} className="mb-3">
+              <QuestionCard
+                questions={q.questions}
+                title={q.requester ? tr('{0} quer saber', q.requester) : tr('Para acertar de primeira')}
+                onSubmit={(answers) => app.answerQuestions(q.id, answers)}
+                onSkip={() => app.answerQuestions(q.id)}
+              />
+            </div>
+          ))}
+        <Composer autoFocus compact={compact} placeholder={empty ? (bot ? tr('Mensagem para {0}…', bot.name) : tr('Mensagem…')) : tr('Responder…')} />
+      </div>
+    </>
+  )
+}
+
 export function ChatView() {
   useLanguage()
   const app = useApp()
@@ -168,9 +238,6 @@ export function ChatView() {
   const avatar = app.activeAvatar
   const bot = app.activeBot
   const project = app.activeProject
-  const empty = !conv || conv.messages.length === 0
-  const bottom = useRef<HTMLDivElement>(null)
-  const lastText = conv?.messages.at(-1)?.text
   const spent = useConversationUsage(conv?.id)
   // Painel lateral com os arquivos que a conversa mexeu (inclui bots chamados nela). Lembra se você fechou.
   const files = useTouchedFiles({ conversationId: conv?.id })
@@ -183,10 +250,6 @@ export function ChatView() {
   const spentLabel = spent && totalTokens(spent) > 0 && (
     <span title={usageDetail(spent)}>{formatTokens(totalTokens(spent))}{tr(' tokens nesta conversa')}</span>
   )
-
-  useEffect(() => {
-    bottom.current?.scrollIntoView({ block: 'end' })
-  }, [conv?.messages.length, lastText])
 
   return (
     <div className="flex h-full">
@@ -265,50 +328,7 @@ export function ChatView() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto border-t border-line">
-          <div className="mx-auto flex max-w-[860px] flex-col gap-6 px-8 py-8">
-            {empty && (
-              <div className="flex flex-col items-center pt-16 text-center">
-                {avatar && <PixelAvatar avatar={avatar} mood={app.mood} size={96} />}
-                <p className={`${avatar ? 'mt-5' : ''} text-[22px] font-medium tracking-[-0.02em]`}>
-                  {bot ? tr('Converse com {0}', bot.name) : tr('Nova conversa')}
-                </p>
-                <p className="mt-1 max-w-[460px] text-[14px] text-muted">
-                  {bot
-                    ? bot.description || tr('Este bot usa as especializações e a personalidade que você definiu.')
-                    : app.visibleBots.length || app.visibleSpecializations.length
-                      ? tr('Pergunte o que quiser. Mencione um bot com @ ou use uma especialização com /.')
-                      : tr('Pergunte o que quiser.')}
-                </p>
-              </div>
-            )}
-            {conv?.messages.map((m, i) => (
-              <Message key={m.id} msg={m} live={app.busy && i === conv.messages.length - 1} />
-            ))}
-            <div ref={bottom} />
-          </div>
-        </div>
-
-        <div className="mx-auto w-full max-w-[860px] px-8 pt-2 pb-6">
-          {app.approvals
-            .filter((r) => !r.conversationId || r.conversationId === conv?.id)
-            .map((r) => (
-              <ApprovalCard key={r.id} req={r} />
-            ))}
-          {app.questions
-            .filter((q) => q.conversationId === conv?.id)
-            .map((q) => (
-              <div key={q.id} className="mb-3">
-                <QuestionCard
-                  questions={q.questions}
-                  title={q.requester ? tr('{0} quer saber', q.requester) : tr('Para acertar de primeira')}
-                  onSubmit={(answers) => app.answerQuestions(q.id, answers)}
-                  onSkip={() => app.answerQuestions(q.id)}
-                />
-              </div>
-            ))}
-          <Composer autoFocus placeholder={empty ? (bot ? tr('Mensagem para {0}…', bot.name) : tr('Mensagem…')) : tr('Responder…')} />
-        </div>
+        <ChatThread />
       </div>
       {showFiles && (
         <aside className="flex w-[300px] shrink-0 flex-col border-l border-line bg-sidebar">

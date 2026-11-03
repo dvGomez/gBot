@@ -1,16 +1,16 @@
 import { t as tr, useLanguage } from '@/i18n'
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from 'react'
-import { ArrowUp, FileText, GraduationCap, LoaderCircle, Paperclip, Square, X } from 'lucide-react'
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent } from 'react'
+import { ArrowUp, FileText, LoaderCircle, Paperclip, Square, X } from 'lucide-react'
 import type { ChatFile } from '@shared/types'
 import { useApp } from '@/state/app'
 import { cn } from '@/lib/cn'
-import { mentionQuery, normalize } from '@/lib/mentions'
+import { botMentions, useMentions } from '@/lib/useMentions'
 import { LimitsButton } from './LimitsButton'
 import { ModelSelect } from './ModelSelect'
-import { PixelAvatar } from './PixelAvatar'
 import { ProviderNotice } from './ProviderNotice'
 
-export function Composer({ autoFocus, placeholder = tr('Pergunte qualquer coisa…') }: { autoFocus?: boolean; placeholder?: string }) {
+/** Campo de mensagem do chat; `compact` (chat flutuante) esconde a dica de @ e /, que não cabe. */
+export function Composer({ autoFocus, compact, placeholder = tr('Pergunte qualquer coisa…') }: { autoFocus?: boolean; compact?: boolean; placeholder?: string }) {
   useLanguage()
   const app = useApp()
   const [text, setText] = useState('')
@@ -18,9 +18,6 @@ export function Composer({ autoFocus, placeholder = tr('Pergunte qualquer coisa�
   const [attaching, setAttaching] = useState(false)
   const [attachError, setAttachError] = useState<string>()
   const [dragging, setDragging] = useState(false)
-  const [caret, setCaret] = useState(0)
-  const [highlight, setHighlight] = useState(0)
-  const [dismissed, setDismissed] = useState(false)
   const ref = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -37,36 +34,19 @@ export function Composer({ autoFocus, placeholder = tr('Pergunte qualquer coisa�
   }, [text])
 
   // Autocompletar de @bots e /especializações (vale o que estiver mais perto do cursor).
-  const at = mentionQuery(text, caret)
-  const slash = mentionQuery(text, caret, '/')
-  const mention = at && (!slash || at.start > slash.start) ? { ...at, trigger: '@' } : slash && { ...slash, trigger: '/' }
-  const suggestions = useMemo(() => {
-    if (!mention) return []
-    const q = normalize(mention.query)
-    const list =
-      mention.trigger === '@'
-        ? app.visibleBots.map((b) => ({ id: b.id, name: b.name, description: b.description, avatar: b.avatar }))
-        : app.visibleSpecializations.map((sp) => ({ id: sp.id, name: sp.name, description: sp.description, avatar: undefined }))
-    // Nomes que começam com o que foi digitado vêm antes dos que só contêm o trecho.
-    const starts = (x: { name: string }) => (normalize(x.name).startsWith(q) ? 0 : 1)
-    return list
-      .filter((x) => normalize(x.name).includes(q))
-      .sort((a, b) => starts(a) - starts(b))
-      .slice(0, 6)
-  }, [mention?.query, mention?.trigger, app.visibleBots, app.visibleSpecializations])
-  const showSuggestions = !dismissed && suggestions.length > 0
-
-  const pick = (name: string) => {
-    if (!mention) return
-    const next = `${text.slice(0, mention.start)}${mention.trigger}${name} ${text.slice(caret)}`
-    const pos = mention.start + name.length + 2
-    setText(next)
-    setCaret(pos)
-    requestAnimationFrame(() => {
-      ref.current?.focus()
-      ref.current?.setSelectionRange(pos, pos)
-    })
-  }
+  const mentions = useMentions({
+    text,
+    setText,
+    ref,
+    sources: [
+      { ...botMentions(app.visibleBots), title: tr('Chamar um bot') },
+      {
+        trigger: '/',
+        title: tr('Usar uma especialização nesta mensagem'),
+        items: app.visibleSpecializations.map((sp) => ({ id: sp.id, name: sp.name, description: sp.description }))
+      }
+    ]
+  })
 
   // Anexos: arrastados, colados (prints vêm sem arquivo de origem) ou escolhidos no seletor.
   const attach = async (files: File[]) => {
@@ -111,7 +91,7 @@ export function Composer({ autoFocus, placeholder = tr('Pergunte qualquer coisa�
     if (!canSend || app.busy) return
     app.send(text, attachments)
     setText('')
-    setCaret(0)
+    mentions.reset()
     setAttachments([])
   }
 
@@ -158,63 +138,19 @@ export function Composer({ autoFocus, placeholder = tr('Pergunte qualquer coisa�
             {attachError && <span className="text-[12px] text-danger">{attachError}</span>}
           </div>
         )}
-        {showSuggestions && (
-          <div className="absolute bottom-full left-3 mb-2 w-[300px] overflow-hidden rounded-tile border border-line bg-sidebar py-1 shadow-lg">
-            <p className="px-3 pt-1.5 pb-1 text-[11px] font-medium text-muted">
-              {mention?.trigger === '/' ? tr('Usar uma especialização nesta mensagem') : tr('Chamar um bot')}
-            </p>
-            {suggestions.map((b, i) => (
-              <button
-                key={b.id}
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  pick(b.name)
-                }}
-                className={cn('flex w-full items-center gap-3 px-3 py-2 text-left', i === highlight && 'bg-hover')}
-              >
-                {b.avatar ? (
-                  <PixelAvatar avatar={b.avatar} size={22} animated={false} />
-                ) : (
-                  <GraduationCap size={18} className="mx-0.5 shrink-0 text-muted" />
-                )}
-                <span className="min-w-0">
-                  <span className="block truncate text-[13px] font-medium">{b.name}</span>
-                  <span className="block truncate text-[11px] text-muted">{b.description}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
+        {mentions.menu && <div className="absolute bottom-full left-3 mb-2">{mentions.menu}</div>}
         <textarea
           ref={ref}
           value={text}
           rows={1}
           onChange={(e) => {
             setText(e.target.value)
-            setCaret(e.target.selectionStart)
-            setHighlight(0)
-            setDismissed(false)
+            mentions.onChange(e)
           }}
-          onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
+          onSelect={mentions.onSelect}
           onPaste={onPaste}
           onKeyDown={(e) => {
-            if (showSuggestions) {
-              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                e.preventDefault()
-                const d = e.key === 'ArrowDown' ? 1 : -1
-                setHighlight((h) => (h + d + suggestions.length) % suggestions.length)
-                return
-              }
-              if (e.key === 'Enter' || e.key === 'Tab') {
-                e.preventDefault()
-                pick(suggestions[Math.min(highlight, suggestions.length - 1)].name)
-                return
-              }
-              if (e.key === 'Escape') {
-                setDismissed(true)
-                return
-              }
-            }
+            if (mentions.onKeyDown(e)) return
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault()
               submit()
@@ -244,7 +180,7 @@ export function Composer({ autoFocus, placeholder = tr('Pergunte qualquer coisa�
               disabled={app.busy}
               placement="up"
             />
-            {(app.visibleBots.length > 0 || app.visibleSpecializations.length > 0) && (
+            {!compact && (app.visibleBots.length > 0 || app.visibleSpecializations.length > 0) && (
               <span className="hidden text-[12px] text-muted xl:inline">
                 {app.visibleSpecializations.length ? tr('@ chama um bot · / usa uma especialização') : tr('Use @ para chamar um bot')}
               </span>

@@ -33,23 +33,23 @@ export function useTeamActivity(runs: Record<string, FlowRun[]>): Map<string, Bo
     }
     const byName = (name: string) => app.bots.find((b) => b.name.toLowerCase() === name.trim().toLowerCase())
 
-    // Rotinas rodando: toda etapa roda como o bot dono da rotina
-    for (const list of Object.values(runs)) {
-      const run = list[0]
-      if (!run || !isLive(run)) continue
+    // Rotinas rodando (vários gatilhos do mesmo bot podem rodar juntos): toda etapa roda como o bot dono
+    for (const run of Object.values(runs).flat()) {
+      if (!isLive(run)) continue
       const flow = app.flows.find((f) => f.id === run.flowId)
       if (!flow || !app.getBot(flow.botId)) continue
       const target = { kind: 'flow' as const, id: run.flowId }
+      const routine = run.triggerLabel || tr('Gatilho')
       // Caixinha de confirmação parada esperando a sua escolha
       const waiting = run.steps.find((s) => s.status === 'waiting')
       if (waiting) {
-        set({ botId: flow.botId, state: 'waiting', mood: 'attention', text: tr('Esperando sua confirmação em "{0}"', flow.name), target })
+        set({ botId: flow.botId, state: 'waiting', mood: 'attention', text: tr('Esperando sua confirmação em "{0}"', routine), target })
         continue
       }
       const running = run.steps.find((s) => s.status === 'running')
       if (!running) continue
       const step = running.label ? ` · ${running.label}` : ''
-      set({ botId: flow.botId, state: 'working', mood: 'thinking', text: tr('Na rotina "{0}"{1}', flow.name, step), target })
+      set({ botId: flow.botId, state: 'working', mood: 'thinking', text: tr('Na rotina "{0}"{1}', routine, step), target })
     }
 
     // Conversa respondendo agora

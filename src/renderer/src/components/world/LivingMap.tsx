@@ -2,6 +2,7 @@ import { t as tr, useLanguage } from '@/i18n'
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Bot as BotIcon } from 'lucide-react'
 import type { AvatarDef, AvatarMood, Flow, FlowRun } from '@shared/types'
+import { activeTriggers } from '@shared/flows'
 import { PixelAvatar } from '@/components/PixelAvatar'
 import { ProjectIcon } from '@/components/ProjectBadge'
 import { Button } from '@/components/ui'
@@ -30,7 +31,7 @@ interface Message {
 
 type Chatter = Record<string, 'talking' | 'happy'>
 
-/** Execuções de rotina acontecendo agora (atualizadas ao vivo). */
+/** Execuções de rotina acontecendo agora, por id da execução (vários gatilhos do mesmo fluxo podem rodar juntos). */
 function useRunningFlows(flows: Flow[]): Record<string, FlowRun> {
   const [running, setRunning] = useState<Record<string, FlowRun>>({})
   const ids = flows.map((f) => f.id).join()
@@ -38,15 +39,15 @@ function useRunningFlows(flows: Flow[]): Record<string, FlowRun> {
     let alive = true
     for (const id of ids ? ids.split(',') : []) {
       void window.gbot.flows.runs(id).then((runs) => {
-        const last = runs[0]
         // Execução "rodando" muito antiga sobrou de um app fechado no meio; ignora.
-        if (alive && last && isLive(last)) setRunning((r) => ({ ...r, [id]: last }))
+        const live = runs.filter(isLive)
+        if (alive && live.length) setRunning((r) => ({ ...r, ...Object.fromEntries(live.map((run) => [run.id, run])) }))
       })
     }
     const off = window.gbot.flows.onRunUpdate((run) =>
       setRunning((r) => {
-        const { [run.flowId]: _, ...rest } = r
-        return run.status === 'running' ? { ...rest, [run.flowId]: run } : rest
+        const { [run.id]: _, ...rest } = r
+        return run.status === 'running' ? { ...rest, [run.id]: run } : rest
       })
     )
     return () => {
@@ -281,7 +282,7 @@ export function LivingMap() {
       // Confirmação pendente pede atenção; senão, a rotina está trabalhando.
       if (run.steps.some((s) => s.status === 'waiting')) m[key] = 'attention'
       else if (m[key] !== 'attention') m[key] = 'thinking'
-      routineOf[key] = flow.name
+      routineOf[key] = run.triggerLabel || tr('Gatilho')
     }
     const conv = app.activeConversation
     if (app.busy && conv) {
@@ -613,7 +614,8 @@ export function LivingMap() {
         const chat = chatter[id]
         const last = Math.max(0, ...app.conversations.filter((c) => c.botId === b.id).map((c) => c.updatedAt))
         const project = app.getProject(b.projectId)
-        const active = app.flows.filter((f) => f.botId === b.id && f.enabled).length
+        const flow = app.botFlow(b.id)
+        const active = flow ? activeTriggers(flow).length : 0
         const routine = routineOf[id]
         const status = [
           routine && tr('na rotina "{0}"', routine),

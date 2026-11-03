@@ -8,7 +8,7 @@ import { languageInstructions } from '../../localization'
 import { getSettings } from '../../settings'
 import { architectPrompt, GBOT_EDIT_HINT } from '../claude-code/architect'
 import { sendToBot, TOOLS_HINT } from '../claude-code/bots'
-import { botPromptLines, memoryLines, memoryOf, specializationsInUse, withSpecializations } from '../persona'
+import { botEditLines, botPromptLines, memoryLines, memoryOf, specializationsInUse, withSpecializations } from '../persona'
 import { mcpEndpointFor, type CallerContext } from '../claude-code/mcp'
 import { withOutputFiles } from '../claude-code/outputs'
 import { fileContext, type UsageTag } from '../claude-code/session'
@@ -62,6 +62,7 @@ function instructions(req: SendMessageRequest, work: WorkContext, fullAccess: bo
       : 'Seus comandos rodam numa sandbox: você cria e edita arquivos na pasta de trabalho e lê o resto do disco.',
     TOOLS_HINT,
     GBOT_EDIT_HINT,
+    ...(req.bot && req.origin?.kind !== 'flow' ? botEditLines(req.bot) : []),
     ...memoryLines(req)
   )
   return [...lines, languageInstructions()].join('\n')
@@ -224,10 +225,12 @@ export const codexProvider: ChatProvider = {
       contexts.set(req.conversationId, entry)
     }
     entry.ctx.chain = req.botChain ?? (req.bot ? [req.bot.id] : [])
-    entry.ctx.depth = entry.ctx.chain.length
+    // Conversa direta (com ou sem bot) é com o usuário: profundidade 0. Só consultas repassadas por outro bot contam.
+    entry.ctx.depth = req.botChain ? req.botChain.length : 0
     entry.ctx.architect = req.architect
     entry.ctx.projectId = req.projectId
     entry.ctx.signal = signal
+    entry.ctx.botId = req.bot?.id
     entry.ctx.memory = memoryOf(req)
     entry.ctx.specializationIds = specializationsInUse(req)
     entry.ctx.memorySource = req.origin ?? { kind: 'conversation', id: req.conversationId }

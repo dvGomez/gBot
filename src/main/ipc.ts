@@ -64,9 +64,14 @@ export function registerIpc() {
     // Rotina rodando não muda (nem pelo editor, nem por um plano do chat): pare ou espere terminar.
     if (isFlowRunning(flow.id)) throw new Error('Esta rotina está rodando: pare a execução ou espere terminar para editar.')
     if (!store.getBot(flow.botId)) throw new Error('O bot desta rotina não existe mais.')
+    // Um fluxo por bot: as rotinas são os gatilhos dele.
+    if (flows.listFlows().some((f) => f.botId === flow.botId && f.id !== flow.id)) throw new Error('Este bot já tem um fluxo.')
     flows.saveFlow(flow)
   })
-  ipcMain.handle('flows:stop', (_e, id: string) => stopFlow(id))
+  ipcMain.handle('flows:stop', (_e, id: string, triggerId?: string) => stopFlow(id, triggerId))
+  ipcMain.handle('flows:set-trigger-enabled', (_e, id: string, triggerId: string, enabled: boolean) =>
+    flows.setTriggerEnabled(id, triggerId, enabled)
+  )
   ipcMain.handle('flows:remove', (_e, id: string) => {
     if (isFlowRunning(id)) throw new Error('Pare a rotina antes de excluir.')
     flows.removeFlow(id)
@@ -76,10 +81,10 @@ export function registerIpc() {
   ipcMain.handle('usage:summary', () => usageSummary())
   ipcMain.handle('usage:conversation', (_e, id: string) => conversationUsage(id))
   ipcMain.handle('usage:records', (_e, since: number) => usageRecords(since))
-  ipcMain.handle('flows:run', (_e, id: string) => {
+  ipcMain.handle('flows:run', (_e, id: string, triggerId: string) => {
     const flow = flows.getFlow(id)
     if (!flow) throw new Error('Rotina não encontrada.')
-    return runFlow(flow, 'manual')
+    return runFlow(flow, triggerId, 'manual')
   })
 
   ipcMain.handle('settings:get', () => getSettings())
@@ -120,7 +125,11 @@ export function registerIpc() {
   ipcMain.handle('specializations:files', (_e, id: string) => listSpecializationFiles(id))
 
   ipcMain.handle('bots:list', () => store.listBots())
-  ipcMain.handle('bots:save', (_e, bot: Bot) => store.saveBot(bot))
+  ipcMain.handle('bots:save', (_e, bot: Bot) => {
+    store.saveBot(bot)
+    // Todo bot tem o seu fluxo, com um gatilho pronto para configurar.
+    flows.ensureBotFlow(bot.id)
+  })
   ipcMain.handle('bots:remove', (_e, id: string) => {
     if (flows.listFlows().some((f) => f.botId === id && isFlowRunning(f.id))) throw new Error('Pare as rotinas do bot antes de excluir.')
     store.removeBot(id)

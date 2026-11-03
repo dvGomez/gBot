@@ -1,4 +1,5 @@
-import type { AutomationPlan, AvatarDef, Bot, Flow, FlowEdge, FlowNode, PlanStep, Project, Specialization } from '@shared/types'
+import type { AutomationPlan, AvatarDef, Bot, Flow, FlowEdge, FlowNode, PlanRoutine, PlanStep, Project, Specialization } from '@shared/types'
+import { reachableFrom, triggersOf } from '@shared/flows'
 import { PROJECT_COLORS } from '@/components/ProjectBadge'
 import { generateAvatar } from '@/avatars/parts'
 import { AVATARS } from '@/avatars/sprites'
@@ -25,15 +26,17 @@ export interface AppliedPlan {
   specializationIds: string[]
   /** Bots do plano (novos e reaproveitados), na ordem do plano. */
   botIds: string[]
-  /** Rotinas criadas ou refeitas, na ordem do plano. */
+  /** Fluxos dos bots que ganharam rotinas criadas ou refeitas, na ordem do plano. */
   flowIds: string[]
 }
 
 const STEP_GAP = 320
+/** Distância vertical entre as faixas (gatilho + etapas) de cada rotina no canvas. */
+const LANE_GAP = 360
 
 /** Caixinha da rotina para uma etapa do plano (a decisão usa o último modelo escolhido, senão um rápido). */
-function stepNode(step: PlanStep, specializationId: (ref: string) => string | undefined, model: string | undefined, x: number): FlowNode {
-  const base = { id: uid(), position: { x, y: 0 } }
+function stepNode(step: PlanStep, specializationId: (ref: string) => string | undefined, model: string | undefined, x: number, y: number): FlowNode {
+  const base = { id: uid(), position: { x, y } }
   const label = step.label?.slice(0, 40) || undefined
   if (step.type === 'task') {
     const sp = step.specialization ? specializationId(step.specialization) : undefined
@@ -55,10 +58,65 @@ function stepNode(step: PlanStep, specializationId: (ref: string) => string | un
   }
 }
 
+/** Gatilho do jeito que o bot novo ganha: sem nome, desligado e com a agenda padrão (ou sem agenda). */
+function isFreshTrigger(t: FlowNode): boolean {
+  const s = t.data.schedule
+  const defaultSchedule = !s || (s.mode === 'times' && s.days.join() === '1,2,3,4,5' && s.times.join() === '09:00')
+  return !t.data.label?.trim() && !t.data.enabled && defaultSchedule
+}
+
+/**
+ * Coloca uma rotina do plano no fluxo do bot, como uma faixa: o gatilho e as etapas ligadas em sequência, da esquerda
+ * para a direita. Com `existingId` (um gatilho do fluxo), tira as caixinhas que só esse gatilho alcança e refaz a faixa
+ * no mesmo lugar (mesmo gatilho, continua ligado ou desligado como estava). Senão, cria uma faixa nova abaixo de tudo,
+ * desligada; o gatilho vazio de um bot recém-criado é aproveitado para a primeira rotina.
+ */
+function placeRoutine(flow: Flow, r: PlanRoutine, specializationId: (ref: string) => string | undefined, model: string | undefined): Flow {
+  const triggers = triggersOf(flow)
+  let trigger = r.existingId ? triggers.find((t) => t.id === r.existingId) : undefined
+  let nodes = flow.nodes
+  let edges = flow.edges
+  if (trigger) {
+    // Caixinhas que outros gatilhos também alcançam ficam (são de outras rotinas).
+    const shared = new Set(triggers.filter((t) => t.id !== trigger!.id).flatMap((t) => [...reachableFrom(flow, t.id)]))
+    const drop = new Set([...reachableFrom(flow, trigger.id)].filter((id) => !shared.has(id)))
+    const triggerId = trigger.id
+    nodes = nodes.filter((n) => !drop.has(n.id))
+    edges = edges.filter((e) => e.source !== triggerId && !drop.has(e.source) && !drop.has(e.target))
+  } else if (triggers.length === 1 && flow.nodes.length === 1 && !flow.edges.length && isFreshTrigger(triggers[0])) {
+    trigger = triggers[0]
+  } else {
+    const y = flow.nodes.length ? Math.max(...flow.nodes.map((n) => n.position.y)) + LANE_GAP : 0
+    const x = triggers.length ? Math.min(...triggers.map((t) => t.position.x)) : 0
+    trigger = { id: uid(), type: 'trigger', position: { x, y }, data: { enabled: false } }
+    nodes = [...nodes, trigger]
+  }
+
+  const lane: FlowNode = { ...trigger, data: { ...trigger.data, label: r.name.slice(0, 60) || trigger.data.label, schedule: r.schedule } }
+  const { x, y } = lane.position
+  const added: FlowNode[] = []
+  const newEdges: FlowEdge[] = []
+  let prev = lane
+  r.steps.forEach((step, i) => {
+    const node = stepNode(step, specializationId, model, x + (i + 1) * STEP_GAP, y)
+    // Depois de uma decisão ou confirmação, segue pela primeira opção (as outras encerram a rotina).
+    const handle = prev.type === 'decision' || prev.type === 'confirm' ? prev.data.options?.[0]?.id : undefined
+    newEdges.push({ id: uid(), source: prev.id, target: node.id, ...(handle ? { sourceHandle: handle } : {}) })
+    added.push(node)
+    prev = node
+  })
+  return {
+    ...flow,
+    nodes: [...nodes.map((n) => (n.id === lane.id ? lane : n)), ...added],
+    edges: [...edges, ...newEdges]
+  }
+}
+
 /**
  * Aplica o plano: cria o que é novo (rotinas novas nascem desligadas, para o usuário revisar e ligar) e altera o que
  * já existe (projeto, especializações e bots com `edit`, rotinas com `existingId`, que são refeitas com as etapas do
- * plano). Os bots reaproveitados ganham as especializações do plano, sem perder as que já tinham.
+ * plano). Os bots reaproveitados ganham as especializações do plano, sem perder as que já tinham. Cada rotina vira um
+ * gatilho (com as etapas) no fluxo do bot.
  */
 export async function applyPlan(plan: AutomationPlan, avatars: Record<string, AvatarDef>, app: AppState): Promise<AppliedPlan> {
   const now = Date.now()
@@ -162,27 +220,15 @@ export async function applyPlan(plan: AutomationPlan, avatars: Record<string, Av
     }
     botIds.push(botId)
 
-    // Rotinas do bot: o gatilho e as etapas, ligadas em sequência.
-    for (const r of b.routines) {
-      const trigger: FlowNode = { id: uid(), type: 'trigger', position: { x: 0, y: 0 }, data: { schedule: r.schedule } }
-      const nodes: FlowNode[] = [trigger]
-      const edges: FlowEdge[] = []
-      r.steps.forEach((step, i) => {
-        const prev = nodes[nodes.length - 1]
-        const node = stepNode(step, (ref) => specIds.get(ref), model, (i + 1) * STEP_GAP)
-        // Depois de uma decisão ou confirmação, segue pela primeira opção (as outras encerram a rotina).
-        const handle = prev.type === 'decision' || prev.type === 'confirm' ? prev.data.options?.[0]?.id : undefined
-        edges.push({ id: uid(), source: prev.id, target: node.id, ...(handle ? { sourceHandle: handle } : {}) })
-        nodes.push(node)
-      })
-      // Rotina existente: a mesma rotina refeita com as etapas do plano (continua ligada ou desligada como estava).
-      const existing = r.existingId ? app.flows.find((x) => x.id === r.existingId) : undefined
-      const flow: Flow = existing
-        ? { ...existing, botId, name: r.name.slice(0, 60) || existing.name, nodes, edges, updatedAt: now }
-        : { id: uid(), botId, name: r.name.slice(0, 60), enabled: false, nodes, edges, createdAt: now, updatedAt: now }
-      await app.saveFlow(flow)
-      flowIds.push(flow.id)
-    }
+    // Rotinas do bot: cada uma vira uma faixa (gatilho + etapas) no fluxo dele.
+    if (!b.routines.length) continue
+    // Bot novo ganha o fluxo no processo principal; o `app` daqui é de antes de salvar, então busca de novo.
+    let flow: Flow =
+      (current ? app.botFlow(botId) : (await window.gbot.flows.list()).find((f) => f.botId === botId)) ??
+      { id: uid(), botId, nodes: [], edges: [], createdAt: now, updatedAt: now }
+    for (const r of b.routines) flow = placeRoutine(flow, r, (ref) => specIds.get(ref), model)
+    await app.saveFlow({ ...flow, updatedAt: now })
+    if (!flowIds.includes(flow.id)) flowIds.push(flow.id)
   }
 
   return { projectId, specializationIds: plan.specializations.map((s) => specIds.get(s.ref)!).filter(Boolean), botIds, flowIds }

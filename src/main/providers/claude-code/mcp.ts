@@ -8,6 +8,7 @@ import type { Lesson, MemoryOwner } from '@shared/types'
 import { BROWSER_TOOL_NAMES, registerBrowserTools } from '../../browser/tools'
 import { learn } from '../../memory'
 import { listSpecializations } from '../../store'
+import { routineRunText, routineRunsText } from '../../flows/history'
 import { answersText, askUser } from '../../questions'
 import { registerApprovalTool } from './permissions'
 import { overviewText, planSchema, sanitizePlan } from './architect'
@@ -24,6 +25,8 @@ export interface CallerContext {
   projectId?: string
   /** Quem está perguntando, para o bot consultado saber (ex.: "Brasa", "Panelinha"). */
   callerName: string
+  /** Bot desta sessão: ganha as ferramentas do histórico das próprias rotinas. */
+  botId?: string
   /** Bots já envolvidos nesta cadeia de consultas (evita A → B → A). */
   chain: string[]
   depth: number
@@ -55,6 +58,8 @@ export const GBOT_TOOLS = [
   GBOT_OVERVIEW_TOOL,
   ...BROWSER_TOOL_NAMES.map((n) => `mcp__gbot__${n}`),
   'mcp__gbot__save_lesson',
+  'mcp__gbot__routine_history',
+  'mcp__gbot__routine_run',
   'WebSearch',
   'WebFetch'
 ]
@@ -139,6 +144,30 @@ function buildServer(ctx: CallerContext): McpServer {
         const { updated } = learn(owner, input, source)
         return { content: [{ type: 'text', text: updated ? 'Lição atualizada na memória.' : 'Lição salva na memória.' }] }
       }
+    )
+  }
+
+  if (ctx.botId) {
+    server.registerTool(
+      'routine_history',
+      {
+        description:
+          'Lista as execuções recentes das suas rotinas (quando rodou, qual rotina, como terminou e um resumo do resultado). ' +
+          'Use quando o usuário perguntar sobre algo que você fez ou encontrou numa rotina; depois veja os detalhes com routine_run.',
+        inputSchema: {
+          limit: z.number().int().min(1).max(30).optional().describe('Quantas execuções (padrão 10, as mais recentes primeiro)'),
+          routine: z.string().optional().describe('Nome da rotina (gatilho) para filtrar; vazio = todas')
+        }
+      },
+      async ({ limit, routine }) => ({ content: [{ type: 'text', text: routineRunsText(ctx.botId!, limit ?? 10, routine) }] })
+    )
+    server.registerTool(
+      'routine_run',
+      {
+        description: 'Mostra uma execução de rotina completa: cada etapa com o que entregou, escolhas, erros e arquivos gerados.',
+        inputSchema: { runId: z.string().describe('Id da execução, como aparece em routine_history') }
+      },
+      async ({ runId }) => ({ content: [{ type: 'text', text: routineRunText(ctx.botId!, runId) }] })
     )
   }
 

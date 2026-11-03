@@ -14,7 +14,8 @@ import {
   Workflow,
   X
 } from 'lucide-react'
-import type { Flow, FlowRun } from '@shared/types'
+import type { FlowNode, FlowRun } from '@shared/types'
+import { activeTriggers, triggerName, triggersOf } from '@shared/flows'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { CreateHero } from '@/components/home/CreateHero'
 import { approvalTitle } from '@/components/ApprovalCard'
@@ -98,12 +99,12 @@ const StatusIcon = ({ status }: { status: FlowRun['status'] }) =>
     <X size={17} strokeWidth={2.5} className="text-danger" />
   )
 
-/** Próximo disparo de uma rotina ativa (horários fixos ou intervalo a partir da última execução). */
-function nextFor(flow: Flow, runs: FlowRun[] | undefined): Date | undefined {
-  const schedule = flow.nodes.find((n) => n.type === 'trigger')?.data.schedule
+/** Próximo disparo de uma rotina ativa (horários fixos ou intervalo a partir da última execução do gatilho). */
+function nextFor(trigger: FlowNode, runs: FlowRun[] | undefined): Date | undefined {
+  const schedule = trigger.data.schedule
   if (!schedule) return undefined
   if (schedule.mode === 'times') return nextRun(schedule)
-  const last = runs?.[0]?.startedAt
+  const last = runs?.find((r) => r.triggerId === trigger.id)?.startedAt
   return last ? new Date(Math.max(Date.now(), last + schedule.everyMinutes * 60_000)) : undefined
 }
 
@@ -112,18 +113,18 @@ export function HomeView() {
   const app = useApp()
   const runs = useFlowRuns(app.flows)
   const team = useTeamActivity(runs)
-  /** Rotina com o bot dono na frente: "Ana · Relatório de vendas". */
-  const routineName = (id: string, fallback = tr('Rotina')) => {
-    const flow = app.flows.find((f) => f.id === id)
-    const bot = app.getBot(flow?.botId)
-    const name = flow?.name ?? fallback
-    return bot ? `${bot.name} · ${name}` : name
+  /** Rotina com o bot dono na frente: "Ana · Relatório de vendas" (sem repetir o bot se o nome já vier com ele). */
+  const routineName = (flowId: string, name = tr('Rotina')) => {
+    const bot = app.getBot(app.flows.find((f) => f.id === flowId)?.botId)
+    return bot && !name.startsWith(`${bot.name} · `) ? `${bot.name} · ${name}` : name
   }
+  const runName = (r: FlowRun) => routineName(r.flowId, r.triggerLabel || tr('Gatilho'))
+  // Cada gatilho do fluxo de um bot é uma rotina.
+  const routines = app.flows.flatMap((f) => triggersOf(f).map((t) => ({ flow: f, trigger: t })))
 
   // ── Agora ──
-  const liveRuns = Object.values(runs)
-    .map((list) => list[0])
-    .filter((r): r is FlowRun => !!r && isLive(r))
+  // Vários gatilhos do mesmo fluxo podem estar rodando ao mesmo tempo.
+  const liveRuns = Object.values(runs).flat().filter(isLive)
   const conv = app.activeConversation
   const answering = app.busy && conv
   const answeringBot = answering ? app.getBot(conv.messages.at(-1)?.botId ?? conv.botId) : undefined
@@ -131,8 +132,7 @@ export function HomeView() {
 
   // ── Próximas execuções ──
   const upcoming = app.flows
-    .filter((f) => f.enabled)
-    .map((f) => ({ flow: f, at: nextFor(f, runs[f.id]) }))
+    .flatMap((f) => activeTriggers(f).map((t) => ({ flow: f, trigger: t, at: nextFor(t, runs[f.id]) })))
     .sort((a, b) => (a.at?.getTime() ?? Infinity) - (b.at?.getTime() ?? Infinity))
 
   // ── Atividade recente: execuções terminadas + conversas, em ordem de tempo ──
@@ -148,7 +148,7 @@ export function HomeView() {
           <Row
             key={`run-${r.id}`}
             icon={<StatusIcon status={r.status === 'running' ? 'error' : r.status} />}
-            title={routineName(r.flowId)}
+            title={runName(r)}
             detail={`${r.status === 'done' ? tr('Rotina concluída') : r.status === 'stopped' ? tr('Rotina parada') : tr('Rotina com erro')} · ${tr(r.trigger === 'manual' ? 'manual' : 'agendado')} · ${timeAgo(r.finishedAt ?? r.startedAt)}`}
             onClick={() => app.openFlow(r.flowId)}
           />
@@ -184,7 +184,7 @@ export function HomeView() {
           <h1 className="mt-1 text-[24px] leading-tight font-medium tracking-[-0.02em]">{greeting()}</h1>
           <p className="mt-1 text-[14px] text-muted">
             {plural(app.bots.length, 'bot', 'bots')} · {plural(app.projects.length, 'projeto', 'projetos')} ·{' '}
-            {plural(app.flows.length, 'rotina', 'rotinas')}
+            {plural(routines.length, 'rotina', 'rotinas')}
             {upcoming.length > 0 && <span className="text-success"> · {plural(upcoming.length, 'ativa', 'ativas')}</span>}
           </p>
         </div>
@@ -250,7 +250,7 @@ export function HomeView() {
                     <Row
                       key={r.id}
                       icon={<LoaderCircle size={18} className="animate-spin text-warning" />}
-                      title={routineName(r.flowId)}
+                      title={runName(r)}
                       detail={tr('{0} · {1}/{2} caixinhas · {3}', current.length ? tr('Rodando: {0}', current.join(', ')) : tr('Começando'), done, r.steps.length, timeAgo(r.startedAt))}
                       onClick={() => app.openFlow(r.flowId)}
                     />
@@ -283,14 +283,12 @@ export function HomeView() {
           <UsageCard />
           <Section title={tr('Próximas execuções')}>
             {upcoming.length ? (
-              upcoming.map(({ flow, at }) => (
+              upcoming.map(({ flow, trigger, at }) => (
                 <Row
-                  key={flow.id}
+                  key={`${flow.id}-${trigger.id}`}
                   icon={at ? <DateBadge date={at} /> : <Workflow size={18} className="text-muted" />}
-                  title={routineName(flow.id)}
-                  detail={`${at ? formatWhen(at) : tr('Aguardando a primeira execução')} · ${describeSchedule(
-                    flow.nodes.find((n) => n.type === 'trigger')?.data.schedule
-                  )}`}
+                  title={routineName(flow.id, triggerName(trigger, tr('Gatilho')))}
+                  detail={`${at ? formatWhen(at) : tr('Aguardando a primeira execução')} · ${describeSchedule(trigger.data.schedule)}`}
                   onClick={() => app.openFlow(flow.id)}
                 />
               ))
@@ -299,17 +297,17 @@ export function HomeView() {
             )}
           </Section>
 
-          {app.flows.some((f) => !f.enabled) && (
+          {routines.some(({ trigger }) => !trigger.data.enabled) && (
             <Section title={tr('Rotinas desligadas')}>
-              {app.flows
-                .filter((f) => !f.enabled)
-                .map((f) => (
+              {routines
+                .filter(({ trigger }) => !trigger.data.enabled)
+                .map(({ flow, trigger }) => (
                   <Row
-                    key={f.id}
+                    key={`${flow.id}-${trigger.id}`}
                     icon={<Workflow size={18} className="text-muted" />}
-                    title={routineName(f.id)}
-                    detail={describeSchedule(f.nodes.find((n) => n.type === 'trigger')?.data.schedule)}
-                    onClick={() => app.openFlow(f.id)}
+                    title={routineName(flow.id, triggerName(trigger, tr('Gatilho')))}
+                    detail={describeSchedule(trigger.data.schedule)}
+                    onClick={() => app.openFlow(flow.id)}
                   />
                 ))}
             </Section>

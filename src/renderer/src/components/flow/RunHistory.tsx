@@ -38,7 +38,7 @@ function duration(run: FlowRun) {
   return ms < 60_000 ? `${Math.round(ms / 1000)} s` : `${Math.round(ms / 60_000)} min`
 }
 
-/** Execuções da rotina, mais recentes primeiro; cada uma abre com o resultado de cada caixinha. */
+/** Execuções das rotinas do bot (cada uma com o gatilho que a iniciou), mais recentes primeiro; cada uma abre com o resultado de cada caixinha. */
 export function RunHistory({ runs }: { runs: FlowRun[] }) {
   useLanguage()
   const app = useApp()
@@ -52,7 +52,11 @@ export function RunHistory({ runs }: { runs: FlowRun[] }) {
           <button onClick={() => setOpen(open === run.id ? undefined : run.id)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left">
             <StepIcon status={run.status} />
             <span className="min-w-0 flex-1">
-              <span className="block text-[13px] font-medium">{when(run.startedAt)}</span>
+              {/* Rotina (gatilho) que rodou, com o nome que tinha na hora. */}
+              <span className="block truncate text-[13px]">
+                <span className="font-medium">{run.triggerLabel || tr('Gatilho')}</span>
+                <span className="text-muted"> · {when(run.startedAt)}</span>
+              </span>
               <span className="block text-[12px] text-muted">
                 {run.trigger === 'manual' ? 'Manual' : tr('Agendada')} · {duration(run)}{run.status === 'stopped' ? tr(' · Parado por você') : ''}
               </span>

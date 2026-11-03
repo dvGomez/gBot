@@ -51,9 +51,9 @@ export function UsageCard() {
             const bot = t.kind === 'bot' ? app.getBot(t.id) : undefined
             const flow = t.kind === 'flow' ? app.flows.find((f) => f.id === t.id) : undefined
             const conv = t.kind === 'conversation' ? app.conversations.find((c) => c.id === t.id) : undefined
-            // Rotina aparece com o nome do bot dono, que é quem a roda.
+            // Fluxo do bot (todas as rotinas dele) aparece com o nome do bot dono, que é quem as roda.
             const owner = flow && app.getBot(flow.botId)
-            const routine = flow && (owner ? `${owner.name} · ${flow.name}` : flow.name)
+            const routine = flow && (owner ? `${owner.name} · ${tr('rotinas')}` : tr('Rotinas'))
             const name =
               bot?.name ??
               routine ??

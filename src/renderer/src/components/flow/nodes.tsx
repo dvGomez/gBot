@@ -1,8 +1,10 @@
 import { t as tr, useLanguage } from '@/i18n'
+import { createContext, useContext } from 'react'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
-import { Clock, GraduationCap, Hand, Split } from 'lucide-react'
+import { Clock, GraduationCap, Hand, LoaderCircle, Play, Split, Square } from 'lucide-react'
 import type { FlowNodeData, FlowStepStatus } from '@shared/types'
 import { PixelAvatar } from '@/components/PixelAvatar'
+import { Toggle } from '@/components/ui'
 import { modelLabel } from '@/components/ModelSelect'
 import { cn } from '@/lib/cn'
 import { describeSchedule, formatWhen, nextRun } from '@/lib/schedule'
@@ -11,6 +13,19 @@ import { useApp } from '@/state/app'
 /** Dados que o canvas passa para cada caixinha: os da rotina + o estado na execução atual. */
 export type CanvasNodeData = FlowNodeData & { status?: FlowStepStatus } & Record<string, unknown>
 export type CanvasNode = Node<CanvasNodeData>
+
+/** O que os gatilhos do canvas podem fazer: cada um é uma rotina, com rodar, parar e liga/desliga próprios. */
+export interface TriggerActions {
+  run(triggerId: string): Promise<void>
+  stop(triggerId?: string): Promise<void>
+  setEnabled(triggerId: string, enabled: boolean): Promise<void>
+  /** Gatilhos com execução em andamento. */
+  live: Set<string>
+  /** Gatilho sendo iniciado agora. */
+  starting?: string
+  stopping: boolean
+}
+export const CanvasActions = createContext<TriggerActions | undefined>(undefined)
 
 const STATUS_RING: Record<FlowStepStatus, string> = {
   pending: 'border-line',
@@ -59,21 +74,55 @@ function Preview({ text }: { text?: string }) {
   )
 }
 
-export function TriggerNode({ data, selected }: NodeProps<CanvasNode>) {
+/** Gatilho: uma rotina do bot. Mostra a agenda e tem rodar/parar e liga/desliga próprios. */
+export function TriggerNode({ id, data, selected }: NodeProps<CanvasNode>) {
   useLanguage()
-  const next = nextRun(data.schedule)
+  const actions = useContext(CanvasActions)
+  const live = !!actions?.live.has(id)
+  const busy = actions?.starting === id
+  const next = data.enabled ? nextRun(data.schedule) : undefined
   return (
     <Box selected={selected} target={false} status={data.status}>
       <div className="flex items-center gap-3">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-tile bg-primary text-on-primary">
+        <div
+          className={cn(
+            'flex size-9 shrink-0 items-center justify-center rounded-tile',
+            data.enabled ? 'bg-primary text-on-primary' : 'bg-tile text-muted'
+          )}
+        >
           <Clock size={17} />
         </div>
-        <div className="min-w-0">
-          <p className="text-[14px] font-semibold">{data.label || tr('Gatilho')}</p>
-          <p className="truncate text-[12px] text-muted">{describeSchedule(data.schedule)}</p>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[14px] font-semibold">{data.label || tr('Gatilho')}</p>
+          <p className="truncate text-[12px] text-muted">{data.schedule ? describeSchedule(data.schedule) : tr('Só manual')}</p>
         </div>
+        {actions && data.schedule && (
+          <span className="nodrag" onClick={(e) => e.stopPropagation()}>
+            <Toggle checked={!!data.enabled} onChange={(v) => void actions.setEnabled(id, v)} label={tr('Rotina ligada')} />
+          </span>
+        )}
       </div>
-      {next && <p className="mt-2 text-[12px] text-fg-2">{tr('Próxima: ')}{formatWhen(next)}</p>}
+      <div className="mt-2.5 flex items-center justify-between gap-2">
+        <p className="truncate text-[12px] text-fg-2">
+          {live ? tr('Rodando agora') : next ? `${tr('Próxima: ')}${formatWhen(next)}` : data.schedule ? tr('Desligada') : ''}
+        </p>
+        {actions && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              void (live ? actions.stop(id) : actions.run(id))
+            }}
+            disabled={busy || (live && actions.stopping)}
+            className={cn(
+              'nodrag inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] font-medium disabled:opacity-50',
+              live ? 'border-danger/60 text-danger hover:bg-danger/10' : 'border-line text-fg-2 hover:bg-hover'
+            )}
+          >
+            {busy ? <LoaderCircle size={12} className="animate-spin" /> : live ? <Square size={11} fill="currentColor" /> : <Play size={12} />}
+            {live ? tr('Parar') : tr('Rodar')}
+          </button>
+        )}
+      </div>
     </Box>
   )
 }

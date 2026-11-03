@@ -5,6 +5,7 @@ import { PixelAvatar } from '@/components/PixelAvatar'
 import { ProjectTile } from '@/components/ProjectBadge'
 import { Button, Card } from '@/components/ui'
 import { draggable, useDrop } from '@/lib/dnd'
+import { activeTriggers, triggersOf } from '@shared/flows'
 import { useApp } from '@/state/app'
 
 function NewCard({ label, onClick }: { label: string; onClick(): void }) {
@@ -97,7 +98,7 @@ export function ProjectView() {
             <p className="mt-3 w-full truncate text-[15px] font-semibold">{b.name}</p>
             <p className="mt-0.5 line-clamp-2 text-[12px] text-muted">{b.description || tr('Sem descrição')}</p>
             <p className="mt-2 text-[11px] text-muted">
-              {tr('{0} rotinas · {1} ligadas', app.flows.filter((f) => f.botId === b.id).length, app.flows.filter((f) => f.botId === b.id && f.enabled).length)}
+              {tr('{0} rotinas · {1} ligadas', triggersOf(app.botFlow(b.id)).length, activeTriggers(app.botFlow(b.id)).length)}
             </p>
           </button>
         ))}

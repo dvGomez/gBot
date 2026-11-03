@@ -4,6 +4,7 @@ import { ArrowLeft, GraduationCap, LoaderCircle, Sparkles, Trash2 } from 'lucide
 import type { Specialization } from '@shared/types'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { MemoryPanel } from '@/components/MemoryPanel'
+import { MentionTextarea } from '@/components/MentionTextarea'
 import { SpecializationFiles } from '@/components/SpecializationFiles'
 import { Button, Card, Field, PageHeader, inputClass } from '@/components/ui'
 import { uid } from '@/lib/format'
@@ -124,15 +125,16 @@ export function SpecializationEditorView() {
 
         <Field
           label={tr('Instruções')}
-          hint={tr('O passo a passo, os cuidados e o formato da resposta. Vale para todo bot que usar esta especialização.')}
+          hint={tr('O passo a passo, os cuidados e o formato da resposta. Vale para todo bot que usar esta especialização. Use @ para envolver outro bot.')}
           error={errors.instructions}
         >
-          <textarea
+          <MentionTextarea
             value={instructions}
-            onChange={(e) => {
-              setInstructions(e.target.value)
+            onValueChange={(v) => {
+              setInstructions(v)
               setErrors((x) => ({ ...x, instructions: undefined }))
             }}
+            bots={app.bots.filter((b) => !b.projectId || b.projectId === projectId)}
             rows={10}
             placeholder={tr(EXAMPLE)}
             className={`${inputClass} resize-y leading-relaxed`}

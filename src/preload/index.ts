@@ -168,8 +168,9 @@ const api: GbotApi = {
     list: () => ipcRenderer.invoke('flows:list'),
     save: (flow) => ipcRenderer.invoke('flows:save', flow),
     remove: (id) => ipcRenderer.invoke('flows:remove', id),
-    run: (id) => ipcRenderer.invoke('flows:run', id),
-    stop: (id) => ipcRenderer.invoke('flows:stop', id),
+    run: (id, triggerId) => ipcRenderer.invoke('flows:run', id, triggerId),
+    stop: (id, triggerId) => ipcRenderer.invoke('flows:stop', id, triggerId),
+    setTriggerEnabled: (id, triggerId, enabled) => ipcRenderer.invoke('flows:set-trigger-enabled', id, triggerId, enabled),
     runs: (flowId) => ipcRenderer.invoke('flows:runs', flowId),
     onRunUpdate: (listener) => {
       const handler = (_: unknown, run: FlowRun) => listener(run)

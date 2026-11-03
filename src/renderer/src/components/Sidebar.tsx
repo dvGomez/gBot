@@ -2,6 +2,7 @@ import { t as tr, useLanguage } from '@/i18n'
 import type { ComponentType, ReactNode } from 'react'
 import { Bot as BotIcon, Brain, ChartColumn, FolderPlus, GraduationCap, House, MessageSquarePlus, Pencil, Plug, Plus, Settings, Trash2 } from 'lucide-react'
 import type { Project } from '@shared/types'
+import { activeTriggers } from '@shared/flows'
 import { cn } from '@/lib/cn'
 import { draggable, useDrop, type ItemRef } from '@/lib/dnd'
 import { useApp, type View } from '@/state/app'
@@ -115,8 +116,8 @@ export function Sidebar() {
   const plainConversations = app.conversations.filter((c) => !c.projectId).slice(0, 8)
   const looseBots = app.bots.filter((b) => !b.projectId)
   const looseSpecializations = app.specializations.filter((sp) => !sp.projectId)
-  // Bots que estão rodando uma rotina agora ou ligados: ganham a bolinha verde.
-  const activeBots = new Set(app.flows.filter((f) => f.enabled).map((f) => f.botId))
+  // Bots com alguma rotina ligada: ganham a bolinha verde.
+  const activeBots = new Set(app.flows.filter((f) => activeTriggers(f).length).map((f) => f.botId))
 
   const conversationMenu = (id: string): MenuAction[] => [
     {
@@ -171,8 +172,7 @@ export function Sidebar() {
               project={p}
               active={
                 ((app.view === 'project' || app.view === 'project-editor') && app.selectedProject?.id === p.id) ||
-                (app.view === 'chat' && app.activeProject?.id === p.id) ||
-                (app.view === 'flow-editor' && app.getBot(app.selectedFlow?.botId)?.projectId === p.id)
+                (app.view === 'chat' && app.activeProject?.id === p.id)
               }
             />
           ))}
@@ -198,8 +198,7 @@ export function Sidebar() {
               drag={{ kind: 'bot', id: b.id }}
               active={
                 ((app.view === 'bot' || app.view === 'bot-editor') && app.selectedBot?.id === b.id) ||
-                (app.view === 'chat' && app.activeBot?.id === b.id) ||
-                (app.view === 'flow-editor' && app.selectedFlow?.botId === b.id)
+                (app.view === 'chat' && app.activeBot?.id === b.id)
               }
               onClick={() => app.openBot(b.id)}
               menu={botMenu(b.id)}

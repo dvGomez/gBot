@@ -1,31 +1,39 @@
 import { t as tr, useLanguage } from '@/i18n'
-import { Plus, Trash2, X } from 'lucide-react'
+import { useContext } from 'react'
+import { Play, Plus, Square, Trash2, X } from 'lucide-react'
 import { uid } from '@/lib/format'
 import type { FlowDecisionOption, FlowNodeData, FlowNodeType, FlowSchedule } from '@shared/types'
-import { Button, Chip, Field, inputClass } from '@/components/ui'
+import { Button, Chip, Field, Toggle, inputClass } from '@/components/ui'
+import { CanvasActions } from '@/components/flow/nodes'
 import { cn } from '@/lib/cn'
 import { WEEKDAYS } from '@/lib/schedule'
 import { ModelSelect } from '@/components/ModelSelect'
+import { MentionTextarea } from '@/components/MentionTextarea'
 import { useApp } from '@/state/app'
 
 const PREV_HINT = tr('O resultado das caixinhas anteriores vai junto automaticamente. Use {{anterior}} para escolher onde ele entra.')
+const MENTION_HINT = tr('Use @ para envolver outro bot: o bot desta etapa pergunta a ele e segue de acordo com a resposta.')
 
-function ScheduleEditor({ value, onChange }: { value: FlowSchedule; onChange(s: FlowSchedule): void }) {
+/** Agenda do gatilho: em horários, a cada N minutos, ou só manual (sem agenda). */
+function ScheduleEditor({ value, onChange }: { value?: FlowSchedule; onChange(s?: FlowSchedule): void }) {
   useLanguage()
   return (
     <div className="space-y-5">
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Chip
-          active={value.mode === 'times'}
-          onClick={() => value.mode !== 'times' && onChange({ mode: 'times', days: [1, 2, 3, 4, 5], times: ['09:00'] })}
+          active={value?.mode === 'times'}
+          onClick={() => value?.mode !== 'times' && onChange({ mode: 'times', days: [1, 2, 3, 4, 5], times: ['09:00'] })}
         >{tr('Em horários')}</Chip>
         <Chip
-          active={value.mode === 'interval'}
-          onClick={() => value.mode !== 'interval' && onChange({ mode: 'interval', everyMinutes: 60 })}
+          active={value?.mode === 'interval'}
+          onClick={() => value?.mode !== 'interval' && onChange({ mode: 'interval', everyMinutes: 60 })}
         >{tr('Repetir a cada')}</Chip>
+        <Chip active={!value} onClick={() => value && onChange(undefined)}>{tr('Só manual')}</Chip>
       </div>
 
-      {value.mode === 'times' ? (
+      {!value ? (
+        <p className="text-[13px] text-muted">{tr('Esta rotina só roda quando você mandar (botão Rodar no gatilho).')}</p>
+      ) : value.mode === 'times' ? (
         <>
           <Field label={tr('Dias da semana')}>
             <div className="flex gap-1.5">
@@ -169,10 +177,12 @@ export function NodePanel({
     (sp) => !bot?.specializationIds.includes(sp.id) && (!sp.projectId || sp.projectId === bot?.projectId)
   )
   const ownModel = !!data.providerId || !!data.model
+  // Bots que a etapa pode mencionar com @ (o próprio bot fica de fora: é ele quem executa).
+  const mentionable = app.bots.filter((b) => b.id !== bot?.id && (!b.projectId || b.projectId === bot?.projectId))
 
   return (
     <div className="space-y-5">
-      <Field label={tr('Nome da caixinha')} hint={tr('Opcional.')}>
+      <Field label={type === 'trigger' ? tr('Nome da rotina') : tr('Nome da caixinha')} hint={type === 'trigger' ? tr('Aparece no histórico e nas notificações.') : tr('Opcional.')}>
         <input
           value={data.label ?? ''}
           onChange={(e) => onChange({ label: e.target.value })}
@@ -189,8 +199,10 @@ export function NodePanel({
         />
       </Field>
 
-      {type === 'trigger' && data.schedule && (
-        <ScheduleEditor value={data.schedule} onChange={(schedule) => onChange({ schedule })} />
+      {type === 'trigger' && (
+        <>
+          <ScheduleEditor value={data.schedule} onChange={(schedule) => onChange({ schedule })} />
+        </>
       )}
 
       {type === 'task' && (
@@ -222,12 +234,13 @@ export function NodePanel({
               )}
             </select>
           </Field>
-          <Field label={tr('O que fazer nesta etapa')} hint={tr(PREV_HINT)}>
-            <textarea
+          <Field label={tr('O que fazer nesta etapa')} hint={`${tr(PREV_HINT)} ${tr(MENTION_HINT)}`}>
+            <MentionTextarea
               value={data.message ?? ''}
-              onChange={(e) => onChange({ message: e.target.value })}
+              onValueChange={(message) => onChange({ message })}
+              bots={mentionable}
               rows={7}
-              placeholder={tr('Ex.: Resuma as novidades de hoje em 5 tópicos.')}
+              placeholder={tr('Ex.: Pergunte ao @Fulano sobre o pedido de hoje e, se estiver atrasado, avise o cliente.')}
               className={`${inputClass} resize-y leading-relaxed`}
             />
           </Field>
@@ -281,9 +294,10 @@ export function NodePanel({
             />
           </Field>
           <Field label={tr('Critério (opcional)')} hint={tr('Ajuda a IA a decidir. O resultado das caixinhas anteriores vai junto.')}>
-            <textarea
+            <MentionTextarea
               value={data.message ?? ''}
-              onChange={(e) => onChange({ message: e.target.value })}
+              onValueChange={(message) => onChange({ message })}
+              bots={mentionable}
               rows={3}
               placeholder={tr('Ex.: Considere urgente se mencionar prazo de hoje.')}
               className={`${inputClass} resize-y leading-relaxed`}
@@ -323,6 +337,34 @@ export function NodePanel({
       {onDelete && (
         <Button variant="ghost" onClick={onDelete} className="text-danger">
           <Trash2 size={14} />{tr(' Remover caixinha')}</Button>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Liga/desliga e rodar/parar de um gatilho. Fica fora do bloqueio do painel: vale mesmo com outra rotina do bot rodando.
+ */
+export function TriggerControls({ nodeId, data }: { nodeId: string; data: FlowNodeData }) {
+  useLanguage()
+  const actions = useContext(CanvasActions)
+  if (!actions) return null
+  return (
+    <div className="mt-4 flex items-center justify-between gap-3 rounded-tile border border-line px-3.5 py-3">
+      {data.schedule ? (
+        <label className="flex items-center gap-2.5 text-[13px] text-fg-2">
+          <Toggle checked={!!data.enabled} onChange={(v) => void actions.setEnabled(nodeId, v)} label={tr('Rotina ligada')} />
+          {data.enabled ? tr('Ligada: roda pela agenda') : tr('Desligada: só roda quando você mandar')}
+        </label>
+      ) : (
+        <span className="text-[13px] text-muted">{tr('Sem agenda')}</span>
+      )}
+      {actions.live.has(nodeId) ? (
+        <Button onClick={() => void actions.stop(nodeId)} disabled={actions.stopping} className="border-danger text-danger">
+          <Square size={13} fill="currentColor" />{tr(' Parar')}</Button>
+      ) : (
+        <Button variant="primary" onClick={() => void actions.run(nodeId)} disabled={actions.starting === nodeId}>
+          <Play size={13} />{tr(' Rodar agora')}</Button>
       )}
     </div>
   )

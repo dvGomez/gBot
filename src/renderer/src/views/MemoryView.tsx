@@ -2,6 +2,7 @@ import { t as tr, useLanguage } from '@/i18n'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ArrowLeft, FileText, FolderClosed, GraduationCap, Search, Trash2, TriangleAlert, Workflow } from 'lucide-react'
 import type { AutoMemoryNote, Lesson } from '@shared/types'
+import { reachableFrom, triggerName, triggersOf } from '@shared/flows'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { ItemMenu } from '@/components/ItemMenu'
 import { Highlight, LessonCard, matches } from '@/components/MemoryPanel'
@@ -233,9 +234,15 @@ export function MemoryView() {
         if (!text || !matches(text, query)) continue
         const label = n.data.label || app.getSpecialization(n.data.specializationId)?.name || tr('caixinha')
         const bot = app.getBot(f.botId)
+        // Rotinas (gatilhos) que chegam nesta caixinha.
+        const routines = triggersOf(f)
+          .filter((t) => reachableFrom(f, t.id).has(n.id))
+          .map((t) => triggerName(t, tr('Gatilho')))
+          .join(', ')
+        const routine = [bot?.name, routines].filter(Boolean).join(' · ') || tr('Rotina')
         sources.push({
           key: `node:${f.id}:${n.id}`,
-          title: tr('Mensagem da caixinha "{0}" na rotina {1}', label, bot ? `${bot.name} · ${f.name}` : f.name),
+          title: tr('Mensagem da caixinha "{0}" na rotina {1}', label, routine),
           icon: <Workflow size={16} className="text-muted" />,
           text,
           action: tr('Abrir rotina'),

@@ -1,13 +1,15 @@
 import { randomUUID } from 'node:crypto'
 import { BrowserWindow } from 'electron'
 import type { ChatEvent, ChatFile, Flow, FlowEdge, FlowNode, FlowRun, FlowRunStep, SendMessageRequest, TokenUsage } from '@shared/types'
+import { triggerName } from '@shared/flows'
 import { addUsage } from '@shared/usage'
 import { askOnce } from '../providers/claude-code/oneShot'
 import { killSessions, stableUuid } from '../providers/claude-code/sessions'
 import { runAsBot, waitNotice } from '../botQueue'
 import { requestConfirmation } from '../confirmations'
 import { getProvider } from '../providers/registry'
-import { getBot, getSpecialization } from '../store'
+import { findMentions } from '@shared/mentions'
+import { getBot, getSpecialization, listBots } from '../store'
 import { listFlows, listRuns, saveRun } from './store'
 
 /** Tempo máximo de uma caixinha. */
@@ -18,8 +20,15 @@ const STEP_TIMEOUT_MS = 15 * 60_000
  * o sinal que cancela as caixinhas e as sessões do Claude Code abertas por elas.
  */
 const running = new Map<string, { run: FlowRun; controller: AbortController; sessions: Set<string> }>()
+/** Cada gatilho roda de forma independente: a chave é fluxo + gatilho. */
+const runKey = (flowId: string, triggerId: string) => `${flowId}:${triggerId}`
 
-export const isFlowRunning = (flowId: string) => running.has(flowId)
+/** Alguma execução do fluxo (de qualquer gatilho) está rodando. */
+export const isFlowRunning = (flowId: string) => [...running.keys()].some((k) => k.startsWith(`${flowId}:`))
+export const isTriggerRunning = (flowId: string, triggerId: string) => running.has(runKey(flowId, triggerId))
+
+/** O fluxo visto a partir do gatilho que disparou: `name` é o nome desse gatilho (a rotina). */
+type Routine = Flow & { name: string }
 
 /** A stopped app cannot resume its old processes; don't leave those routines locked after restarting. */
 export function recoverInterruptedFlows() {
@@ -51,10 +60,15 @@ const STOPPED = 'Parado por você.'
  * Para a rotina na hora: cancela o que estiver rodando (sessões, processos do Codex, decisões, filas de bots,
  * confirmações pendentes) e marca a execução como parada, sem esperar ninguém terminar.
  */
-export function stopFlow(flowId: string) {
-  const active = running.get(flowId)
+export function stopFlow(flowId: string, triggerId?: string) {
+  const keys = triggerId ? [runKey(flowId, triggerId)] : [...running.keys()].filter((k) => k.startsWith(`${flowId}:`))
+  for (const key of keys) stopRun(key)
+}
+
+function stopRun(key: string) {
+  const active = running.get(key)
   if (!active) return
-  running.delete(flowId)
+  running.delete(key)
   active.controller.abort()
   for (const key of active.sessions) killSessions(key)
   const now = Date.now()
@@ -80,7 +94,7 @@ export function nodeLabel(node: FlowNode): string {
 }
 
 /** Caixinhas alcançáveis a partir do gatilho, em ordem; erro se houver ciclo. */
-function plan(flow: Flow): { order: FlowNode[]; incoming: Map<string, FlowEdge[]> } {
+function plan(flow: Flow, triggerId: string): { order: FlowNode[]; incoming: Map<string, FlowEdge[]> } {
   const parents = new Map<string, string[]>()
   const incoming = new Map<string, FlowEdge[]>()
   const children = new Map<string, string[]>()
@@ -89,7 +103,7 @@ function plan(flow: Flow): { order: FlowNode[]; incoming: Map<string, FlowEdge[]
     parents.set(e.target, [...(parents.get(e.target) ?? []), e.source])
     children.set(e.source, [...(children.get(e.source) ?? []), e.target])
   }
-  const trigger = flow.nodes.find((n) => n.type === 'trigger')
+  const trigger = flow.nodes.find((n) => n.type === 'trigger' && n.id === triggerId)
   if (!trigger) throw new Error('A rotina não tem gatilho.')
 
   const reachable = new Set<string>()
@@ -163,8 +177,26 @@ function runContext(trail: TrailStep[], parentIds: Set<string>): string {
   ].join('\n')
 }
 
+/** Bots mencionados com @ na mensagem da caixinha (os visíveis no projeto do bot da rotina, menos ele mesmo). */
+function mentionedBots(flow: Flow, node: FlowNode) {
+  const owner = getBot(flow.botId)
+  const visible = listBots().filter((b) => b.id !== flow.botId && (!b.projectId || b.projectId === owner?.projectId))
+  return findMentions(node.data.message ?? '', visible)
+}
+
+/** Aviso dos bots mencionados: o bot da etapa pergunta a cada um (ask_bot) e segue de acordo com a resposta. */
+function mentionLines(flow: Flow, node: FlowNode): string[] {
+  const bots = mentionedBots(flow, node)
+  if (!bots.length) return []
+  return [
+    `[Bots mencionados nesta etapa: ${bots.map((b) => `@${b.name}${b.description ? ` (${b.description})` : ''}`).join('; ')}.`,
+    'Fale com cada um usando a ferramenta ask_bot (bot: o nome sem o @), com todo o contexto necessário, e use a resposta',
+    'para decidir e fazer o que a etapa pede. Diga no resultado o que cada bot respondeu.]'
+  ]
+}
+
 /** Monta o texto da caixinha: o contexto da execução + o que o usuário escreveu + o resultado das anteriores. */
-function compose(flow: Flow, node: FlowNode, inputs: string[], context: string): string {
+function compose(flow: Routine, node: FlowNode, inputs: string[], context: string): string {
   const prev = inputs.length === 1 ? inputs[0] : inputs.map((t, i) => `Resultado ${i + 1}:\n${t}`).join('\n\n')
   let text = (node.data.message ?? '').trim()
   if (text.includes('{{anterior}}')) text = text.replaceAll('{{anterior}}', prev)
@@ -174,6 +206,7 @@ function compose(flow: Flow, node: FlowNode, inputs: string[], context: string):
   return [
     `[Etapa da sua rotina automática "${flow.name}" no gBot. Ninguém está acompanhando em tempo real: entregue o resultado direto, sem fazer perguntas.]`,
     ...(sp ? [`[Nesta etapa, use a sua especialização "${sp.name}".]`] : []),
+    ...mentionLines(flow, node),
     ...(context ? [context] : []),
     '',
     text
@@ -182,7 +215,7 @@ function compose(flow: Flow, node: FlowNode, inputs: string[], context: string):
 
 async function execute(
   runId: string,
-  flow: Flow,
+  flow: Routine,
   node: FlowNode,
   inputs: string[],
   onNotice: (text: string) => void,
@@ -260,7 +293,7 @@ const joinInputs = (inputs: string[]) =>
  */
 async function decide(
   runId: string,
-  flow: Flow,
+  flow: Routine,
   node: FlowNode,
   inputs: string[],
   onNotice: (text: string) => void,
@@ -272,37 +305,47 @@ async function decide(
   if (options.length < 2) throw new Error('A decisão precisa de pelo menos duas opções.')
   const prompt = [
     `[Decisão na rotina automática "${flow.name}" do gBot. Ninguém está acompanhando em tempo real.]`,
-    'Leia o resultado anterior e escolha a opção que melhor descreve a situação. Não use ferramentas.',
+    mentionedBots(flow, node).length
+      ? 'Leia o resultado anterior, consulte os bots mencionados e escolha a opção que melhor descreve a situação.'
+      : 'Leia o resultado anterior e escolha a opção que melhor descreve a situação. Não use ferramentas.',
     context,
     inputs.length ? `<resultado_anterior>\n${joinInputs(inputs)}\n</resultado_anterior>` : '(sem resultado anterior)',
     node.data.message?.trim() ? `Critério: ${node.data.message.trim()}` : '',
+    ...mentionLines(flow, node),
     'Opções:',
     ...options.map((o, i) => `${i + 1}. ${o.label.trim()}`),
-    'Responda apenas com o número da opção escolhida.'
+    'Responda apenas com o número da opção escolhida (no fim, numa linha só).'
   ]
     .filter(Boolean)
     .join('\n')
   const providerId = node.data.providerId ?? 'claude-code'
   let answer: string
-  if (providerId === 'claude-code') {
+  // Decisão que menciona um bot precisa de ferramentas para consultá-lo: roda como uma etapa do bot, não como pergunta avulsa.
+  if (providerId === 'claude-code' && !mentionedBots(flow, node).length) {
     const res = await askOnce(prompt, node.data.model ?? 'haiku', { kind: 'flow', flowId: flow.id }, STEP_TIMEOUT_MS, undefined, stop.signal)
     onUsage(res.usage)
     answer = res.text
   } else {
     answer = (await execute(runId, flow, node, inputs, onNotice, onUsage, context, stop, prompt)).text
   }
-  const n = Number(answer.match(/\d+/)?.[0])
+  // O número vem na última linha (antes pode haver o que os bots consultados responderam).
+  const n = Number(answer.trim().split('\n').at(-1)?.match(/\d+/)?.[0] ?? answer.match(/\d+/)?.[0])
   const chosen = options[n - 1]
   if (!chosen) throw new Error(`Não consegui entender a escolha ("${answer.slice(0, 60)}").`)
   return { optionId: chosen.id, label: chosen.label.trim() }
 }
 
 /** Roda a rotina: caixinhas em ordem, ramos em paralelo; cada uma espera todas as anteriores. */
-export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<string> {
-  if (running.has(flow.id)) throw new Error('Esta rotina já está rodando.')
+export async function runFlow(base: Flow, triggerId: string, trigger: FlowRun['trigger']): Promise<string> {
+  const key = runKey(base.id, triggerId)
+  if (running.has(key)) throw new Error('Esta rotina já está rodando.')
+  const triggerNode = base.nodes.find((n) => n.id === triggerId && n.type === 'trigger')
+  const flow: Routine = { ...base, name: triggerNode ? triggerName(triggerNode) : 'Rotina' }
   const run: FlowRun = {
     id: randomUUID(),
     flowId: flow.id,
+    triggerId,
+    triggerLabel: flow.name,
     trigger,
     status: 'running',
     startedAt: Date.now(),
@@ -312,7 +355,7 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
   let order: FlowNode[]
   let incoming: Map<string, FlowEdge[]>
   try {
-    ;({ order, incoming } = plan(flow))
+    ;({ order, incoming } = plan(flow, triggerId))
   } catch (e) {
     publish({ ...run, status: 'error', finishedAt: Date.now(), steps: [{ nodeId: '', label: 'Rotina', status: 'error', error: (e as Error).message }] })
     return run.id
@@ -325,7 +368,7 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
   run.steps = order.map((n): FlowRunStep => ({ nodeId: n.id, label: nodeLabel(n), status: 'pending' }))
   const controller = new AbortController()
   const sessions = new Set<string>()
-  running.set(flow.id, { run, controller, sessions })
+  running.set(key, { run, controller, sessions })
   const stop: StopContext = { signal: controller.signal, track: (key) => sessions.add(key) }
   const stopped = () => controller.signal.aborted
   // Depois de parar, nada mais muda a execução: o "parado" já foi gravado por stopFlow.
@@ -357,7 +400,8 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
             (incoming.get(node.id) ?? []).map(async (e): Promise<Result> => {
               const parent = byId(e.source)
               if (!parent) return { kind: 'skip' }
-              if (parent.type === 'trigger') return { kind: 'ok', output: '', trail: [], files: [] }
+              // Ligação de outro gatilho do fluxo não conta: só a deste gatilho inicia o caminho.
+              if (parent.type === 'trigger') return parent.id === triggerId ? { kind: 'ok', output: '', trail: [], files: [] } : { kind: 'skip' }
               if (!order.includes(parent)) return { kind: 'skip' }
               const r = await exec(parent)
               const branches = parent.type === 'decision' || parent.type === 'confirm'
@@ -457,7 +501,7 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
 
   void Promise.all(order.map(exec)).finally(() => {
     if (stopped()) return
-    running.delete(flow.id)
+    running.delete(key)
     // Caixinha pulada porque a decisão escolheu outro caminho não é erro.
     run.status = run.steps.some((s) => s.status === 'error') ? 'error' : 'done'
     run.finishedAt = Date.now()
