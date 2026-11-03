@@ -57,7 +57,7 @@ export function usageSummary(): UsageSummary {
     if (r.at < weekAgo) continue
     week = addUsage(week, only(r))
     if (r.at >= startOfDay) today = addUsage(today, only(r))
-    // Quem gastou: o fluxo (inclusive bots consultados nele), senão o bot, senão a conversa.
+    // Quem gastou: a rotina (inclusive bots consultados nela), senão o bot, senão a conversa.
     const owner = r.flowId
       ? ({ kind: 'flow', id: r.flowId } as const)
       : r.botId

@@ -75,7 +75,7 @@ function ScheduleEditor({ value, onChange }: { value: FlowSchedule; onChange(s: 
           </Field>
         </>
       ) : (
-        <Field label={tr('Intervalo')} hint={tr('Conta a partir da última execução (ou de quando o fluxo foi ativado).')}>
+        <Field label={tr('Intervalo')} hint={tr('Conta a partir da última execução (ou de quando a rotina foi ligada).')}>
           <div className="flex gap-2">
             <input
               type="number"
@@ -162,7 +162,13 @@ export function NodePanel({
 }) {
   useLanguage()
   const app = useApp()
-
+  const bot = app.getBot(app.selectedFlow?.botId)
+  // Especializações do bot primeiro; depois as outras disponíveis no projeto dele (usar uma delas não a adiciona ao bot).
+  const own = (bot?.specializationIds ?? []).map((id) => app.getSpecialization(id)).filter((sp) => !!sp)
+  const others = app.specializations.filter(
+    (sp) => !bot?.specializationIds.includes(sp.id) && (!sp.projectId || sp.projectId === bot?.projectId)
+  )
+  const ownModel = !!data.providerId || !!data.model
 
   return (
     <div className="space-y-5">
@@ -173,13 +179,11 @@ export function NodePanel({
           placeholder={
             type === 'trigger'
               ? tr('Gatilho')
-              : type === 'bot'
-                ? tr('Nome do bot')
+              : type === 'task'
+                ? (app.getSpecialization(data.specializationId)?.name ?? tr('Tarefa'))
                 : type === 'decision'
                   ? tr('Decisão')
-                  : type === 'confirm'
-                    ? tr('Confirmação')
-                    : 'Prompt'
+                  : tr('Confirmação')
           }
           className={inputClass}
         />
@@ -189,19 +193,36 @@ export function NodePanel({
         <ScheduleEditor value={data.schedule} onChange={(schedule) => onChange({ schedule })} />
       )}
 
-      {type === 'bot' && (
+      {type === 'task' && (
         <>
-          <Field label="Bot">
-            <select value={data.botId ?? ''} onChange={(e) => onChange({ botId: e.target.value || undefined })} className={inputClass}>
-              <option value="">{tr('Escolha um bot')}</option>
-              {app.bots.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
+          <Field label={tr('Especialização')} hint={tr('O que {0} usa nesta etapa. Sem especialização, faz com o que já sabe.', bot?.name ?? 'o bot')}>
+            <select
+              value={data.specializationId ?? ''}
+              onChange={(e) => onChange({ specializationId: e.target.value || undefined })}
+              className={inputClass}
+            >
+              <option value="">{tr('Nenhuma')}</option>
+              {own.length > 0 && (
+                <optgroup label={tr('Do bot')}>
+                  {own.map((sp) => (
+                    <option key={sp.id} value={sp.id}>
+                      {sp.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {others.length > 0 && (
+                <optgroup label={tr('Outras')}>
+                  {others.map((sp) => (
+                    <option key={sp.id} value={sp.id}>
+                      {sp.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </Field>
-          <Field label={tr('Mensagem para o bot')} hint={tr(PREV_HINT)}>
+          <Field label={tr('O que fazer nesta etapa')} hint={tr(PREV_HINT)}>
             <textarea
               value={data.message ?? ''}
               onChange={(e) => onChange({ message: e.target.value })}
@@ -209,6 +230,32 @@ export function NodePanel({
               placeholder={tr('Ex.: Resuma as novidades de hoje em 5 tópicos.')}
               className={`${inputClass} resize-y leading-relaxed`}
             />
+          </Field>
+          <Field label={tr('Modelo')} hint={tr('Por padrão, o do bot. Escolha outro só para esta etapa se precisar.')}>
+            <div className="space-y-2">
+              <select
+                value={ownModel ? 'own' : 'bot'}
+                onChange={(e) =>
+                  onChange(
+                    e.target.value === 'own'
+                      ? { providerId: bot?.providerId ?? 'claude-code', model: bot?.model ?? app.preferredModel(bot?.providerId ?? 'claude-code') }
+                      : { providerId: undefined, model: undefined }
+                  )
+                }
+                className={inputClass}
+              >
+                <option value="bot">{tr('O modelo do bot')}</option>
+                <option value="own">{tr('Outro modelo nesta etapa')}</option>
+              </select>
+              {ownModel && (
+                <ModelSelect providerId={data.providerId ?? 'claude-code'} value={data.model}
+                  onChange={(providerId, model) => {
+                    const value = model === 'default' ? undefined : model
+                    onChange({ providerId, model: value })
+                    app.rememberModel(value, providerId)
+                  }} fullWidth />
+              )}
+            </div>
           </Field>
         </>
       )}
@@ -268,28 +315,6 @@ export function NodePanel({
               onChange={(options) => onChange({ options })}
               placeholder={(i) => (i === 0 ? tr('Ex.: Aprovar') : i === 1 ? tr('Ex.: Recusar') : tr('Ex.: Pedir ajuste'))}
               max={5}
-            />
-          </Field>
-        </>
-      )}
-
-      {type === 'prompt' && (
-        <>
-          <Field label={tr('Modelo')}>
-            <ModelSelect providerId={data.providerId ?? 'claude-code'} value={data.model}
-              onChange={(providerId, model) => {
-                const value = model === 'default' ? undefined : model
-                onChange({ providerId, model: value })
-                app.rememberModel(value, providerId)
-              }} fullWidth />
-          </Field>
-          <Field label="Prompt" hint={tr(PREV_HINT)}>
-            <textarea
-              value={data.message ?? ''}
-              onChange={(e) => onChange({ message: e.target.value })}
-              rows={9}
-              placeholder={tr('Ex.: Abra o g1.globo.com no navegador e liste as 5 principais manchetes.')}
-              className={`${inputClass} resize-y leading-relaxed`}
             />
           </Field>
         </>

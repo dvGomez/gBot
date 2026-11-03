@@ -4,6 +4,7 @@ import { app, BrowserWindow, nativeTheme, shell } from 'electron'
 import { setConfirmationWindowOpener } from './confirmations'
 import { startScheduler } from './flows/scheduler'
 import { hasRunningChats, registerIpc } from './ipc'
+import { migrateData } from './migrate'
 import { startUpdates } from './updates'
 import { createTray } from './tray'
 
@@ -59,6 +60,7 @@ app.whenReady().then(() => {
   // No app instalado o ícone vem do pacote; em dev, o Dock mostraria o ícone do Electron.
   const devIcon = join(app.getAppPath(), 'build/icon.png')
   if (!app.isPackaged && existsSync(devIcon)) app.dock?.setIcon(devIcon)
+  migrateData()
   registerIpc()
   createWindow()
   createTray(openWindow)
@@ -68,6 +70,6 @@ app.whenReady().then(() => {
   app.on('activate', openWindow)
 })
 
-// Fechar a janela não encerra o app: ele segue na barra de menu para os fluxos agendados.
+// Fechar a janela não encerra o app: ele segue na barra de menu para as rotinas agendadas.
 // Para sair de vez: "Sair do gBot" no ícone da barra de menu (ou Cmd+Q).
 app.on('window-all-closed', () => undefined)

@@ -1,15 +1,14 @@
 import { spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { MemoryOwner, ProviderAccount, ProviderModel, SendMessageRequest } from '@shared/types'
+import type { ProviderAccount, ProviderModel, SendMessageRequest } from '@shared/types'
 import type { ChatProvider, ProviderAccounts } from '../types'
 import { withAttachments } from '../../attachments'
-import { botFilesPrompt } from '../../botFiles'
-import { memoryPrompt } from '../../memory'
 import { languageInstructions } from '../../localization'
 import { getSettings } from '../../settings'
 import { architectPrompt, GBOT_EDIT_HINT } from '../claude-code/architect'
 import { sendToBot, TOOLS_HINT } from '../claude-code/bots'
+import { botPromptLines, memoryLines, memoryOf, specializationsInUse, withSpecializations } from '../persona'
 import { mcpEndpointFor, type CallerContext } from '../claude-code/mcp'
 import { withOutputFiles } from '../claude-code/outputs'
 import { fileContext, type UsageTag } from '../claude-code/session'
@@ -50,23 +49,11 @@ function codexModels(): ProviderModel[] {
   return models
 }
 
-const memoryOf = (req: SendMessageRequest): MemoryOwner | undefined =>
-  req.memory ?? (req.bot ? { kind: 'bot', id: req.bot.id } : undefined)
-
 function instructions(req: SendMessageRequest, work: WorkContext, fullAccess: boolean): string {
   if (req.architect) return [...architectPrompt(), ...work.promptLines, TOOLS_HINT, languageInstructions()].join('\n')
   const { bot } = req
   const lines = ['Você está conversando com o usuário pelo gBot, um aplicativo de chat para desktop.']
-  if (bot) {
-    lines.push(
-      `Nesta conversa você é o bot "${bot.name}"${bot.description ? `: ${bot.description}` : ''}.`,
-      'Siga estas instruções definidas pelo usuário para este bot:',
-      '<instrucoes_do_bot>',
-      bot.instructions.trim(),
-      '</instrucoes_do_bot>',
-      ...botFilesPrompt(bot.id)
-    )
-  }
+  if (bot) lines.push(...botPromptLines(bot))
   lines.push(
     'Responda no idioma do usuário, de forma direta e amigável. Use Markdown quando ajudar a leitura.',
     ...work.promptLines,
@@ -75,7 +62,7 @@ function instructions(req: SendMessageRequest, work: WorkContext, fullAccess: bo
       : 'Seus comandos rodam numa sandbox: você cria e edita arquivos na pasta de trabalho e lê o resto do disco.',
     TOOLS_HINT,
     GBOT_EDIT_HINT,
-    ...memoryPrompt(memoryOf(req))
+    ...memoryLines(req)
   )
   return [...lines, languageInstructions()].join('\n')
 }
@@ -219,7 +206,7 @@ export const codexProvider: ChatProvider = {
   accounts: codexAccounts,
 
   async send(req, emit, signal) {
-    const text = withAttachments(req.text, req.attachments)
+    const text = withSpecializations(req, withAttachments(req.text, req.attachments))
     // Mentions dispatch through the provider configured for the target bot.
     if (req.targetBotId) {
       await sendToBot(req.conversationId, req.projectId, req.targetBotId, text, emit, signal, req.origin)
@@ -242,6 +229,7 @@ export const codexProvider: ChatProvider = {
     entry.ctx.projectId = req.projectId
     entry.ctx.signal = signal
     entry.ctx.memory = memoryOf(req)
+    entry.ctx.specializationIds = specializationsInUse(req)
     entry.ctx.memorySource = req.origin ?? { kind: 'conversation', id: req.conversationId }
     const work = workContext(req.projectId)
     const fullAccess = !!getSettings().autoApproveTools

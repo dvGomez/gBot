@@ -36,7 +36,7 @@ function ExampleRow({ items, reverse, onPick }: { items: string[]; reverse?: boo
 
 /**
  * Destaque da página inicial: o usuário conta o que quer automatizar e começa uma conversa com o arquiteto do gBot,
- * que pergunta o que faltar, testa de verdade (com permissão) e propõe os bots, fluxos e projeto para criar.
+ * que pergunta o que faltar, testa de verdade (com permissão) e propõe os bots, especializações, rotinas e projeto para criar.
  */
 export function CreateHero() {
   useLanguage()
@@ -95,7 +95,7 @@ export function CreateHero() {
         </div>
 
         <h2 className="mt-5 text-center text-[34px] leading-tight font-medium tracking-[-0.03em]">{tr('O que vamos automatizar hoje?')}</h2>
-        <p className="mx-auto mt-2 max-w-[620px] text-center text-[15px] leading-relaxed text-muted">{tr('Conte a tarefa que toma o seu tempo. O gBot testa de verdade com você, sem achismo, e monta a equipe de bots e os fluxos para ela rodar sozinha, no seu computador, com a sua assinatura.')}</p>
+        <p className="mx-auto mt-2 max-w-[620px] text-center text-[15px] leading-relaxed text-muted">{tr('Conte a tarefa que toma o seu tempo. O gBot testa de verdade com você, sem achismo, e monta a equipe de bots, especializações e rotinas para ela rodar sozinha, no seu computador, com a sua assinatura.')}</p>
 
         {/* Balão de fala: a ponta aponta para a equipe */}
         <div className="relative mt-7">
@@ -122,7 +122,7 @@ export function CreateHero() {
               <div className="flex min-w-0 items-center gap-3">
                 {models.length > 0 && <ModelSelect providerId={app.providerId} value={model} onChange={(provider, value) => changeModel(value, provider)} placement="up" />}
                 <p className="truncate text-[12px] text-muted">
-                  {ready ? tr('Considera os bots, fluxos e projetos que você já tem.') : tr('Conectar conta')}
+                  {ready ? tr('Considera os bots, especializações, rotinas e projetos que você já tem.') : tr('Conectar conta')}
                 </p>
               </div>
               <Button variant="primary" onClick={start} disabled={!text.trim() || !ready || app.busy}>

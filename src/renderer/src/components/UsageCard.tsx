@@ -19,7 +19,7 @@ function Stat({ label, usage }: { label: string; usage: TokenUsage }) {
   )
 }
 
-/** Quanto o gBot gastou hoje e na semana, e quem mais pesou (fluxo, bot ou conversa). */
+/** Quanto o gBot gastou hoje e na semana, e quem mais pesou (rotina, bot ou conversa). */
 export function UsageCard() {
   useLanguage()
   const app = useApp()
@@ -51,7 +51,14 @@ export function UsageCard() {
             const bot = t.kind === 'bot' ? app.getBot(t.id) : undefined
             const flow = t.kind === 'flow' ? app.flows.find((f) => f.id === t.id) : undefined
             const conv = t.kind === 'conversation' ? app.conversations.find((c) => c.id === t.id) : undefined
-            const name = bot?.name ?? flow?.name ?? conv?.title ?? (t.kind === 'conversation' ? tr('Conversa excluída') : tr('Excluído'))
+            // Rotina aparece com o nome do bot dono, que é quem a roda.
+            const owner = flow && app.getBot(flow.botId)
+            const routine = flow && (owner ? `${owner.name} · ${flow.name}` : flow.name)
+            const name =
+              bot?.name ??
+              routine ??
+              conv?.title ??
+              (t.kind === 'conversation' ? tr('Conversa excluída') : t.kind === 'flow' ? tr('Rotina excluída') : tr('Excluído'))
             const open = bot
               ? () => app.openBot(bot.id)
               : flow

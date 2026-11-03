@@ -47,19 +47,24 @@ const api: GbotApi = {
     remove: (id) => ipcRenderer.invoke('projects:remove', id),
     pickFolder: (current) => ipcRenderer.invoke('projects:pickFolder', current)
   },
+  specializations: {
+    list: () => ipcRenderer.invoke('specializations:list'),
+    save: (specialization) => ipcRenderer.invoke('specializations:save', specialization),
+    remove: (id) => ipcRenderer.invoke('specializations:remove', id),
+    suggest: (instructions) => ipcRenderer.invoke('specializations:suggest', instructions),
+    files: (id) => ipcRenderer.invoke('specializations:files', id),
+    // Arquivos arrastados chegam como File: o caminho real só é acessível aqui no preload.
+    addFiles: (id, files) => ipcRenderer.invoke('specializations:add-files', id, files?.map((f) => webUtils.getPathForFile(f))),
+    removeFile: (id, name) => ipcRenderer.invoke('specializations:remove-file', id, name),
+    setFileNote: (id, name, note) => ipcRenderer.invoke('specializations:file-note', id, name, note),
+    revealFile: (id, name) => ipcRenderer.invoke('specializations:reveal-file', id, name)
+  },
   bots: {
     list: () => ipcRenderer.invoke('bots:list'),
     save: (bot) => ipcRenderer.invoke('bots:save', bot),
     remove: (id) => ipcRenderer.invoke('bots:remove', id),
-    suggest: (instructions) => ipcRenderer.invoke('bots:suggest', instructions),
     tasks: () => ipcRenderer.invoke('bots:tasks'),
     cancelTask: (id) => ipcRenderer.invoke('bots:cancel-task', id),
-    files: (botId) => ipcRenderer.invoke('bots:files', botId),
-    // Arquivos arrastados chegam como File: o caminho real só é acessível aqui no preload.
-    addFiles: (botId, files) => ipcRenderer.invoke('bots:add-files', botId, files?.map((f) => webUtils.getPathForFile(f))),
-    removeFile: (botId, name) => ipcRenderer.invoke('bots:remove-file', botId, name),
-    setFileNote: (botId, name, note) => ipcRenderer.invoke('bots:file-note', botId, name, note),
-    revealFile: (botId, name) => ipcRenderer.invoke('bots:reveal-file', botId, name),
     onTasks: (cb) => {
       const handler = (_e: Electron.IpcRendererEvent, tasks: BotTask[]) => cb(tasks)
       ipcRenderer.on('bots:tasks', handler)

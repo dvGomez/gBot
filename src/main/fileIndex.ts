@@ -4,8 +4,8 @@ import { app, BrowserWindow } from 'electron'
 import type { FilesFilter, TouchedFile } from '@shared/types'
 
 /**
- * Arquivos mexidos pelas conversas, bots e fluxos (criados, alterados, lidos ou anexados), em data/files.jsonl, um
- * registro por linha. Alimenta o painel de arquivos de cada conversa, fluxo e bot. Guarda os últimos 90 dias.
+ * Arquivos mexidos pelas conversas, bots e rotinas (criados, alterados, lidos ou anexados), em data/files.jsonl, um
+ * registro por linha. Alimenta o painel de arquivos de cada conversa, rotina e bot. Guarda os últimos 90 dias.
  */
 const KEEP_DAYS = 90
 const DAY = 24 * 60 * 60_000
@@ -72,7 +72,7 @@ export function pruneFileIndex() {
 /** Evita encher o índice com a mesma leitura repetida em sequência. */
 const recent = new Map<string, number>()
 
-/** Registra arquivos mexidos num contexto (conversa, fluxo, bot) e avisa as janelas. */
+/** Registra arquivos mexidos num contexto (conversa, rotina, bot) e avisa as janelas. */
 export function recordFiles(entries: { path: string; action: Action }[], ctx: FileContext) {
   const now = Date.now()
   const records: FileRecord[] = []

@@ -1,9 +1,10 @@
 import type { Bot, ChatEvent } from '@shared/types'
 import type { Lesson } from '@shared/types'
 import { attachmentsAccess } from '../../attachments'
-import { botFilesAccess, botFilesPrompt } from '../../botFiles'
 import { runAsBot } from '../../botQueue'
 import { memoryPrompt } from '../../memory'
+import { specializationFilesAccess } from '../../specializationFiles'
+import { botPromptLines, botSpecializations } from '../persona'
 import { languageInstructions } from '../../localization'
 import { withOutputFiles } from './outputs'
 import { reflectIfNeeded } from './reflect'
@@ -38,8 +39,9 @@ export function findBot(ref: string, projectId?: string): Bot | undefined {
 export const TOOLS_HINT = [
   'Quando faltar uma informação ou decisão do usuário que muda o resultado, use `ask_user` para perguntar com opções',
   '(um cartão no chat) em vez de perguntar por texto; não pergunte o que dá para decidir com bom senso.',
-  'Ferramentas do gBot: `list_bots` mostra os bots especializados do usuário e `ask_bot` envia uma pergunta a um deles.',
-  'Consulte um bot quando o pedido combinar com a especialidade dele ou quando o usuário pedir; não consulte sem necessidade.',
+  'Ferramentas do gBot: `list_bots` mostra os outros bots do time do usuário (com as especializações de cada um) e `ask_bot`',
+  'envia uma pergunta ou tarefa a um deles. Consulte um bot quando o pedido combinar com as especializações dele ou quando o',
+  'usuário pedir; não consulte sem necessidade.',
   'Ao usar a resposta de um bot, diga de qual bot ela veio.',
   'Você também controla o navegador do gBot (Edge/Chrome com perfil próprio, onde o usuário pode estar logado) com as ferramentas browser_*:',
   'abra endereços com browser_navigate, leia com browser_read e use os números [n] para clicar (browser_click) e digitar (browser_type).',
@@ -66,18 +68,14 @@ function baseLines(work: WorkContext): string[] {
 
 /** Prompt de sistema de um bot consultado ou @mencionado, numa sessão própria dentro de uma conversa. */
 function botSystemPrompt(bot: Bot, work: WorkContext): string {
+  const specs = botSpecializations(bot.id)
   return [
     ...baseLines(work),
-    `Você é o bot "${bot.name}"${bot.description ? `: ${bot.description}` : ''}.`,
-    'Siga estas instruções definidas pelo usuário para você:',
-    '<instrucoes_do_bot>',
-    bot.instructions.trim(),
-    '</instrucoes_do_bot>',
-    ...botFilesPrompt(bot.id),
+    ...botPromptLines(bot),
     'Nesta sessão você recebe mensagens de duas origens: do usuário, que chama você com @menção numa conversa, e de outros ' +
       'assistentes do gBot, que consultam você em nome do usuário (essas começam com "Mensagem de <nome>:"). ' +
       'Para consultas de outros assistentes, responda de forma completa e objetiva: sua resposta será repassada.',
-    ...memoryPrompt({ kind: 'bot', id: bot.id })
+    ...memoryPrompt({ kind: 'bot', id: bot.id }, specs.length > 0)
   ].join('\n')
 }
 
@@ -107,6 +105,7 @@ async function botSession(conversationId: string, projectId: string | undefined,
       depth: 1,
       memory: { kind: 'bot', id: bot.id }
     }
+    ctx.specializationIds = bot.specializationIds
     entry = { ctx, config: (await mcpConfigFor(ctx)).config }
     botContexts.set(key, entry)
   }
@@ -114,8 +113,9 @@ async function botSession(conversationId: string, projectId: string | undefined,
   entry.ctx.signal = signal
   entry.ctx.memorySource = source ?? { kind: 'conversation', id: conversationId }
   const work = workContext(projectId)
-  // Arquivos de referência do bot e anexos da conversa onde ele foi chamado.
-  const files = botFilesAccess(bot.id)
+  entry.ctx.specializationIds = bot.specializationIds
+  // Arquivos de referência das especializações do bot e anexos da conversa onde ele foi chamado.
+  const files = specializationFilesAccess(bot.specializationIds)
   const attached = attachmentsAccess(conversationId)
   const session = await getSession({
     key,
@@ -231,7 +231,10 @@ setBotHandlers({
     const bots = visibleBots(ctx.projectId)
     if (!bots.length) return 'Não há bots disponíveis aqui.'
     return bots
-      .map((b) => `- ${b.name}${ctx.chain.includes(b.id) ? ' (você)' : ''}: ${b.description || 'sem descrição'}`)
+      .map((b) => {
+        const specs = botSpecializations(b.id).map((sp) => sp.name)
+        return `- ${b.name}${ctx.chain.includes(b.id) ? ' (você)' : ''}: ${b.description || 'sem descrição'}${specs.length ? ` (especializações: ${specs.join(', ')})` : ''}`
+      })
       .join('\n')
   },
   ask: askBot

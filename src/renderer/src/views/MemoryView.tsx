@@ -1,6 +1,6 @@
 import { t as tr, useLanguage } from '@/i18n'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { ArrowLeft, FileText, FolderClosed, Search, Trash2, TriangleAlert, Workflow } from 'lucide-react'
+import { ArrowLeft, FileText, FolderClosed, GraduationCap, Search, Trash2, TriangleAlert, Workflow } from 'lucide-react'
 import type { AutoMemoryNote, Lesson } from '@shared/types'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { ItemMenu } from '@/components/ItemMenu'
@@ -137,10 +137,10 @@ export function MemoryView() {
   const [autoNotes, setAutoNotes] = useState<AutoMemoryNote[]>([])
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState(() =>
-    app.memoryScope.flowId
-      ? `flow:${app.memoryScope.flowId}`
-      : app.memoryScope.botId
-        ? `bot:${app.memoryScope.botId}`
+    app.memoryScope.botId
+      ? `bot:${app.memoryScope.botId}`
+      : app.memoryScope.specializationId
+        ? `specialization:${app.memoryScope.specializationId}`
         : 'all'
   )
 
@@ -154,18 +154,17 @@ export function MemoryView() {
     return window.gbot.memory.onChanged(load)
   }, [])
 
-  // Quem entra no recorte: um fluxo leva junto os bots das caixinhas dele.
+  // Quem entra no recorte: um bot leva junto as especializações que ele usa.
   const inScope = useMemo(() => {
     if (scope === 'all') return undefined
     const [kind, id] = [scope.slice(0, scope.indexOf(':')), scope.slice(scope.indexOf(':') + 1)]
-    if (kind === 'bot') return { flows: new Set<string>(), bots: new Set([id]) }
-    const flow = app.flows.find((f) => f.id === id)
-    const bots = new Set((flow?.nodes ?? []).map((n) => n.data.botId).filter((b): b is string => !!b))
-    return { flows: new Set([id]), bots }
-  }, [scope, app.flows])
+    if (kind === 'specialization') return { bots: new Set<string>(), specializations: new Set([id]), specializationId: id }
+    const bot = app.bots.find((b) => b.id === id)
+    return { bots: new Set([id]), specializations: new Set(bot?.specializationIds ?? []), specializationId: undefined }
+  }, [scope, app.bots])
 
-  const owned = (kind: 'bot' | 'flow', id: string) =>
-    !inScope || (kind === 'bot' ? inScope.bots : inScope.flows).has(id)
+  const owned = (kind: 'bot' | 'specialization', id: string) =>
+    !inScope || (kind === 'bot' ? inScope.bots : inScope.specializations).has(id)
 
   const found = lessons.filter(
     (l) => owned(l.owner.kind, l.owner.id) && [l.title, l.when, l.steps, l.why].some((t) => matches(t, query))
@@ -192,11 +191,24 @@ export function MemoryView() {
         })
       }
     }
+    for (const sp of app.specializations) {
+      if (!owned('specialization', sp.id)) continue
+      if (matches(sp.instructions, query) || matches(sp.description, query)) {
+        sources.push({
+          key: `specialization:${sp.id}`,
+          title: tr('Instruções da especialização {0}', sp.name),
+          icon: <GraduationCap size={16} className="text-muted" />,
+          text: matches(sp.instructions, query) ? sp.instructions : sp.description,
+          action: tr('Editar especialização'),
+          open: () => app.editSpecialization(sp.id)
+        })
+      }
+    }
     const projectIds = inScope
       ? new Set(
           [
             ...app.bots.filter((b) => inScope.bots.has(b.id)).map((b) => b.projectId),
-            ...app.flows.filter((f) => inScope.flows.has(f.id)).map((f) => f.projectId)
+            ...app.specializations.filter((sp) => inScope.specializations.has(sp.id)).map((sp) => sp.projectId)
           ].filter(Boolean)
         )
       : undefined
@@ -213,18 +225,20 @@ export function MemoryView() {
         })
       }
     }
+    // Caixinhas das rotinas: as do bot do recorte, ou as que usam a especialização do recorte.
     for (const f of app.flows) {
-      if (!owned('flow', f.id)) continue
       for (const n of f.nodes) {
+        if (inScope && !inScope.bots.has(f.botId) && !(inScope.specializationId && n.data.specializationId === inScope.specializationId)) continue
         const text = n.data.message ?? ''
         if (!text || !matches(text, query)) continue
-        const label = n.data.label || (n.type === 'bot' ? app.getBot(n.data.botId)?.name : undefined) || 'caixinha'
+        const label = n.data.label || app.getSpecialization(n.data.specializationId)?.name || tr('caixinha')
+        const bot = app.getBot(f.botId)
         sources.push({
           key: `node:${f.id}:${n.id}`,
-          title: tr('Mensagem da caixinha "{0}" no fluxo {1}', label, f.name),
+          title: tr('Mensagem da caixinha "{0}" na rotina {1}', label, bot ? `${bot.name} · ${f.name}` : f.name),
           icon: <Workflow size={16} className="text-muted" />,
           text,
-          action: tr('Abrir fluxo'),
+          action: tr('Abrir rotina'),
           open: () => app.openFlow(f.id)
         })
       }
@@ -243,11 +257,11 @@ export function MemoryView() {
         open: bot ? () => app.openBot(bot.id) : undefined
       }
     }
-    const flow = app.flows.find((f) => f.id === id)
+    const sp = app.getSpecialization(id)
     return {
-      icon: <Workflow size={18} className="text-muted" />,
-      name: flow ? tr('Memória do fluxo {0}', flow.name) : tr('Memória de um fluxo excluído'),
-      open: flow ? () => app.openFlow(flow.id) : undefined
+      icon: <GraduationCap size={18} className="text-muted" />,
+      name: sp ? tr('Memória da especialização {0}', sp.name) : tr('Memória de uma especialização excluída'),
+      open: sp ? () => app.editSpecialization(sp.id) : undefined
     }
   }
 
@@ -260,7 +274,7 @@ export function MemoryView() {
         <ArrowLeft size={14} />{tr(' Início')}</button>
       <p className="text-[12px] font-medium tracking-[0.02em] text-muted">{tr('Sistema')}</p>
       <h1 className="mt-1 text-[36px] leading-tight font-medium tracking-[-0.03em]">{tr('Regras e memória')}</h1>
-      <p className="mt-1 text-[15px] text-muted">{tr('Tudo o que bots e fluxos seguem: as lições que eles aprenderam sozinhos e as instruções que você escreveu. Viu uma "orientação registrada" numa resposta? Procure um trecho dela aqui para achar, editar ou desligar.')}</p>
+      <p className="mt-1 text-[15px] text-muted">{tr('Tudo o que os bots seguem: as lições que eles aprenderam sozinhos (deles e das especializações que usam) e as instruções que você escreveu. Viu uma "orientação registrada" numa resposta? Procure um trecho dela aqui para achar, editar ou desligar.')}</p>
 
       <div className="mt-6 flex gap-2">
         <label className="relative min-w-0 flex-1">
@@ -276,21 +290,21 @@ export function MemoryView() {
         </label>
         <div className="w-[260px] shrink-0">
           <select value={scope} onChange={(e) => setScope(e.target.value)} className={inputClass}>
-            <option value="all">{tr('Todos os bots e fluxos')}</option>
-            {app.flows.length > 0 && (
-              <optgroup label={tr('Fluxo (com os bots dele)')}>
-                {app.flows.map((f) => (
-                  <option key={f.id} value={`flow:${f.id}`}>
-                    {f.name}
+            <option value="all">{tr('Todos os bots e especializações')}</option>
+            {app.bots.length > 0 && (
+              <optgroup label={tr('Bot (com as especializações dele)')}>
+                {app.bots.map((b) => (
+                  <option key={b.id} value={`bot:${b.id}`}>
+                    {b.name}
                   </option>
                 ))}
               </optgroup>
             )}
-            {app.bots.length > 0 && (
-              <optgroup label="Bot">
-                {app.bots.map((b) => (
-                  <option key={b.id} value={`bot:${b.id}`}>
-                    {b.name}
+            {app.specializations.length > 0 && (
+              <optgroup label={tr('Especialização')}>
+                {app.specializations.map((sp) => (
+                  <option key={sp.id} value={`specialization:${sp.id}`}>
+                    {sp.name}
                   </option>
                 ))}
               </optgroup>

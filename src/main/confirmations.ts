@@ -4,7 +4,7 @@ import type { ChatFile, FlowDecisionOption, PendingConfirmation } from '@shared/
 import { uiText } from './localization'
 
 /**
- * Confirmações manuais dos fluxos: a caixinha de confirmação pausa a execução até o usuário escolher uma opção.
+ * Confirmações manuais das rotinas: a caixinha de confirmação pausa a execução até o usuário escolher uma opção.
  * Cada pedido vira uma notificação do sistema (com um botão por opção) e fica nas pendências do app até ser
  * respondido. Ficam só na memória: a execução que espera também só existe enquanto o app está aberto.
  */
@@ -59,7 +59,7 @@ function notify(item: PendingConfirmation) {
   const image = item.files.find((f) => IMAGE.test(f.name))
   const others = item.files.length - (image ? 1 : 0)
   const body = [
-    clip(item.message || uiText('Escolha como o fluxo deve seguir.'), 180),
+    clip(item.message || uiText('Escolha como a rotina deve seguir.'), 180),
     item.files.length ? `📎 ${item.files.length === 1 ? uiText('1 arquivo') : uiText('{0} arquivos', item.files.length)}${others && image ? uiText(' (clique para ver)') : ''}` : ''
   ]
     .filter(Boolean)

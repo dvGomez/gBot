@@ -26,7 +26,7 @@ const ACTION: Record<TouchedFile['action'], { label: string; tone: string }> = l
   }
 })
 
-/** Arquivos mexidos numa conversa, fluxo ou bot; atualiza sozinho quando algo novo é mexido ali. */
+/** Arquivos mexidos numa conversa, rotina ou bot; atualiza sozinho quando algo novo é mexido ali. */
 export function useTouchedFiles(filter: FilesFilter): TouchedFile[] {
   const [files, setFiles] = useState<TouchedFile[]>([])
   const { conversationId, flowId, botId } = filter

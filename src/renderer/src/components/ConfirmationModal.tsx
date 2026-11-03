@@ -3,10 +3,16 @@ import { useEffect, useState } from 'react'
 import { ExternalLink, Hand, X } from 'lucide-react'
 import type { PendingConfirmation } from '@shared/types'
 import { timeAgo } from '@/lib/format'
-import { useApp } from '@/state/app'
+import { useApp, type AppState } from '@/state/app'
 import { FileCards } from './FileCards'
 import { Markdown } from './Markdown'
 import { Button, inputClass } from './ui'
+
+/** Nome da rotina com o bot dono na frente (ex.: "Ana · Resumo do dia"), quando ela ainda existe. */
+function withBot(item: PendingConfirmation, app: AppState): string {
+  const bot = app.getBot(app.flows.find((f) => f.id === item.flowId)?.botId)
+  return bot ? `${bot.name} · ${item.flowName}` : item.flowName
+}
 
 /** Botões das opções: a primeira em destaque, como na notificação. */
 function OptionButtons({ item, note, small }: { item: PendingConfirmation; note?: string; small?: boolean }) {
@@ -34,8 +40,8 @@ function OptionButtons({ item, note, small }: { item: PendingConfirmation; note?
 }
 
 /**
- * Janela para responder uma confirmação de fluxo: o que precisa ser confirmado, o resultado das caixinhas
- * anteriores e os arquivos (imagens com miniatura), sem precisar abrir o fluxo.
+ * Janela para responder uma confirmação de rotina: o que precisa ser confirmado, o resultado das caixinhas
+ * anteriores e os arquivos (imagens com miniatura), sem precisar abrir a rotina.
  */
 export function ConfirmationModal() {
   useLanguage()
@@ -55,6 +61,7 @@ export function ConfirmationModal() {
   }, [item, app])
 
   if (!item) return null
+  const routineName = withBot(item, app)
   const images = item.files.filter((f) => f.thumb)
   const others = item.files.filter((f) => !f.thumb)
 
@@ -68,7 +75,7 @@ export function ConfirmationModal() {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={tr('Confirmação do fluxo')}
+        aria-label={tr('Confirmação da rotina')}
         className="flex max-h-full w-full max-w-[720px] flex-col overflow-hidden rounded-card border border-line bg-page shadow-2xl"
       >
         <div className="flex items-start gap-3 border-b border-line px-6 py-4">
@@ -76,7 +83,7 @@ export function ConfirmationModal() {
             <Hand size={17} />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[12px] text-muted">{tr('Fluxo ')}{item.flowName} · {timeAgo(item.createdAt)}
+            <p className="text-[12px] text-muted">{tr('Rotina ')}{routineName} · {timeAgo(item.createdAt)}
             </p>
             <p className="truncate text-[16px] font-semibold">{item.title}</p>
           </div>
@@ -90,7 +97,7 @@ export function ConfirmationModal() {
         </div>
 
         <div className="selectable space-y-4 overflow-y-auto px-6 py-5">
-          <p className="text-[15px] leading-relaxed text-fg">{item.message || tr('Escolha como o fluxo deve seguir.')}</p>
+          <p className="text-[15px] leading-relaxed text-fg">{item.message || tr('Escolha como a rotina deve seguir.')}</p>
 
           {images.length > 0 && (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -136,7 +143,7 @@ export function ConfirmationModal() {
               app.openFlow(item.flowId)
             }}
           >
-            <ExternalLink size={14} />{tr(' Abrir fluxo')}</Button>
+            <ExternalLink size={14} />{tr(' Abrir rotina')}</Button>
           <OptionButtons item={item} note={note} />
         </div>
       </div>
@@ -155,7 +162,7 @@ export function PendingConfirmationsBar() {
     <div className="mx-auto mb-2 flex w-full max-w-[860px] flex-wrap items-center gap-2 rounded-tile border border-warning/50 bg-sidebar px-4 py-2.5 text-[13px]">
       <Hand size={15} className="shrink-0 text-warning" />
       <button onClick={() => app.openConfirmation(first.id)} className="min-w-0 flex-1 truncate text-left text-fg-2 hover:text-fg">
-        <span className="font-medium text-fg">{first.flowName}</span>{tr(' espera sua confirmação: ')}{first.title}
+        <span className="font-medium text-fg">{withBot(first, app)}</span>{tr(' espera sua confirmação: ')}{first.title}
         {first.files.length > 0 && ` · ${first.files.length === 1 ? tr('1 arquivo') : tr('{0} arquivos', first.files.length)}`}
         {more > 0 && ` (+${more})`}
       </button>

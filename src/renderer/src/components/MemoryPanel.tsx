@@ -57,18 +57,18 @@ function LessonForm({ initial, onSave, onCancel }: { initial: Draft; onSave(d: D
   )
 }
 
-/** De onde a lição veio (conversa ou fluxo, com link), para o rodapé do cartão. */
+/** De onde a lição veio (conversa ou rotina, com link), para o rodapé do cartão. */
 function SourceLabel({ lesson: l }: { lesson: Lesson }) {
   useLanguage()
   const app = useApp()
   if (l.source.kind === 'manual') return <>{tr('adicionado por você')}</>
   if (l.source.kind === 'flow') {
-    const flow = app.flows.find((f) => f.id === l.source.id)
-    return flow ? (
-      <button onClick={() => app.openFlow(flow.id)} className="inline text-left underline underline-offset-2 hover:text-fg">{tr('no fluxo "')}{flow.name}"
+    const routine = app.flows.find((f) => f.id === l.source.id)
+    return routine ? (
+      <button onClick={() => app.openFlow(routine.id)} className="inline text-left underline underline-offset-2 hover:text-fg">{tr('na rotina "')}{routine.name}"
       </button>
     ) : (
-      <>{tr('num fluxo')}</>
+      <>{tr('numa rotina')}</>
     )
   }
   const conv = app.conversations.find((c) => c.id === l.source.id)
@@ -168,7 +168,10 @@ export function LessonCard({ lesson: l, query }: { lesson: Lesson; query?: strin
   )
 }
 
-/** Memória de um bot ou fluxo: o que aprendeu, quando, por quê e de onde veio; dá para editar, desligar e apagar. */
+/**
+ * Memória de um bot ou de uma especialização: o que aprendeu, quando, por quê e de onde veio; dá para editar, desligar
+ * e apagar. A da especialização é escrita pelos bots que a usam e vale para todos eles.
+ */
 export function MemoryPanel({ owner, compact }: { owner: MemoryOwner; compact?: boolean }) {
   useLanguage()
   const app = useApp()
@@ -182,8 +185,6 @@ export function MemoryPanel({ owner, compact }: { owner: MemoryOwner; compact?: 
       if (o.kind === owner.kind && o.id === owner.id) load()
     })
   }, [owner.kind, owner.id])
-
-  const who = owner.kind === 'bot' ? tr('o bot') : tr('o fluxo')
 
   return (
     <div>
@@ -217,7 +218,11 @@ export function MemoryPanel({ owner, compact }: { owner: MemoryOwner; compact?: 
       )}
 
       {lessons.length === 0 && !adding && (
-        <p className="text-[13px] leading-relaxed text-muted">{tr('Nada aprendido ainda. Quando algo der errado e ')}{who}{tr(' descobrir o jeito certo, ele anota aqui um procedimento curto para acertar de primeira na próxima vez.')}</p>
+        <p className="text-[13px] leading-relaxed text-muted">
+          {owner.kind === 'bot'
+            ? tr('Nada aprendido ainda. Quando algo der errado e o bot descobrir o jeito certo, ele anota aqui um procedimento curto para acertar de primeira na próxima vez.')
+            : tr('Nada aprendido ainda. Quando um bot que usa esta especialização errar e descobrir o jeito certo, ele anota aqui um procedimento curto, que passa a valer para todos os bots que a usam.')}
+        </p>
       )}
 
       <div className="space-y-2">
@@ -227,7 +232,7 @@ export function MemoryPanel({ owner, compact }: { owner: MemoryOwner; compact?: 
       </div>
 
       <button
-        onClick={() => app.openMemory(owner.kind === 'flow' ? { flowId: owner.id } : { botId: owner.id })}
+        onClick={() => app.openMemory(owner.kind === 'specialization' ? { specializationId: owner.id } : { botId: owner.id })}
         className="mt-3 flex items-center gap-1.5 text-[12px] text-muted hover:text-fg"
       >
         <Search size={12} />{tr(' Procurar uma regra em toda a memória e nas instruções')}</button>

@@ -1,6 +1,6 @@
 import { t as tr, useLanguage } from '@/i18n'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
-import { Clock, Hand, Sparkles, Split } from 'lucide-react'
+import { Clock, GraduationCap, Hand, Split } from 'lucide-react'
 import type { FlowNodeData, FlowStepStatus } from '@shared/types'
 import { PixelAvatar } from '@/components/PixelAvatar'
 import { modelLabel } from '@/components/ModelSelect'
@@ -8,7 +8,7 @@ import { cn } from '@/lib/cn'
 import { describeSchedule, formatWhen, nextRun } from '@/lib/schedule'
 import { useApp } from '@/state/app'
 
-/** Dados que o canvas passa para cada caixinha: os do fluxo + o estado na execução atual. */
+/** Dados que o canvas passa para cada caixinha: os da rotina + o estado na execução atual. */
 export type CanvasNodeData = FlowNodeData & { status?: FlowStepStatus } & Record<string, unknown>
 export type CanvasNode = Node<CanvasNodeData>
 
@@ -78,43 +78,33 @@ export function TriggerNode({ data, selected }: NodeProps<CanvasNode>) {
   )
 }
 
-export function BotNode({ data, selected }: NodeProps<CanvasNode>) {
+/** Tarefa: o bot da rotina faz a etapa, com a especialização escolhida (se houver). */
+export function TaskNode({ data, selected }: NodeProps<CanvasNode>) {
   useLanguage()
   const app = useApp()
-  const bot = app.getBot(data.botId)
+  const bot = app.getBot(app.selectedFlow?.botId)
+  const sp = app.getSpecialization(data.specializationId)
+  // Modelo da caixinha, se escolhido; senão, o do bot.
+  const own = !!data.providerId || !!data.model
+  const providerId = (own ? data.providerId : bot?.providerId) ?? 'claude-code'
+  const models = app.providers.find((p) => p.id === providerId)?.models ?? []
+  const running = data.status === 'running'
   return (
     <Box selected={selected} status={data.status}>
       <div className="flex items-center gap-3">
         {bot ? (
-          <PixelAvatar avatar={bot.avatar} size={34} animated={data.status === 'running'} mood={data.status === 'running' ? 'thinking' : 'idle'} />
+          <PixelAvatar avatar={bot.avatar} size={34} animated={running} mood={running ? 'thinking' : 'idle'} />
         ) : (
           <div className="size-9 shrink-0 rounded-tile bg-tile" />
         )}
         <div className="min-w-0">
-          <p className="truncate text-[14px] font-semibold">{data.label || bot?.name || tr('Escolha um bot')}</p>
-          <p className="truncate text-[12px] text-muted">Bot{bot && app.models.length ? ` · ${modelLabel(app.models, bot.model)}` : ''}</p>
-        </div>
-      </div>
-      <Preview text={data.message} />
-    </Box>
-  )
-}
-
-export function PromptNode({ data, selected }: NodeProps<CanvasNode>) {
-  useLanguage()
-  const app = useApp()
-  const provider = app.providers.find((p) => p.id === (data.providerId ?? 'claude-code'))
-  return (
-    <Box selected={selected} status={data.status}>
-      <div className="flex items-center gap-3">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-tile bg-tile text-fg-2">
-          <Sparkles size={17} />
-        </div>
-        <div className="min-w-0">
-          <p className="truncate text-[14px] font-semibold">{data.label || 'Prompt'}</p>
-          <p className="truncate text-[12px] text-muted">
-            {provider?.name ?? tr('Provedor')}
-            {provider?.models?.length ? ` · ${modelLabel(provider.models, data.model)}` : ''}
+          <p className="truncate text-[14px] font-semibold">{data.label || sp?.name || tr('Tarefa')}</p>
+          <p className="flex items-center gap-1 truncate text-[12px] text-muted">
+            {sp && <GraduationCap size={12} className="shrink-0" />}
+            <span className="truncate">
+              {sp ? sp.name : tr('Sem especialização')}
+              {models.length ? ` · ${modelLabel(models, own ? data.model : bot?.model)}` : ''}
+            </span>
           </p>
         </div>
       </div>
@@ -179,7 +169,7 @@ function OptionOutputs({ options, empty }: { options: CanvasNodeData['options'];
   )
 }
 
-/** Confirmação: pausa o fluxo, notifica o usuário e segue pela opção que ele escolher. */
+/** Confirmação: pausa a rotina, notifica o usuário e segue pela opção que ele escolher. */
 export function ConfirmNode({ id, data, selected }: NodeProps<CanvasNode>) {
   useLanguage()
   const app = useApp()
@@ -210,4 +200,4 @@ export function ConfirmNode({ id, data, selected }: NodeProps<CanvasNode>) {
   )
 }
 
-export const nodeTypes = { trigger: TriggerNode, bot: BotNode, prompt: PromptNode, decision: DecisionNode, confirm: ConfirmNode }
+export const nodeTypes = { trigger: TriggerNode, task: TaskNode, decision: DecisionNode, confirm: ConfirmNode }

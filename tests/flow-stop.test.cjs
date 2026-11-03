@@ -25,8 +25,8 @@ const deferred = () => {
   const promise = new Promise((r) => { resolve = r })
   return { promise, resolve }
 }
-const node = (id, type = 'prompt', data = {}) => ({ id, type, position: { x: 0, y: 0 }, data: { message: 'Teste', ...data } })
-const flow = (id, nodes, edges) => ({ id, name: id, enabled: false, createdAt: 1, updatedAt: 1,
+const node = (id, type = 'task', data = {}) => ({ id, type, position: { x: 0, y: 0 }, data: { message: 'Teste', ...data } })
+const flow = (id, nodes, edges, botId = 'bot') => ({ id, botId, name: id, enabled: false, createdAt: 1, updatedAt: 1,
   nodes: [node('trigger', 'trigger'), ...nodes],
   edges: edges.map(([source, target]) => ({ id: `${source}-${target}`, source, target })) })
 const blocking = (signal) => new Promise((_, reject) => {
@@ -35,6 +35,7 @@ const blocking = (signal) => new Promise((_, reject) => {
 })
 
 test('parar fluxos cancela trabalho e impede novas etapas', async (t) => {
+  // Ramos paralelos rodam como o mesmo bot: um começa, o outro espera na fila dele; parar cancela os dois.
   await t.test('cancela ramos paralelos e preserva as etapas concluídas', async () => {
     const signals = []
     state.send = async (req, emit, signal) => {
@@ -42,11 +43,13 @@ test('parar fluxos cancela trabalho e impede novas etapas', async (t) => {
       signals.push(signal)
       await blocking(signal)
     }
-    const f = flow('parallel', [node('first', 'prompt', { message: 'primeira' }), node('a'), node('b'), node('last')],
+    const f = flow('parallel', [node('first', 'task', { message: 'primeira' }), node('a'), node('b'), node('last')],
       [['trigger', 'first'], ['first', 'a'], ['first', 'b'], ['a', 'last'], ['b', 'last']])
     const id = await runFlow(f, 'manual')
     await tick()
-    assert.equal(signals.length, 2)
+    await tick()
+    assert.equal(signals.length, 1)
+    assert.equal(listBotTasks().length, 2)
     stopFlow(f.id)
     assert(signals.every((s) => s.aborted))
     assert.equal(isFlowRunning(f.id), false)
@@ -109,7 +112,7 @@ test('parar fluxos cancela trabalho e impede novas etapas', async (t) => {
     await tick()
     let calls = 0
     state.send = async () => { calls++ }
-    const f = flow('queued', [node('b', 'bot', { botId: 'bot' })], [['trigger', 'b']])
+    const f = flow('queued', [node('b')], [['trigger', 'b']])
     await runFlow(f, 'manual')
     await tick()
     assert.equal(listBotTasks().length, 2)
@@ -134,15 +137,27 @@ test('parar fluxos cancela trabalho e impede novas etapas', async (t) => {
 })
 
 
-test('workflow bot steps use the saved provider and model, including legacy defaults', async () => {
+test('routine steps run as the owning bot, with its provider and model unless the step overrides them', async () => {
   const requests = []
   state.send = async (req, emit) => { requests.push(req); emit({ type: 'delta', text: 'done' }) }
-  state.bots.set('codex-bot', { id: 'codex-bot', name: 'Codex bot', instructions: 'test', providerId: 'codex', model: 'gpt-test' })
-  const f = flow('provider-routing', [node('a', 'bot', { botId: 'codex-bot' }), node('b', 'bot', { botId: 'legacy-bot' })], [['trigger', 'a'], ['a', 'b']])
+  state.bots.set('codex-bot', { id: 'codex-bot', name: 'Codex bot', description: '', instructions: 'test', specializationIds: [], providerId: 'codex', model: 'gpt-test' })
+  state.specializations.set('sp', { id: 'sp', name: 'Revisar PRs', description: '', instructions: 'Revise.' })
+  const f = flow('provider-routing', [
+    node('a', 'task', { specializationId: 'sp' }),
+    node('b', 'task', { providerId: 'claude-code', model: 'haiku' })
+  ], [['trigger', 'a'], ['a', 'b']], 'codex-bot')
   await runFlow(f, 'manual')
   await tick()
-  assert.deepEqual(requests.map(({ providerId, model }) => ({ providerId, model })), [
-    { providerId: 'codex', model: 'gpt-test' }, { providerId: 'claude-code', model: undefined }
+  assert.deepEqual(requests.map(({ providerId, model, bot, specializationIds }) => ({ providerId, model, bot: bot.id, specializationIds })), [
+    { providerId: 'codex', model: 'gpt-test', bot: 'codex-bot', specializationIds: ['sp'] },
+    { providerId: 'claude-code', model: 'haiku', bot: 'codex-bot', specializationIds: undefined }
   ])
+  assert.match(requests[0].text, /especialização "Revisar PRs"/)
+  // Bot sem provedor salvo (legado) usa o Claude Code com o modelo padrão.
+  requests.length = 0
+  await runFlow(flow('legacy', [node('c')], [['trigger', 'c']], 'legacy-bot'), 'manual')
+  await tick()
+  assert.deepEqual(requests.map(({ providerId, model }) => ({ providerId, model })), [{ providerId: 'claude-code', model: undefined }])
   state.bots.clear()
+  state.specializations.clear()
 })

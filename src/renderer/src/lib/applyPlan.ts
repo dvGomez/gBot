@@ -1,34 +1,44 @@
-import type { AutomationPlan, AvatarDef, Bot, Flow, FlowEdge, FlowNode, PlanStep, Project } from '@shared/types'
+import type { AutomationPlan, AvatarDef, Bot, Flow, FlowEdge, FlowNode, PlanStep, Project, Specialization } from '@shared/types'
 import { PROJECT_COLORS } from '@/components/ProjectBadge'
 import { generateAvatar } from '@/avatars/parts'
 import { AVATARS } from '@/avatars/sprites'
 import type { AppState } from '@/state/app'
 import { uid } from './format'
 
-/** Avatar para cada bot novo do plano: os prontos que ainda ninguém usa, depois avatares gerados. */
-export function avatarsForPlan(plan: AutomationPlan, existing: Bot[]): Record<string, AvatarDef> {
-  const used = new Set(existing.map((b) => b.avatar.id))
+/** `count` avatares sorteados: os prontos que ainda ninguém usa, depois avatares gerados. */
+export function freeAvatars(existing: Bot[], count: number): AvatarDef[] {
+  const used = new Set(existing.map((b) => b.avatar?.id))
   const free = AVATARS.filter((a) => !used.has(a.id)).sort(() => Math.random() - 0.5)
-  const out: Record<string, AvatarDef> = {}
-  for (const b of plan.bots) if (!b.existingId) out[b.ref] = free.shift() ?? generateAvatar()
-  return out
+  return Array.from({ length: count }, () => free.shift() ?? generateAvatar())
+}
+
+/** Avatar para cada bot novo do plano. */
+export function avatarsForPlan(plan: AutomationPlan, existing: Bot[]): Record<string, AvatarDef> {
+  const fresh = plan.bots.filter((b) => !b.existingId)
+  const avatars = freeAvatars(existing, fresh.length)
+  return Object.fromEntries(fresh.map((b, i) => [b.ref, avatars[i]]))
 }
 
 export interface AppliedPlan {
   projectId?: string
+  /** Especializações do plano (novas e reaproveitadas), na ordem do plano. */
+  specializationIds: string[]
   /** Bots do plano (novos e reaproveitados), na ordem do plano. */
   botIds: string[]
+  /** Rotinas criadas ou refeitas, na ordem do plano. */
   flowIds: string[]
 }
 
 const STEP_GAP = 320
 
-/** Caixinha do fluxo para uma etapa do plano (caixinhas de modelo usam o último modelo escolhido). */
-function stepNode(step: PlanStep, botId: (ref: string) => string | undefined, model: string | undefined, x: number): FlowNode {
+/** Caixinha da rotina para uma etapa do plano (a decisão usa o último modelo escolhido, senão um rápido). */
+function stepNode(step: PlanStep, specializationId: (ref: string) => string | undefined, model: string | undefined, x: number): FlowNode {
   const base = { id: uid(), position: { x, y: 0 } }
   const label = step.label?.slice(0, 40) || undefined
-  if (step.type === 'bot') return { ...base, type: 'bot', data: { label, botId: botId(step.bot), message: step.message } }
-  if (step.type === 'prompt') return { ...base, type: 'prompt', data: { label, providerId: 'claude-code', model, message: step.message } }
+  if (step.type === 'task') {
+    const sp = step.specialization ? specializationId(step.specialization) : undefined
+    return { ...base, type: 'task', data: { label, ...(sp ? { specializationId: sp } : {}), message: step.message } }
+  }
   if (step.type === 'confirm') {
     return { ...base, type: 'confirm', data: { label, message: step.message, options: step.options.map((o) => ({ id: uid(), label: o })) } }
   }
@@ -46,8 +56,9 @@ function stepNode(step: PlanStep, botId: (ref: string) => string | undefined, mo
 }
 
 /**
- * Aplica o plano: cria o que é novo (fluxos novos nascem desligados, para o usuário revisar e ligar) e altera o que
- * já existe (projeto e bots com `edit`, fluxos com `existingId`, que são refeitos com as etapas do plano).
+ * Aplica o plano: cria o que é novo (rotinas novas nascem desligadas, para o usuário revisar e ligar) e altera o que
+ * já existe (projeto, especializações e bots com `edit`, rotinas com `existingId`, que são refeitas com as etapas do
+ * plano). Os bots reaproveitados ganham as especializações do plano, sem perder as que já tinham.
  */
 export async function applyPlan(plan: AutomationPlan, avatars: Record<string, AvatarDef>, app: AppState): Promise<AppliedPlan> {
   const now = Date.now()
@@ -80,60 +91,99 @@ export async function applyPlan(plan: AutomationPlan, avatars: Record<string, Av
     projectId = project.id
   }
 
-  const ids = new Map<string, string>()
-  for (const b of plan.bots) {
-    if (b.existingId) {
-      ids.set(b.ref, b.existingId)
-      const current = app.getBot(b.existingId)
-      if (b.edit && current) {
-        await app.saveBot({
+  // Especializações: as novas entram no projeto; as existentes só mudam com `edit`.
+  const specIds = new Map<string, string>()
+  for (const s of plan.specializations) {
+    if (s.existingId) {
+      specIds.set(s.ref, s.existingId)
+      const current = app.getSpecialization(s.existingId)
+      if (s.edit && current) {
+        await app.saveSpecialization({
           ...current,
-          name: b.name || current.name,
-          description: b.description || current.description,
-          instructions: b.instructions.trim() || current.instructions,
-          model: b.model ?? current.model,
+          name: s.name.slice(0, 60) || current.name,
+          description: s.description || current.description,
+          instructions: s.instructions.trim() || current.instructions,
           updatedAt: now
         })
       }
       continue
     }
-    const bot: Bot = {
+    const sp: Specialization = {
       id: uid(),
-      name: b.name,
-      avatar: avatars[b.ref] ?? generateAvatar(),
-      description: b.description,
-      instructions: b.instructions.trim() || b.description,
-      model: b.model,
+      name: s.name.slice(0, 60),
+      description: s.description,
+      instructions: s.instructions.trim() || s.description,
       projectId,
       createdAt: now,
       updatedAt: now
     }
-    await app.saveBot(bot)
-    ids.set(b.ref, bot.id)
+    await app.saveSpecialization(sp)
+    specIds.set(s.ref, sp.id)
   }
+  const specsOf = (refs: string[]) => refs.map((r) => specIds.get(r)).filter((id): id is string => !!id)
 
   const model = app.preferredModel('claude-code')
+  const botIds: string[] = []
   const flowIds: string[] = []
-  for (const f of plan.flows) {
-    const trigger: FlowNode = { id: uid(), type: 'trigger', position: { x: 0, y: 0 }, data: { schedule: f.schedule } }
-    const nodes: FlowNode[] = [trigger]
-    const edges: FlowEdge[] = []
-    f.steps.forEach((step, i) => {
-      const prev = nodes[nodes.length - 1]
-      const node = stepNode(step, (ref) => ids.get(ref), model, (i + 1) * STEP_GAP)
-      // Depois de uma decisão ou confirmação, segue pela primeira opção (as outras encerram o fluxo).
-      const handle = prev.type === 'decision' || prev.type === 'confirm' ? prev.data.options?.[0]?.id : undefined
-      edges.push({ id: uid(), source: prev.id, target: node.id, ...(handle ? { sourceHandle: handle } : {}) })
-      nodes.push(node)
-    })
-    // Fluxo existente: o mesmo fluxo refeito com as etapas do plano (continua ligado ou desligado como estava).
-    const current = f.existingId ? app.flows.find((x) => x.id === f.existingId) : undefined
-    const flow: Flow = current
-      ? { ...current, name: f.name.slice(0, 60) || current.name, projectId: projectId ?? current.projectId, nodes, edges, updatedAt: now }
-      : { id: uid(), name: f.name.slice(0, 60), enabled: false, projectId, nodes, edges, createdAt: now, updatedAt: now }
-    await app.saveFlow(flow)
-    flowIds.push(flow.id)
+  for (const b of plan.bots) {
+    let botId: string
+    const current = b.existingId ? app.getBot(b.existingId) : undefined
+    if (b.existingId) {
+      botId = b.existingId
+      if (current) {
+        // Soma as especializações do plano às que o bot já usa (sem repetir).
+        const specializationIds = [...new Set([...current.specializationIds, ...specsOf(b.specializations)])]
+        const edited = b.edit
+          ? {
+              name: b.name || current.name,
+              description: b.description || current.description,
+              instructions: b.instructions.trim() || current.instructions,
+              model: b.model ?? current.model
+            }
+          : {}
+        const changed = b.edit || specializationIds.length !== current.specializationIds.length
+        if (changed) await app.saveBot({ ...current, ...edited, specializationIds, updatedAt: now })
+      }
+    } else {
+      const bot: Bot = {
+        id: uid(),
+        name: b.name,
+        avatar: avatars[b.ref] ?? generateAvatar(),
+        description: b.description,
+        instructions: b.instructions.trim(),
+        specializationIds: [...new Set(specsOf(b.specializations))],
+        model: b.model,
+        projectId,
+        createdAt: now,
+        updatedAt: now
+      }
+      await app.saveBot(bot)
+      botId = bot.id
+    }
+    botIds.push(botId)
+
+    // Rotinas do bot: o gatilho e as etapas, ligadas em sequência.
+    for (const r of b.routines) {
+      const trigger: FlowNode = { id: uid(), type: 'trigger', position: { x: 0, y: 0 }, data: { schedule: r.schedule } }
+      const nodes: FlowNode[] = [trigger]
+      const edges: FlowEdge[] = []
+      r.steps.forEach((step, i) => {
+        const prev = nodes[nodes.length - 1]
+        const node = stepNode(step, (ref) => specIds.get(ref), model, (i + 1) * STEP_GAP)
+        // Depois de uma decisão ou confirmação, segue pela primeira opção (as outras encerram a rotina).
+        const handle = prev.type === 'decision' || prev.type === 'confirm' ? prev.data.options?.[0]?.id : undefined
+        edges.push({ id: uid(), source: prev.id, target: node.id, ...(handle ? { sourceHandle: handle } : {}) })
+        nodes.push(node)
+      })
+      // Rotina existente: a mesma rotina refeita com as etapas do plano (continua ligada ou desligada como estava).
+      const existing = r.existingId ? app.flows.find((x) => x.id === r.existingId) : undefined
+      const flow: Flow = existing
+        ? { ...existing, botId, name: r.name.slice(0, 60) || existing.name, nodes, edges, updatedAt: now }
+        : { id: uid(), botId, name: r.name.slice(0, 60), enabled: false, nodes, edges, createdAt: now, updatedAt: now }
+      await app.saveFlow(flow)
+      flowIds.push(flow.id)
+    }
   }
 
-  return { projectId, botIds: plan.bots.map((b) => ids.get(b.ref)!).filter(Boolean), flowIds }
+  return { projectId, specializationIds: plan.specializations.map((s) => specIds.get(s.ref)!).filter(Boolean), botIds, flowIds }
 }

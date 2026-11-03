@@ -13,6 +13,6 @@ const PROMPT = [
  */
 export function reflectIfNeeded(session: ClaudeSession, owner?: MemoryOwner) {
   if (!owner || !session.lastTurnFailed || session.exited) return
-  const tag = { kind: 'reflection' as const, ...(owner.kind === 'bot' ? { botId: owner.id } : { flowId: owner.id }) }
+  const tag = { kind: 'reflection' as const, ...(owner.kind === 'bot' ? { botId: owner.id } : {}) }
   void session.send(PROMPT, () => undefined, AbortSignal.timeout(120_000), tag).catch(() => undefined)
 }

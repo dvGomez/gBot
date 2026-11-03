@@ -7,21 +7,21 @@ import { killSessions, stableUuid } from '../providers/claude-code/sessions'
 import { runAsBot, waitNotice } from '../botQueue'
 import { requestConfirmation } from '../confirmations'
 import { getProvider } from '../providers/registry'
-import { getBot } from '../store'
+import { getBot, getSpecialization } from '../store'
 import { listFlows, listRuns, saveRun } from './store'
 
 /** Tempo máximo de uma caixinha. */
 const STEP_TIMEOUT_MS = 15 * 60_000
 
 /**
- * Fluxos em execução (um fluxo não roda duas vezes ao mesmo tempo), com o que é preciso para parar tudo na hora:
+ * Rotinas em execução (uma rotina não roda duas vezes ao mesmo tempo), com o que é preciso para parar tudo na hora:
  * o sinal que cancela as caixinhas e as sessões do Claude Code abertas por elas.
  */
 const running = new Map<string, { run: FlowRun; controller: AbortController; sessions: Set<string> }>()
 
 export const isFlowRunning = (flowId: string) => running.has(flowId)
 
-/** A stopped app cannot resume its old processes; don't leave those flows locked after restarting. */
+/** A stopped app cannot resume its old processes; don't leave those routines locked after restarting. */
 export function recoverInterruptedFlows() {
   for (const flow of listFlows()) {
     if (isFlowRunning(flow.id)) continue
@@ -48,7 +48,7 @@ interface StopContext {
 const STOPPED = 'Parado por você.'
 
 /**
- * Para o fluxo na hora: cancela o que estiver rodando (sessões, processos do Codex, decisões, filas de bots,
+ * Para a rotina na hora: cancela o que estiver rodando (sessões, processos do Codex, decisões, filas de bots,
  * confirmações pendentes) e marca a execução como parada, sem esperar ninguém terminar.
  */
 export function stopFlow(flowId: string) {
@@ -73,8 +73,7 @@ function publish(run: FlowRun) {
 
 export function nodeLabel(node: FlowNode): string {
   if (node.data.label?.trim()) return node.data.label.trim()
-  if (node.type === 'bot') return getBot(node.data.botId ?? '')?.name ?? 'Bot'
-  if (node.type === 'prompt') return 'Prompt'
+  if (node.type === 'task') return getSpecialization(node.data.specializationId ?? '')?.name ?? 'Tarefa'
   if (node.type === 'decision') return 'Decisão'
   if (node.type === 'confirm') return 'Confirmação'
   return 'Gatilho'
@@ -91,7 +90,7 @@ function plan(flow: Flow): { order: FlowNode[]; incoming: Map<string, FlowEdge[]
     children.set(e.source, [...(children.get(e.source) ?? []), e.target])
   }
   const trigger = flow.nodes.find((n) => n.type === 'trigger')
-  if (!trigger) throw new Error('O fluxo não tem gatilho.')
+  if (!trigger) throw new Error('A rotina não tem gatilho.')
 
   const reachable = new Set<string>()
   const stack = [trigger.id]
@@ -99,7 +98,7 @@ function plan(flow: Flow): { order: FlowNode[]; incoming: Map<string, FlowEdge[]
     const id = stack.pop()!
     for (const c of children.get(id) ?? []) if (!reachable.has(c)) reachable.add(c), stack.push(c)
   }
-  if (reachable.has(trigger.id)) throw new Error('O fluxo tem um ciclo (uma caixinha volta para o gatilho).')
+  if (reachable.has(trigger.id)) throw new Error('A rotina tem um ciclo (uma caixinha volta para o gatilho).')
 
   // Ordem topológica entre as alcançáveis (Kahn); sobra = ciclo.
   const indeg = new Map<string, number>()
@@ -115,7 +114,7 @@ function plan(flow: Flow): { order: FlowNode[]; incoming: Map<string, FlowEdge[]
       if (indeg.get(c) === 0) queue.push(c)
     }
   }
-  if (order.length !== reachable.size) throw new Error('O fluxo tem um ciclo entre caixinhas.')
+  if (order.length !== reachable.size) throw new Error('A rotina tem um ciclo entre caixinhas.')
   return { order, incoming }
 }
 
@@ -148,7 +147,7 @@ function mergeTrails(trails: TrailStep[][]): TrailStep[] {
  */
 function runContext(trail: TrailStep[], parentIds: Set<string>): string {
   if (!trail.length) return ''
-  // Em fluxos longos fica o começo (onde costuma estar o objetivo) e o fim (o mais recente).
+  // Em rotinas longas fica o começo (onde costuma estar o objetivo) e o fim (o mais recente).
   const steps = trail.length > 12 ? [...trail.slice(0, 3), ...trail.slice(-9)] : trail
   const lines = steps.map((t, i) => {
     if (t.chosen) return `${i + 1}. ${t.label}: escolheu "${clip(t.chosen, 200)}"`
@@ -171,8 +170,10 @@ function compose(flow: Flow, node: FlowNode, inputs: string[], context: string):
   if (text.includes('{{anterior}}')) text = text.replaceAll('{{anterior}}', prev)
   else if (prev) text = `${text}\n\n<resultado_anterior>\n${prev}\n</resultado_anterior>`.trim()
   if (!text) throw new Error('A caixinha está sem mensagem.')
+  const sp = node.data.specializationId ? getSpecialization(node.data.specializationId) : undefined
   return [
-    `[Etapa do fluxo automático "${flow.name}" no gBot. Ninguém está acompanhando em tempo real: entregue o resultado direto, sem fazer perguntas.]`,
+    `[Etapa da sua rotina automática "${flow.name}" no gBot. Ninguém está acompanhando em tempo real: entregue o resultado direto, sem fazer perguntas.]`,
+    ...(sp ? [`[Nesta etapa, use a sua especialização "${sp.name}".]`] : []),
     ...(context ? [context] : []),
     '',
     text
@@ -198,26 +199,19 @@ async function execute(
     history: [],
     origin: { kind: 'flow' as const, id: flow.id }
   }
-  let req: SendMessageRequest
-  if (node.type === 'bot') {
-    const bot = getBot(node.data.botId ?? '')
-    if (!bot) throw new Error('O bot desta caixinha não existe mais.')
-    req = {
-      ...base,
-      providerId: bot.providerId ?? 'claude-code',
-      model: bot.model,
-      projectId: bot.projectId ?? flow.projectId,
-      bot: { id: bot.id, name: bot.name, description: bot.description, instructions: bot.instructions }
-    }
-  } else {
-    // Caixinha de prompt (e de decisão) aprende na memória do próprio fluxo; caixinha de bot, na memória do bot.
-    req = {
-      ...base,
-      providerId: node.data.providerId ?? 'claude-code',
-      model: node.data.model,
-      projectId: flow.projectId,
-      memory: { kind: 'flow', id: flow.id }
-    }
+  // Toda caixinha roda como o bot dono da rotina (com a memória e as especializações dele); a caixinha pode escolher
+  // outro modelo e uma especialização que o bot ainda não tenha.
+  const owner = getBot(flow.botId)
+  if (!owner) throw new Error('O bot desta rotina não existe mais.')
+  if (node.data.specializationId && !getSpecialization(node.data.specializationId)) throw new Error('A especialização desta caixinha não existe mais.')
+  const ownModel = !!node.data.providerId || !!node.data.model
+  const req: SendMessageRequest = {
+    ...base,
+    providerId: (ownModel ? node.data.providerId : owner.providerId) ?? 'claude-code',
+    model: ownModel ? node.data.model : owner.model,
+    projectId: owner.projectId,
+    bot: { id: owner.id, name: owner.name, description: owner.description, instructions: owner.instructions },
+    ...(node.data.specializationId ? { specializationIds: [node.data.specializationId] } : {})
   }
 
   const provider = getProvider(req.providerId)
@@ -244,18 +238,13 @@ async function execute(
     if (stop.aborted) throw new Error(flowStop.aborted ? STOPPED : 'A tarefa foi cancelada na página do bot.')
   }
   const flowStop = stop.signal
-  const bot = req.bot
-  if (bot) {
-    await runAsBot(
-      bot.id,
-      { label: `Fluxo "${flow.name}" · ${nodeLabel(node)}`, origin: 'flow', originId: flow.id },
-      flowStop,
-      run,
-      (ahead) => onNotice(waitNotice(bot.name, ahead))
-    )
-  } else {
-    await run(flowStop)
-  }
+  await runAsBot(
+    owner.id,
+    { label: `Rotina "${flow.name}" · ${nodeLabel(node)}`, origin: 'flow', originId: flow.id },
+    flowStop,
+    run,
+    (ahead) => onNotice(waitNotice(owner.name, ahead))
+  )
   return { text: out.trim(), files }
 }
 
@@ -282,7 +271,7 @@ async function decide(
   const options = (node.data.options ?? []).filter((o) => o.label.trim())
   if (options.length < 2) throw new Error('A decisão precisa de pelo menos duas opções.')
   const prompt = [
-    `[Decisão no fluxo automático "${flow.name}" do gBot. Ninguém está acompanhando em tempo real.]`,
+    `[Decisão na rotina automática "${flow.name}" do gBot. Ninguém está acompanhando em tempo real.]`,
     'Leia o resultado anterior e escolha a opção que melhor descreve a situação. Não use ferramentas.',
     context,
     inputs.length ? `<resultado_anterior>\n${joinInputs(inputs)}\n</resultado_anterior>` : '(sem resultado anterior)',
@@ -308,9 +297,9 @@ async function decide(
   return { optionId: chosen.id, label: chosen.label.trim() }
 }
 
-/** Roda o fluxo: caixinhas em ordem, ramos em paralelo; cada uma espera todas as anteriores. */
+/** Roda a rotina: caixinhas em ordem, ramos em paralelo; cada uma espera todas as anteriores. */
 export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<string> {
-  if (running.has(flow.id)) throw new Error('Este fluxo já está rodando.')
+  if (running.has(flow.id)) throw new Error('Esta rotina já está rodando.')
   const run: FlowRun = {
     id: randomUUID(),
     flowId: flow.id,
@@ -325,11 +314,11 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
   try {
     ;({ order, incoming } = plan(flow))
   } catch (e) {
-    publish({ ...run, status: 'error', finishedAt: Date.now(), steps: [{ nodeId: '', label: 'Fluxo', status: 'error', error: (e as Error).message }] })
+    publish({ ...run, status: 'error', finishedAt: Date.now(), steps: [{ nodeId: '', label: 'Rotina', status: 'error', error: (e as Error).message }] })
     return run.id
   }
   if (!order.length) {
-    publish({ ...run, status: 'error', finishedAt: Date.now(), steps: [{ nodeId: '', label: 'Fluxo', status: 'error', error: 'Ligue o gatilho a pelo menos uma caixinha.' }] })
+    publish({ ...run, status: 'error', finishedAt: Date.now(), steps: [{ nodeId: '', label: 'Rotina', status: 'error', error: 'Ligue o gatilho a pelo menos uma caixinha.' }] })
     return run.id
   }
 
@@ -426,7 +415,7 @@ export async function runFlow(flow: Flow, trigger: FlowRun['trigger']): Promise<
               pub()
               const { option, note } = await requestConfirmation({
                 flowId: flow.id,
-                flowName: flow.name,
+                flowName: [getBot(flow.botId)?.name, flow.name].filter(Boolean).join(' · '),
                 runId: run.id,
                 nodeId: node.id,
                 title: label,

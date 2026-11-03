@@ -2,9 +2,8 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node
 import { join } from 'node:path'
 import { app } from 'electron'
 import type { Flow, FlowRun } from '@shared/types'
-import { removeMemory } from '../memory'
 
-/** Fluxos em data/flows.json; execuções em data/flow-runs/<fluxo>.json (as 50 mais recentes). */
+/** Rotinas dos bots em data/flows.json; execuções em data/flow-runs/<rotina>.json (as 50 mais recentes). */
 const MAX_RUNS = 50
 
 function dir(...parts: string[]) {
@@ -47,14 +46,22 @@ export function removeFlow(id: string) {
     listFlows().filter((f) => f.id !== id)
   )
   rmSync(runsFile(id), { force: true })
-  removeMemory({ kind: 'flow', id })
 }
 
-/** Solta os fluxos de um projeto que foi excluído. */
-export function detachFlows(projectId: string) {
+/** Remove as rotinas de um bot que foi excluído. */
+export function removeBotFlows(botId: string) {
+  for (const flow of listFlows()) if (flow.botId === botId) removeFlow(flow.id)
+}
+
+/** Tira uma especialização excluída das caixinhas que a usavam (o bot passa a fazer a tarefa sem ela). */
+export function forgetSpecialization(id: string) {
   write(
     flowsFile(),
-    listFlows().map(({ projectId: p, ...f }) => (p === projectId ? f : { ...f, projectId: p }))
+    listFlows().map((f) =>
+      f.nodes.some((n) => n.data.specializationId === id)
+        ? { ...f, nodes: f.nodes.map((n) => (n.data.specializationId === id ? { ...n, data: { ...n.data, specializationId: undefined } } : n)) }
+        : f
+    )
   )
 }
 

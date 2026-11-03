@@ -16,13 +16,14 @@ import type {
   Flow,
   Project,
   ProviderInfo,
-  ProviderModel
+  ProviderModel,
+  Specialization
 } from '@shared/types'
 import { addUsage } from '@shared/usage'
 import type { ItemRef } from '@/lib/dnd'
 import { uid } from '@/lib/format'
-import { avatarsForPlan } from '@/lib/applyPlan'
-import { findMention } from '@/lib/mentions'
+import { avatarsForPlan, freeAvatars } from '@/lib/applyPlan'
+import { findMention, findSlashes } from '@/lib/mentions'
 import { load, save } from './storage'
 
 export type View =
@@ -30,6 +31,7 @@ export type View =
   | 'chat'
   | 'bot'
   | 'bot-editor'
+  | 'specialization-editor'
   | 'project'
   | 'project-editor'
   | 'flow-editor'
@@ -38,10 +40,10 @@ export type View =
   | 'memory'
   | 'settings'
 
-/** Recorte da página de regras e memória: um fluxo (com os bots dele) ou um bot. */
+/** Recorte da página de regras e memória: um bot (com as especializações dele) ou uma especialização. */
 export interface MemoryScope {
-  flowId?: string
   botId?: string
+  specializationId?: string
 }
 
 interface Pending {
@@ -53,7 +55,7 @@ interface Pending {
 export interface AppState {
   view: View
   setView(v: View): void
-  /** Abre a página de regras e memória, já recortada num fluxo ou bot se informado. */
+  /** Abre a página de regras e memória, já recortada num bot ou especialização se informado. */
   openMemory(scope?: MemoryScope): void
   memoryScope: MemoryScope
   /** Provedor em uso (o escolhido, ou o primeiro pronto se o escolhido não estiver). */
@@ -68,12 +70,13 @@ export interface AppState {
   connected: boolean
   refreshProviders(): Promise<void>
 
+  /** Rotinas de todos os bots. */
   flows: Flow[]
-  /** Fluxo aberto no canvas. */
+  /** Rotina aberta no canvas. */
   selectedFlow?: Flow
   openFlow(id: string): void
-  /** Cria um fluxo novo (com o gatilho) e abre no canvas; com `projectId`, dentro do projeto. */
-  newFlow(projectId?: string): Promise<void>
+  /** Cria uma rotina nova para o bot (com o gatilho) e abre no canvas. */
+  newFlow(botId: string): Promise<void>
   saveFlow(flow: Flow): Promise<void>
   removeFlow(id: string): Promise<void>
 
@@ -85,6 +88,17 @@ export interface AppState {
   saveProject(project: Project): Promise<void>
   removeProject(id: string): Promise<void>
   getProject(id?: string): Project | undefined
+
+  specializations: Specialization[]
+  /** Especialização aberta no editor (ausente = criando uma nova). */
+  selectedSpecialization?: Specialization
+  /** Abre o editor; sem `id` cria uma especialização nova, já dentro de `projectId` se informado. */
+  editSpecialization(id?: string, projectId?: string): void
+  /** Projeto sugerido para a especialização nova que está sendo criada. */
+  specializationDraftProjectId?: string
+  saveSpecialization(specialization: Specialization): Promise<void>
+  removeSpecialization(id: string): Promise<void>
+  getSpecialization(id?: string): Specialization | undefined
 
   bots: Bot[]
   /** Bot aberto na página do bot ou no editor (ausente no editor = criando um novo). */
@@ -106,6 +120,8 @@ export interface AppState {
   activeProject?: Project
   /** Bots que a conversa ativa pode chamar: os soltos e os do projeto dela. */
   visibleBots: Bot[]
+  /** Especializações que a conversa ativa pode chamar com /: as soltas e as do projeto dela. */
+  visibleSpecializations: Specialization[]
   /** Modelos do provedor em uso (vazio se o provedor não oferece escolha). */
   models: ProviderModel[]
   /** Modelo da conversa ativa (ou do rascunho); undefined = padrão. */
@@ -114,14 +130,14 @@ export interface AppState {
   setActiveModel(model?: string, providerId?: string): void
   /** Último modelo escolhido no provedor (por padrão, o em uso): é o que vem marcado em tudo que for criado. */
   preferredModel(providerId?: string): string | undefined
-  /** Guarda o modelo escolhido como padrão para as próximas criações (conversas, bots, caixinhas de fluxo). */
+  /** Guarda o modelo escolhido como padrão para as próximas criações (conversas, bots, caixinhas de rotina). */
   rememberModel(model: string | undefined, providerId?: string): void
   openConversation(id: string): void
   /** Abre um chat vazio; com `botId`, a conversa será com aquele bot; com `projectId`, dentro do projeto. */
   newConversation(botId?: string, projectId?: string): void
   /** Move a conversa para um projeto (ou para fora de projetos, com undefined). */
   moveConversation(id: string, projectId?: string): Promise<void>
-  /** Move uma conversa, bot ou fluxo para um projeto (ou para fora, com undefined). */
+  /** Move uma conversa, bot ou especialização para um projeto (ou para fora, com undefined). */
   moveItem(item: ItemRef, projectId?: string): Promise<void>
   removeConversation(id: string): Promise<void>
 
@@ -130,7 +146,7 @@ export interface AppState {
   /** Pedidos de aprovação esperando resposta (ex.: navegador abrir um site). */
   approvals: ApprovalRequest[]
   respondApproval(id: string, decision: ApprovalDecision): void
-  /** Caixinhas de confirmação dos fluxos esperando você. */
+  /** Caixinhas de confirmação das rotinas esperando você. */
   confirmations: PendingConfirmation[]
   /** Confirmação aberta na janela de resposta (ex.: depois de clicar na notificação). */
   openConfirmationId?: string
@@ -187,6 +203,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [selectedFlowId, setSelectedFlowId] = useState<string>()
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>()
+  const [specializations, setSpecializations] = useState<Specialization[]>([])
+  const [selectedSpecializationId, setSelectedSpecializationId] = useState<string>()
+  const [specializationDraftProjectId, setSpecializationDraftProjectId] = useState<string>()
   const [bots, setBots] = useState<Bot[]>([])
   const [selectedBotId, setSelectedBotId] = useState<string>()
   const [botDraftProjectId, setBotDraftProjectId] = useState<string>()
@@ -232,7 +251,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void refreshProviders()
     void window.gbot.projects.list().then(setProjects)
     void window.gbot.flows.list().then(setFlows)
-    void window.gbot.bots.list().then(setBots)
+    void window.gbot.specializations.list().then(setSpecializations)
+    void window.gbot.bots.list().then((list) => {
+      // Bots vindos da migração (um por fluxo antigo) ainda não têm avatar: ganham um sorteado.
+      const missing = list.filter((b) => !b.avatar)
+      if (!missing.length) return setBots(list)
+      const avatars = freeAvatars(list.filter((b) => b.avatar), missing.length)
+      const fixed = list.map((b) => (b.avatar ? b : { ...b, avatar: avatars.shift()! }))
+      setBots(fixed)
+      for (const b of fixed) if (missing.some((m) => m.id === b.id)) void window.gbot.bots.save(b)
+    })
     void window.gbot.conversations.list().then(setMetas)
   }, [refreshProviders])
 
@@ -252,6 +280,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   botsRef.current = bots
   const getBot = useCallback((id?: string) => (id ? bots.find((b) => b.id === id) : undefined), [bots])
   const getProject = useCallback((id?: string) => (id ? projects.find((p) => p.id === id) : undefined), [projects])
+  const getSpecialization = useCallback(
+    (id?: string) => (id ? specializations.find((sp) => sp.id === id) : undefined),
+    [specializations]
+  )
 
   const activeConversation = activeId ? loaded[activeId] : undefined
   const activeBot = getBot(activeConversation ? activeConversation.botId : draftBotId)
@@ -290,6 +322,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => bots.filter((b) => !b.projectId || b.projectId === activeProject?.id),
     [bots, activeProject?.id]
   )
+  const visibleSpecializations = useMemo(
+    () => specializations.filter((sp) => !sp.projectId || sp.projectId === activeProject?.id),
+    [specializations, activeProject?.id]
+  )
   const activeAvatar = activeBot?.avatar
 
   const settleMood = useCallback((m: AvatarMood, ms: number) => {
@@ -326,7 +362,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMood('attention')
     })
     const offAsked = window.gbot.questions.onResolved((id) => setQuestions((list) => list.filter((q) => q.id !== id)))
-    // Confirmações dos fluxos: a lista vem do processo principal; a notificação pede para abrir uma delas.
+    // Confirmações das rotinas: a lista vem do processo principal; a notificação pede para abrir uma delas.
     const loadConfirmations = () => void window.gbot.confirmations.list().then(setConfirmations)
     loadConfirmations()
     const offConfirmations = window.gbot.confirmations.onChanged(loadConfirmations)
@@ -460,6 +496,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // @menção a outro bot: a mensagem vai direto para ele, e a resposta aparece com o avatar dele.
       const mentioned = conversation.mode === 'architect' ? undefined : findMention(text, visibleBots)
       const target = mentioned && mentioned.id !== conversation.botId ? mentioned : undefined
+      // /Especialização: as instruções dela vão junto nesta mensagem.
+      const slashed = conversation.mode === 'architect' ? [] : findSlashes(text, visibleSpecializations).map((sp) => sp.id)
       const history = conversation.messages.filter((m) => !m.error).map(({ role, text }) => ({ role, text }))
       const userMsg: ChatMessage = { id: uid(), role: 'user', text: typed, createdAt: now, ...(attachments?.length ? { files: attachments } : {}) }
       const botMsg: ChatMessage = {
@@ -496,6 +534,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         text: target ? text : withMentionContext(conversation, text, bots),
         history,
         targetBotId: target?.id,
+        ...(slashed.length ? { specializationIds: slashed } : {}),
         projectId: updated.projectId,
         model: updated.model,
         bot: bot && { id: bot.id, name: bot.name, description: bot.description, instructions: bot.instructions },
@@ -503,7 +542,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         architect: updated.mode === 'architect' || undefined
       })
     },
-    [activeConversation, draftConversationId, draftBotId, draftProjectId, draftOrPreferred, getBot, bots, visibleBots, activeProviderId]
+    [activeConversation, draftConversationId, draftBotId, draftProjectId, draftOrPreferred, getBot, bots, visibleBots, visibleSpecializations, activeProviderId]
   )
 
   const cancel = useCallback(() => {
@@ -578,13 +617,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setSelectedFlowId(id)
         setView('flow-editor')
       },
-      newFlow: async (projectId) => {
+      newFlow: async (botId) => {
         const now = Date.now()
         const flow: Flow = {
           id: uid(),
-          name: tr('Novo fluxo'),
+          botId,
+          name: tr('Nova rotina'),
           enabled: false,
-          projectId,
           nodes: [
             {
               id: uid(),
@@ -604,15 +643,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
       saveFlow: async (flow) => {
         await window.gbot.flows.save(flow)
-        // Fluxo novo (ex.: criado pelo plano da página inicial) entra na lista.
+        // Rotina nova (ex.: criada pelo plano da página inicial) entra na lista.
         setFlows((fs) => (fs.some((f) => f.id === flow.id) ? fs.map((f) => (f.id === flow.id ? flow : f)) : [...fs, flow]))
       },
       removeFlow: async (id) => {
+        const botId = flows.find((f) => f.id === id)?.botId
         await window.gbot.flows.remove(id)
         setFlows((fs) => fs.filter((f) => f.id !== id))
         if (view === 'flow-editor' && selectedFlowId === id) {
           setSelectedFlowId(undefined)
-          setView('home')
+          // Volta para a página do bot dono da rotina.
+          if (botId) setSelectedBotId(botId)
+          setView(botId ? 'bot' : 'home')
         }
       },
 
@@ -637,7 +679,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setProjects((ps) => ps.filter((p) => p.id !== id))
         // O que estava no projeto fica solto (o processo principal já gravou em disco).
         setBots((bs) => bs.map(({ projectId, ...b }) => (projectId === id ? b : { ...b, projectId })))
-        setFlows((fs) => fs.map(({ projectId, ...f }) => (projectId === id ? f : { ...f, projectId })))
+        setSpecializations((ss) => ss.map(({ projectId, ...sp }) => (projectId === id ? sp : { ...sp, projectId })))
         setMetas((ms) => ms.map(({ projectId, ...m }) => (projectId === id ? m : { ...m, projectId })))
         setLoaded((all) =>
           Object.fromEntries(
@@ -648,6 +690,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setView('home')
       },
       getProject,
+
+      specializations,
+      selectedSpecialization: getSpecialization(selectedSpecializationId),
+      editSpecialization: (id, projectId) => {
+        setSelectedSpecializationId(id)
+        setSpecializationDraftProjectId(projectId)
+        setView('specialization-editor')
+      },
+      specializationDraftProjectId,
+      saveSpecialization: async (sp) => {
+        await window.gbot.specializations.save(sp)
+        setSpecializations((ss) => (ss.some((x) => x.id === sp.id) ? ss.map((x) => (x.id === sp.id ? sp : x)) : [...ss, sp]))
+      },
+      removeSpecialization: async (id) => {
+        await window.gbot.specializations.remove(id)
+        setSpecializations((ss) => ss.filter((sp) => sp.id !== id))
+        // O processo principal já tirou dos bots e das caixinhas que a usavam.
+        setBots((bs) => bs.map((b) => (b.specializationIds.includes(id) ? { ...b, specializationIds: b.specializationIds.filter((s) => s !== id) } : b)))
+        setFlows((fs) =>
+          fs.map((f) =>
+            f.nodes.some((n) => n.data.specializationId === id)
+              ? { ...f, nodes: f.nodes.map((n) => (n.data.specializationId === id ? { ...n, data: { ...n.data, specializationId: undefined } } : n)) }
+              : f
+          )
+        )
+        if (view === 'specialization-editor' && selectedSpecializationId === id) {
+          setSelectedSpecializationId(undefined)
+          setView('home')
+        }
+      },
+      getSpecialization,
 
       bots,
       selectedBot: getBot(selectedBotId),
@@ -668,10 +741,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       removeBot: async (id) => {
         await window.gbot.bots.remove(id)
         setBots((bs) => bs.filter((b) => b.id !== id))
+        setFlows((fs) => fs.filter((f) => f.botId !== id))
         setMetas((ms) => ms.filter((m) => m.botId !== id))
         // Só sai da tela atual se ela mostrava o bot excluído (ou uma conversa dele).
         const showingBot = (view === 'bot' || view === 'bot-editor') && selectedBotId === id
-        if (showingBot || (view === 'chat' && activeBot?.id === id)) {
+        const showingRoutine = view === 'flow-editor' && flows.find((f) => f.id === selectedFlowId)?.botId === id
+        if (showingBot || showingRoutine || (view === 'chat' && activeBot?.id === id)) {
           setSelectedBotId(undefined)
           setActiveId(undefined)
           setView('home')
@@ -684,6 +759,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       activeBot,
       activeProject,
       visibleBots,
+      visibleSpecializations,
       models,
       activeModel,
       setActiveModel,
@@ -717,11 +793,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           await window.gbot.bots.save(moved)
           return
         }
-        const flow = flows.find((f) => f.id === item.id)
-        if (!flow) return
-        const moved = { ...flow, projectId, updatedAt: now }
-        setFlows((fs) => fs.map((f) => (f.id === flow.id ? moved : f)))
-        await window.gbot.flows.save(moved)
+        const sp = specializations.find((x) => x.id === item.id)
+        if (!sp) return
+        const moved = { ...sp, projectId, updatedAt: now }
+        setSpecializations((ss) => ss.map((x) => (x.id === sp.id ? moved : x)))
+        await window.gbot.specializations.save(moved)
       },
       removeConversation: async (id) => {
         await window.gbot.conversations.remove(id)
@@ -776,6 +852,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       projects,
       selectedProjectId,
       getProject,
+      specializations,
+      selectedSpecializationId,
+      specializationDraftProjectId,
+      getSpecialization,
       bots,
       selectedBotId,
       botDraftProjectId,
@@ -785,6 +865,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       activeBot,
       activeProject,
       visibleBots,
+      visibleSpecializations,
       models,
       activeModel,
       setActiveModel,

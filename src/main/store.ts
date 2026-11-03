@@ -1,14 +1,16 @@
 import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
-import type { Bot, Conversation, ConversationMeta, Project } from '@shared/types'
+import type { Bot, Conversation, ConversationMeta, Project, Specialization } from '@shared/types'
 import { removeAttachments } from './attachments'
-import { removeAllBotFiles } from './botFiles'
+import { removeAllSpecializationFiles } from './specializationFiles'
+import { forgetSpecialization, removeBotFlows } from './flows/store'
 import { removeMemory } from './memory'
 
 /**
  * Armazenamento local em JSON (~/Library/Application Support/gBot/data):
- *   bots.json             todos os bots
+ *   specializations.json  todas as especializações
+ *   team.json             todos os bots (o time)
  *   conversations/<id>.json  uma conversa por arquivo
  * Escritas são atômicas (arquivo temporário + rename).
  */
@@ -50,7 +52,7 @@ export function saveProject(project: Project) {
   writeJson(projectsFile(), [...listProjects().filter((p) => p.id !== project.id), project])
 }
 
-/** Remove o projeto e solta o que estava nele (bots e conversas não são apagados). */
+/** Remove o projeto e solta o que estava nele (bots, especializações e conversas não são apagados). */
 export function removeProject(id: string) {
   writeJson(
     projectsFile(),
@@ -59,6 +61,10 @@ export function removeProject(id: string) {
   writeJson(
     botsFile(),
     listBots().map(({ projectId, ...b }) => (projectId === id ? b : { ...b, projectId }))
+  )
+  writeJson(
+    specializationsFile(),
+    listSpecializations().map(({ projectId, ...sp }) => (projectId === id ? sp : { ...sp, projectId }))
   )
   for (const meta of listConversations()) {
     if (meta.projectId !== id) continue
@@ -69,12 +75,45 @@ export function removeProject(id: string) {
   }
 }
 
+// ── Especializações ─────────────────────────────────────────────────
+
+const specializationsFile = () => join(dataDir(), 'specializations.json')
+
+export function listSpecializations(): Specialization[] {
+  return readJson<Specialization[]>(specializationsFile(), []).sort((a, b) => a.createdAt - b.createdAt)
+}
+
+export function getSpecialization(id: string): Specialization | undefined {
+  return listSpecializations().find((sp) => sp.id === id)
+}
+
+export function saveSpecialization(specialization: Specialization) {
+  writeJson(specializationsFile(), [...listSpecializations().filter((sp) => sp.id !== specialization.id), specialization])
+}
+
+/** Remove a especialização, os arquivos e a memória dela, e tira dos bots e das rotinas que a usavam. */
+export function removeSpecialization(id: string) {
+  writeJson(
+    specializationsFile(),
+    listSpecializations().filter((sp) => sp.id !== id)
+  )
+  writeJson(
+    botsFile(),
+    listBots().map((b) => (b.specializationIds.includes(id) ? { ...b, specializationIds: b.specializationIds.filter((s) => s !== id) } : b))
+  )
+  forgetSpecialization(id)
+  removeMemory({ kind: 'specialization', id })
+  removeAllSpecializationFiles(id)
+}
+
 // ── Bots ────────────────────────────────────────────────────────────
 
-const botsFile = () => join(dataDir(), 'bots.json')
+const botsFile = () => join(dataDir(), 'team.json')
 
 export function listBots(): Bot[] {
-  return readJson<Bot[]>(botsFile(), []).sort((a, b) => a.createdAt - b.createdAt)
+  return readJson<Bot[]>(botsFile(), [])
+    .map((b) => ({ ...b, specializationIds: b.specializationIds ?? [] }))
+    .sort((a, b) => a.createdAt - b.createdAt)
 }
 
 export function getBot(id: string): Bot | undefined {
@@ -91,10 +130,10 @@ export function removeBot(id: string) {
     botsFile(),
     listBots().filter((b) => b.id !== id)
   )
-  // As conversas do bot vão junto.
+  // As conversas e as rotinas do bot vão junto.
   for (const meta of listConversations()) if (meta.botId === id) removeConversation(meta.id)
+  removeBotFlows(id)
   removeMemory({ kind: 'bot', id })
-  removeAllBotFiles(id)
 }
 
 // ── Conversas ───────────────────────────────────────────────────────

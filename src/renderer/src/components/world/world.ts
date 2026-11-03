@@ -2,12 +2,11 @@
  * Simulação simples (sem dependências) que posiciona o mapa da home:
  *   - projetos são "ilhas" quadradas que se empurram e ficam perto do centro;
  *   - bots de um projeto ficam presos dentro da ilha dele;
- *   - bots soltos e fluxos flutuam fora das ilhas;
- *   - fluxos são puxados para perto dos bots que usam (molas).
+ *   - bots soltos flutuam fora das ilhas.
  * As colisões são resolvidas por posição, então o mapa nunca fica com nada sobreposto.
  */
 
-export type BodyKind = 'zone' | 'bot' | 'flow'
+export type BodyKind = 'zone' | 'bot'
 
 export interface Body {
   id: string
@@ -18,7 +17,7 @@ export interface Body {
   y: number
   vx: number
   vy: number
-  /** Ilha (projeto) em que o bot ou fluxo mora. */
+  /** Ilha (projeto) em que o bot mora. */
   zone?: string
   /** Sendo arrastado: fica onde o mouse está e a física não mexe nele. */
   pinned?: boolean
@@ -31,14 +30,7 @@ export interface BodySpec {
   zone?: string
 }
 
-export interface Link {
-  a: string
-  b: string
-  length: number
-}
-
 export const BOT_R = 52
-export const FLOW_R = 48
 const PAD = 12
 /** Até onde o centro de um bot pode chegar das bordas da ilha (o nome do projeto ocupa o topo). */
 const INSET_X = 60
@@ -47,7 +39,7 @@ const INSET_BOTTOM = 42
 /** Os bots são puxados um pouco abaixo do centro, longe do nome do projeto. */
 const ZONE_LABEL = 22
 
-/** Metade do lado da ilha, para caber os bots e fluxos do projeto. */
+/** Metade do lado da ilha, para caber os bots do projeto. */
 export const zoneHalf = (members: number) => (members === 0 ? 80 : 44 + 60 * Math.sqrt(members))
 
 /** Número estável entre 0 e 1 a partir de um texto (posições iniciais e fases das animações). */
@@ -81,7 +73,7 @@ function separation(p: Body, q: Body): [number, number] | undefined {
     return ox < oy ? [ox * (dx < 0 ? -1 : 1), 0] : [0, oy * (dy < 0 ? -1 : 1)]
   }
 
-  // Ilha com bot/fluxo: círculo contra quadrado.
+  // Ilha com bot: círculo contra quadrado.
   if (p.kind === 'zone' || q.kind === 'zone') {
     const [z, c, sign] = p.kind === 'zone' ? [p, q, 1] : [q, p, -1]
     const min = c.r + PAD
@@ -103,7 +95,7 @@ function separation(p: Body, q: Body): [number, number] | undefined {
     return [sx * (pen + min) * sign, sy * (pen + min) * sign]
   }
 
-  // Bot/fluxo com bot/fluxo: dois círculos.
+  // Bot com bot: dois círculos.
   let ux = dx
   let uy = dy
   let d = Math.hypot(dx, dy)
@@ -119,14 +111,13 @@ function separation(p: Body, q: Body): [number, number] | undefined {
 
 export class World {
   bodies = new Map<string, Body>()
-  links: Link[] = []
   members = new Map<string, Body[]>()
   width = 0
   height = 0
   alpha = 1
 
   /** Atualiza o que existe no mapa, mantendo onde já estava quem continua. */
-  sync(specs: BodySpec[], links: Link[], width: number, height: number) {
+  sync(specs: BodySpec[], width: number, height: number) {
     const sx = this.width ? width / this.width : 1
     const sy = this.height ? height / this.height : 1
     this.width = width
@@ -145,11 +136,10 @@ export class World {
       }
     }
     this.bodies = next
-    this.links = links.filter((l) => next.has(l.a) && next.has(l.b))
     this.members = new Map()
     for (const b of next.values()) if (b.zone) this.members.set(b.zone, [...(this.members.get(b.zone) ?? []), b])
 
-    // Lugar inicial: ilhas espalhadas na horizontal, membros dentro delas, o resto onde der.
+    // Lugar inicial: ilhas espalhadas na horizontal, bots de projeto dentro delas, os soltos onde der.
     const zones = specs.filter((s) => s.kind === 'zone')
     for (const b of fresh.filter((f) => f.kind === 'zone')) {
       const i = zones.findIndex((z) => z.id === b.id)
@@ -163,18 +153,6 @@ export class World {
         const dist = Math.max(0, z.r - INSET_X) * 0.6
         b.x = z.x + Math.cos(ang) * dist
         b.y = z.y + ZONE_LABEL + Math.sin(ang) * dist
-      } else {
-        b.x = width * (0.1 + 0.8 * hash(b.id, 1))
-        b.y = height * (0.15 + 0.7 * hash(b.id, 2))
-      }
-    }
-    for (const b of fresh.filter((f) => f.kind === 'flow')) {
-      const near = this.links.flatMap((l) => (l.a === b.id ? [l.b] : l.b === b.id ? [l.a] : []))
-      // Ilhas e bots já foram posicionados acima.
-      const placed = near.map((id) => next.get(id)!)
-      if (placed.length) {
-        b.x = placed.reduce((s, n) => s + n.x, 0) / placed.length + (hash(b.id) - 0.5) * 80
-        b.y = placed.reduce((s, n) => s + n.y, 0) / placed.length + (hash(b.id, 1) - 0.5) * 80
       } else {
         b.x = width * (0.1 + 0.8 * hash(b.id, 1))
         b.y = height * (0.15 + 0.7 * hash(b.id, 2))
@@ -222,18 +200,6 @@ export class World {
           b.vy += (cy - b.y) * g * a
         }
       }
-      for (const l of this.links) {
-        const p = this.bodies.get(l.a)!
-        const q = this.bodies.get(l.b)!
-        const dx = q.x - p.x
-        const dy = q.y - p.y
-        const d = Math.hypot(dx, dy) || 1
-        const k = ((d - l.length) / d) * 0.03 * a
-        p.vx += dx * k
-        p.vy += dy * k
-        q.vx -= dx * k
-        q.vy -= dy * k
-      }
     }
 
     for (const b of list) {
@@ -242,7 +208,7 @@ export class World {
       if (!b.pinned) this.move(b, b.vx, b.vy)
     }
 
-    // Colisões: entre coisas soltas (ilhas, bots soltos, fluxos) e entre bots da mesma ilha.
+    // Colisões: entre coisas soltas (ilhas e bots soltos) e entre bots da mesma ilha.
     for (let i = 0; i < list.length; i++) {
       for (let j = i + 1; j < list.length; j++) {
         const p = list[i]
@@ -262,14 +228,14 @@ export class World {
       if (b.pinned) continue
       const z = b.zone ? this.bodies.get(b.zone) : undefined
       if (z) {
-        // Bot ou fluxo de projeto não sai da ilha.
+        // Bot de projeto não sai da ilha.
         const x = clamp(b.x, z.x - z.r + INSET_X, Math.max(z.x - z.r + INSET_X, z.x + z.r - INSET_X))
         const y = clamp(b.y, z.y - z.r + INSET_TOP, Math.max(z.y - z.r + INSET_TOP, z.y + z.r - INSET_BOTTOM))
         b.x = x
         b.y = y
         continue
       }
-      // Bordas: bots e fluxos precisam de espaço em cima para o nome.
+      // Bordas: bots precisam de espaço em cima para o nome.
       const top = b.kind === 'zone' ? b.r + 8 : b.r + 20
       const x = clamp(b.x, b.r + 8, Math.max(b.r + 8, this.width - b.r - 8))
       const y = clamp(b.y, top, Math.max(top, this.height - b.r - 8))

@@ -38,7 +38,7 @@ function duration(run: FlowRun) {
   return ms < 60_000 ? `${Math.round(ms / 1000)} s` : `${Math.round(ms / 60_000)} min`
 }
 
-/** Execuções do fluxo, mais recentes primeiro; cada uma abre com o resultado de cada caixinha. */
+/** Execuções da rotina, mais recentes primeiro; cada uma abre com o resultado de cada caixinha. */
 export function RunHistory({ runs }: { runs: FlowRun[] }) {
   useLanguage()
   const app = useApp()
@@ -63,9 +63,9 @@ export function RunHistory({ runs }: { runs: FlowRun[] }) {
           {open === run.id && (
             <div className="space-y-3 border-t border-line px-3 py-3">
               <button
-                onClick={() => app.openMemory({ flowId: run.flowId })}
+                onClick={() => app.openMemory({ botId: app.flows.find((f) => f.id === run.flowId)?.botId })}
                 className="flex items-center gap-1.5 text-[12px] text-muted hover:text-fg"
-                title={tr('Lições aprendidas e instruções do fluxo e dos bots dele')}
+                title={tr('Lições aprendidas e instruções do bot da rotina e das especializações dele')}
               >
                 <Search size={12} />{tr(' Alguma resposta citou uma regra? Ver de onde ela vem')}</button>
               {run.steps.map((s, i) => (

@@ -1,6 +1,6 @@
 import { t as tr, useLanguage } from '@/i18n'
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from 'react'
-import { ArrowUp, FileText, LoaderCircle, Paperclip, Square, X } from 'lucide-react'
+import { ArrowUp, FileText, GraduationCap, LoaderCircle, Paperclip, Square, X } from 'lucide-react'
 import type { ChatFile } from '@shared/types'
 import { useApp } from '@/state/app'
 import { cn } from '@/lib/cn'
@@ -36,18 +36,29 @@ export function Composer({ autoFocus, placeholder = tr('Pergunte qualquer coisa�
     el.style.overflowY = el.scrollHeight > 200 ? 'auto' : 'hidden'
   }, [text])
 
-  // Autocompletar de @menções
-  const mention = mentionQuery(text, caret)
+  // Autocompletar de @bots e /especializações (vale o que estiver mais perto do cursor).
+  const at = mentionQuery(text, caret)
+  const slash = mentionQuery(text, caret, '/')
+  const mention = at && (!slash || at.start > slash.start) ? { ...at, trigger: '@' } : slash && { ...slash, trigger: '/' }
   const suggestions = useMemo(() => {
     if (!mention) return []
     const q = normalize(mention.query)
-    return app.visibleBots.filter((b) => normalize(b.name).includes(q)).slice(0, 6)
-  }, [mention?.query, app.visibleBots])
+    const list =
+      mention.trigger === '@'
+        ? app.visibleBots.map((b) => ({ id: b.id, name: b.name, description: b.description, avatar: b.avatar }))
+        : app.visibleSpecializations.map((sp) => ({ id: sp.id, name: sp.name, description: sp.description, avatar: undefined }))
+    // Nomes que começam com o que foi digitado vêm antes dos que só contêm o trecho.
+    const starts = (x: { name: string }) => (normalize(x.name).startsWith(q) ? 0 : 1)
+    return list
+      .filter((x) => normalize(x.name).includes(q))
+      .sort((a, b) => starts(a) - starts(b))
+      .slice(0, 6)
+  }, [mention?.query, mention?.trigger, app.visibleBots, app.visibleSpecializations])
   const showSuggestions = !dismissed && suggestions.length > 0
 
   const pick = (name: string) => {
     if (!mention) return
-    const next = `${text.slice(0, mention.start)}@${name} ${text.slice(caret)}`
+    const next = `${text.slice(0, mention.start)}${mention.trigger}${name} ${text.slice(caret)}`
     const pos = mention.start + name.length + 2
     setText(next)
     setCaret(pos)
@@ -149,7 +160,9 @@ export function Composer({ autoFocus, placeholder = tr('Pergunte qualquer coisa�
         )}
         {showSuggestions && (
           <div className="absolute bottom-full left-3 mb-2 w-[300px] overflow-hidden rounded-tile border border-line bg-sidebar py-1 shadow-lg">
-            <p className="px-3 pt-1.5 pb-1 text-[11px] font-medium text-muted">{tr('Chamar um bot')}</p>
+            <p className="px-3 pt-1.5 pb-1 text-[11px] font-medium text-muted">
+              {mention?.trigger === '/' ? tr('Usar uma especialização nesta mensagem') : tr('Chamar um bot')}
+            </p>
             {suggestions.map((b, i) => (
               <button
                 key={b.id}
@@ -159,7 +172,11 @@ export function Composer({ autoFocus, placeholder = tr('Pergunte qualquer coisa�
                 }}
                 className={cn('flex w-full items-center gap-3 px-3 py-2 text-left', i === highlight && 'bg-hover')}
               >
-                <PixelAvatar avatar={b.avatar} size={22} animated={false} />
+                {b.avatar ? (
+                  <PixelAvatar avatar={b.avatar} size={22} animated={false} />
+                ) : (
+                  <GraduationCap size={18} className="mx-0.5 shrink-0 text-muted" />
+                )}
                 <span className="min-w-0">
                   <span className="block truncate text-[13px] font-medium">{b.name}</span>
                   <span className="block truncate text-[11px] text-muted">{b.description}</span>
@@ -227,7 +244,11 @@ export function Composer({ autoFocus, placeholder = tr('Pergunte qualquer coisa�
               disabled={app.busy}
               placement="up"
             />
-            {app.visibleBots.length > 0 && <span className="hidden text-[12px] text-muted xl:inline">{tr('Use @ para chamar um bot')}</span>}
+            {(app.visibleBots.length > 0 || app.visibleSpecializations.length > 0) && (
+              <span className="hidden text-[12px] text-muted xl:inline">
+                {app.visibleSpecializations.length ? tr('@ chama um bot · / usa uma especialização') : tr('Use @ para chamar um bot')}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2">

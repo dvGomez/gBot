@@ -7,6 +7,7 @@ import { z } from 'zod'
 import type { Lesson, MemoryOwner } from '@shared/types'
 import { BROWSER_TOOL_NAMES, registerBrowserTools } from '../../browser/tools'
 import { learn } from '../../memory'
+import { listSpecializations } from '../../store'
 import { answersText, askUser } from '../../questions'
 import { registerApprovalTool } from './permissions'
 import { overviewText, planSchema, sanitizePlan } from './architect'
@@ -26,8 +27,10 @@ export interface CallerContext {
   /** Bots já envolvidos nesta cadeia de consultas (evita A → B → A). */
   chain: string[]
   depth: number
-  /** Memória usada por esta sessão (bot ou fluxo); sem ela, save_lesson não é oferecida. */
+  /** Memória usada por esta sessão (o bot, ou a especialização chamada); sem ela, save_lesson não é oferecida. */
   memory?: MemoryOwner
+  /** Especializações em uso na sessão: save_lesson pode registrar lições nelas. */
+  specializationIds?: string[]
   /** Origem registrada nas lições aprendidas. */
   memorySource?: Lesson['source']
   /** Conversa com o arquiteto: ganha a ferramenta `propose_plan`. */
@@ -71,7 +74,7 @@ function buildServer(ctx: CallerContext): McpServer {
     'list_bots',
     {
       description:
-        'Lista os bots especializados do gBot (nome e o que cada um faz). Use antes de ask_bot se não souber quais bots existem.',
+        'Lista os bots do time do gBot (nome, o que cada um faz e as especializações). Use antes de ask_bot se não souber quais bots existem.',
       inputSchema: {}
     },
     async () => ({ content: [{ type: 'text', text: handlers?.list(ctx) ?? 'Nenhum bot disponível.' }] })
@@ -81,8 +84,8 @@ function buildServer(ctx: CallerContext): McpServer {
     'ask_bot',
     {
       description:
-        'Envia uma pergunta ou tarefa a um bot especializado do gBot e devolve a resposta dele. Use quando o pedido do usuário ' +
-        'combinar com a especialidade de um bot, ou quando o usuário pedir para consultar um bot. Escreva a mensagem completa, ' +
+        'Envia uma pergunta ou tarefa a outro bot do time do gBot e devolve a resposta dele. Use quando o pedido do usuário ' +
+        'combinar com as especializações de um bot, ou quando o usuário pedir para consultar um bot. Escreva a mensagem completa, ' +
         'com o contexto necessário: o bot não vê esta conversa.',
       inputSchema: {
         bot: z.string().describe('Nome (ou id) do bot, como aparece em list_bots'),
@@ -114,12 +117,24 @@ function buildServer(ctx: CallerContext): McpServer {
           title: z.string().describe('Nome curto do procedimento, ex.: "Enviar mensagem no WhatsApp Web"'),
           when: z.string().describe('Quando usar, em poucas palavras'),
           steps: z.string().describe('Passos ou cuidados objetivos, até 5 linhas curtas'),
-          why: z.string().describe('O que deu errado antes (uma frase)')
+          why: z.string().describe('O que deu errado antes (uma frase)'),
+          specialization: z
+            .string()
+            .optional()
+            .describe('Nome da especialização a que a lição pertence (como executar a especialização); vazio = sua memória')
         }
       },
-      async (input) => {
+      async ({ specialization, ...input }) => {
         ctx.signal?.throwIfAborted()
-        const owner = ctx.memory!
+        let owner = ctx.memory!
+        if (specialization?.trim()) {
+          const key = specialization.trim().toLowerCase()
+          const sp = listSpecializations().find(
+            (x) => ctx.specializationIds?.includes(x.id) && (x.id === specialization || x.name.toLowerCase() === key)
+          )
+          if (!sp) return { content: [{ type: 'text', text: `Especialização "${specialization}" não está em uso aqui. Salve sem ela ou use o nome exato.` }], isError: true }
+          owner = { kind: 'specialization', id: sp.id }
+        }
         const source = ctx.memorySource ?? { kind: 'conversation' as const, id: ctx.conversationId }
         const { updated } = learn(owner, input, source)
         return { content: [{ type: 'text', text: updated ? 'Lição atualizada na memória.' : 'Lição salva na memória.' }] }
@@ -157,7 +172,7 @@ function buildServer(ctx: CallerContext): McpServer {
       }
     },
     async ({ questions }, extra) => {
-      // Fluxos e bots consultados por outros não têm ninguém olhando o chat: seguem sozinhos.
+      // Rotinas e bots consultados por outros não têm ninguém olhando o chat: seguem sozinhos.
       if (ctx.depth > 0 || ctx.memorySource?.kind === 'flow') {
         return { content: [{ type: 'text', text: 'Não há ninguém para responder agora. Decida com bom senso e siga, dizendo o que escolheu.' }] }
       }
@@ -166,13 +181,13 @@ function buildServer(ctx: CallerContext): McpServer {
     }
   )
 
-  // Criar ou alterar itens do gBot: o arquiteto e o assistente principal das conversas (fluxos e bots consultados não).
+  // Criar ou alterar itens do gBot: o arquiteto e o assistente principal das conversas (rotinas e bots consultados não).
   if (ctx.architect || (ctx.depth === 0 && ctx.memorySource?.kind !== 'flow')) {
     server.registerTool(
       'gbot_overview',
       {
         description:
-          'Mostra os bots, fluxos e projetos que existem no gBot (com instruções e etapas) e como montar um plano para criar ' +
+          'Mostra os bots (com rotinas), especializações e projetos que existem no gBot e como montar um plano para criar ' +
           'ou alterar itens. Chame antes de `propose_plan`.',
         inputSchema: {}
       },
@@ -182,7 +197,7 @@ function buildServer(ctx: CallerContext): McpServer {
       'propose_plan',
       {
         description:
-          'Mostra ao usuário o plano do que criar ou alterar no gBot (projeto, bots e fluxos), num cartão com o botão para ' +
+          'Mostra ao usuário o plano do que criar ou alterar no gBot (projeto, especializações, bots e rotinas), num cartão com o botão para ' +
           'aplicar. Para mudar algo que existe, use "existingId" (edição), nunca um item novo. Quem aplica é o usuário, pelo ' +
           'cartão: não crie nem altere nada você mesmo.',
         inputSchema: planSchema.shape

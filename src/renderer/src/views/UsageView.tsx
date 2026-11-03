@@ -49,7 +49,7 @@ const KINDS: Series[] = localized([{
   color: '#199e70'
 }, {
   key: 'flow',
-  label: tr('Fluxos'),
+  label: tr('Rotinas'),
   color: '#c98500'
 }, {
   key: 'reflection',
@@ -82,7 +82,7 @@ export function modelFamily(model?: string): string {
 const turnKey = (r: UsageRecord) => `${r.at}|${r.kind}|${r.conversationId ?? ''}|${r.botId ?? ''}|${r.flowId ?? ''}`
 
 type Owner = { kind: 'flow' | 'bot' | 'conversation' | 'other'; id: string }
-/** Quem gastou: o fluxo (inclusive bots consultados nele), senão o bot, senão a conversa. */
+/** Quem gastou: a rotina (inclusive bots consultados nela), senão o bot, senão a conversa. */
 const ownerOf = (r: UsageRecord): Owner =>
   r.flowId
     ? { kind: 'flow', id: r.flowId }
@@ -225,7 +225,13 @@ export function UsageView() {
 
   const nameOf = (o: Owner) => {
     if (o.kind === 'bot') return app.getBot(o.id)?.name ?? tr('Bot excluído')
-    if (o.kind === 'flow') return app.flows.find((f) => f.id === o.id)?.name ?? tr('Fluxo excluído')
+    if (o.kind === 'flow') {
+      // Rotina: com o nome do bot dono, que é quem a roda.
+      const routine = app.flows.find((f) => f.id === o.id)
+      if (!routine) return tr('Rotina excluída')
+      const bot = app.getBot(routine.botId)
+      return bot ? `${bot.name} · ${routine.name}` : routine.name
+    }
     if (o.kind === 'conversation') return app.conversations.find((c) => c.id === o.id)?.title ?? tr('Conversa excluída')
     return KINDS.find((k) => k.key === o.id)?.label ?? tr('Outros')
   }
@@ -288,10 +294,10 @@ export function UsageView() {
       out.push({
         key: `flow-${g.owner.id}`,
         text: (
-          <>{tr('O fluxo ')}<b>{nameOf(g.owner)}</b>{tr(' responde por ')}{Math.round((g.usage.cost / cost) * 100)}{tr('% do peso')}{perDay ? <>{tr(' e roda cerca de ')}{perDay}{tr(' vezes por dia')}</> : null}{tr('. Veja se dá para rodar menos vezes, juntar caixinhas ou usar um modelo mais leve nelas.')}</>
+          <>{tr('A rotina ')}<b>{nameOf(g.owner)}</b>{tr(' responde por ')}{Math.round((g.usage.cost / cost) * 100)}{tr('% do peso')}{perDay ? <>{tr(' e roda cerca de ')}{perDay}{tr(' vezes por dia')}</> : null}{tr('. Veja se dá para rodar menos vezes, juntar caixinhas ou usar um modelo mais leve nelas.')}</>
         ),
         open: openOf(g.owner),
-        action: tr('Abrir fluxo')
+        action: tr('Abrir rotina')
       })
     }
     const consult = data.byKind.get('consult')?.cost ?? 0
@@ -309,7 +315,7 @@ export function UsageView() {
       out.push({
         key: 'reflection',
         text: (
-          <>{tr('A ')}<b>{tr('reflexão automática')}</b>{tr(' (registrar lições depois de falhas) foi ')}{Math.round((reflection / cost) * 100)}{tr('% do peso: houve muitas falhas de ferramenta. Vale ver os avisos nas conversas e fluxos.')}</>
+          <>{tr('A ')}<b>{tr('reflexão automática')}</b>{tr(' (registrar lições depois de falhas) foi ')}{Math.round((reflection / cost) * 100)}{tr('% do peso: houve muitas falhas de ferramenta. Vale ver os avisos nas conversas e rotinas.')}</>
         )
       })
     }
@@ -348,7 +354,7 @@ export function UsageView() {
       </div>
 
       {empty ? (
-        <Card className="mt-6 p-8 text-center text-[14px] text-muted">{tr('Nenhum consumo registrado neste período. Os números aparecem aqui conforme você usa conversas, bots e fluxos.')}</Card>
+        <Card className="mt-6 p-8 text-center text-[14px] text-muted">{tr('Nenhum consumo registrado neste período. Os números aparecem aqui conforme você usa conversas, bots e rotinas.')}</Card>
       ) : (
         <div className={cn('mt-6 space-y-4 transition-opacity', loading && records && 'opacity-60')}>
           <div className="flex gap-3">
@@ -443,14 +449,14 @@ export function UsageView() {
 
           <Panel
             title={tr('Detalhes')}
-            sub={tr('Quem gastou: o fluxo (com os bots consultados nele), senão o bot, senão a conversa')}
+            sub={tr('Quem gastou: a rotina (com os bots consultados nela), senão o bot, senão a conversa')}
             aside={
               <div className="flex gap-1.5">
                 {(
                   [
                     ['all', tr('Tudo')],
                     ['bot', 'Bots'],
-                    ['flow', tr('Fluxos')],
+                    ['flow', tr('Rotinas')],
                     ['conversation', tr('Conversas')]
                   ] as const
                 ).map(([id, label]) => (

@@ -1,64 +1,45 @@
 import { t as tr, useLanguage } from '@/i18n'
 import { ModelSelect } from '@/components/ModelSelect'
 import { useState } from 'react'
-import { ArrowLeft, Dices, LoaderCircle, Pencil, Sparkles, Trash2 } from 'lucide-react'
+import { ArrowLeft, Check, Dices, GraduationCap, Pencil, Plus, Trash2 } from 'lucide-react'
 import type { AvatarDef, Bot } from '@shared/types'
 import { AvatarPickerModal } from '@/components/AvatarPickerModal'
 import { PixelAvatar } from '@/components/PixelAvatar'
 import { Button, Card, Field, PageHeader, inputClass } from '@/components/ui'
-import { AVATARS } from '@/avatars/sprites'
 import { randomName } from '@/avatars/parts'
+import { freeAvatars } from '@/lib/applyPlan'
 import { uid } from '@/lib/format'
 import { useApp } from '@/state/app'
 
-const EXAMPLE = tr('Exemplo:\nVocê é um revisor de contratos de prestação de serviço.\n- Leia o contrato que eu enviar e liste as cláusulas de risco.\n- Para cada risco, explique em linguagem simples e sugira uma redação alternativa.\n- Seja objetivo e use tópicos.')
+const EXAMPLE = tr('Exemplo:\nVocê é calma e caprichosa. Fala de um jeito simples e direto.\n- Antes de enviar algo a clientes, peça minha confirmação.\n- Prefira respostas curtas, em tópicos.')
 
-/** Criar ou editar um bot: avatar, nome, descrição e instruções. */
+/** Criar ou editar um bot: avatar, nome, descrição, personalidade, especializações e modelo. */
 export function BotEditorView() {
   useLanguage()
   const app = useApp()
   const editing = app.selectedBot
-  const [avatar, setAvatar] = useState<AvatarDef>(() => editing?.avatar ?? AVATARS[Math.floor(Math.random() * AVATARS.length)])
+  // Bot novo ganha um avatar que ainda ninguém do time usa.
+  const [avatar, setAvatar] = useState<AvatarDef>(() => editing?.avatar ?? freeAvatars(app.bots, 1)[0])
   const [generated, setGenerated] = useState<AvatarDef[]>(() => (editing?.avatar.id.startsWith('gen-') ? [editing.avatar] : []))
   const [name, setName] = useState(editing?.name ?? '')
   const [description, setDescription] = useState(editing?.description ?? '')
   const [instructions, setInstructions] = useState(editing?.instructions ?? '')
-  const [errors, setErrors] = useState<{ name?: string; instructions?: string }>({})
-  const [suggesting, setSuggesting] = useState(false)
-  const [suggestError, setSuggestError] = useState<string>()
+  const [specializationIds, setSpecializationIds] = useState<string[]>(editing?.specializationIds ?? [])
+  const [errors, setErrors] = useState<{ name?: string }>({})
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [projectId, setProjectId] = useState(editing ? editing.projectId : app.botDraftProjectId)
   // Bot novo já vem com o último modelo escolhido.
   const [providerId, setProviderId] = useState(editing ? (editing.providerId ?? 'claude-code') : app.providerId)
   const [model, setModel] = useState(() => (editing ? editing.model : app.preferredModel()))
   const [pickingAvatar, setPickingAvatar] = useState(false)
-
-  const suggest = async () => {
-    if (!instructions.trim()) {
-      setErrors((e) => ({ ...e, instructions: tr('Escreva as instruções primeiro: a sugestão é feita a partir delas.') }))
-      return
-    }
-    setSuggesting(true)
-    setSuggestError(undefined)
-    try {
-      const s = await window.gbot.bots.suggest(instructions)
-      if (s.name) setName(s.name)
-      if (s.description) setDescription(s.description)
-      setErrors((e) => ({ ...e, name: undefined }))
-    } catch {
-      setSuggestError(tr('Não consegui sugerir agora. Tente de novo ou escreva o nome.'))
-    } finally {
-      setSuggesting(false)
-    }
-  }
+  // Especializações que o bot pode usar: as soltas e as do projeto dele (as já escolhidas continuam na lista).
+  const available = app.specializations.filter((sp) => !sp.projectId || sp.projectId === projectId || specializationIds.includes(sp.id))
+  const toggle = (id: string) => setSpecializationIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]))
 
   const submit = async () => {
-    const next = {
-      name: name.trim() ? undefined : tr('Dê um nome ao bot.'),
-      instructions: instructions.trim() ? undefined : tr('Escreva o que o bot deve fazer.')
-    }
+    const next = { name: name.trim() ? undefined : tr('Dê um nome ao bot.') }
     setErrors(next)
-    if (next.name || next.instructions) return
+    if (next.name) return
 
     const now = Date.now()
     const bot: Bot = {
@@ -67,6 +48,7 @@ export function BotEditorView() {
       avatar,
       description: description.trim(),
       instructions: instructions.trim(),
+      specializationIds: specializationIds.filter((id) => app.getSpecialization(id)),
       projectId,
       providerId,
       model,
@@ -87,7 +69,7 @@ export function BotEditorView() {
       <PageHeader
         eyebrow="Bots"
         title={editing ? tr('Editar {0}', editing.name) : tr('Novo bot')}
-        subtitle={tr('Um assistente especializado: escolha o avatar e o nome, depois escreva as instruções.')}
+        subtitle={tr('Um membro do time: tem avatar, personalidade e especializações, conversa com você e roda rotinas sozinho.')}
       />
 
       {/* Identidade: avatar (clique para trocar), nome e descrição */}
@@ -126,26 +108,14 @@ export function BotEditorView() {
                 className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-[12px] text-fg-2 hover:bg-hover"
               >
                 <Dices size={13} />{tr(' Sortear')}</button>
-              <button
-                type="button"
-                onClick={suggest}
-                disabled={suggesting || !app.connected}
-                title={tr('Sugere nome e descrição a partir das instruções')}
-                className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-[12px] text-fg-2 hover:bg-hover disabled:opacity-50"
-              >
-                {suggesting ? <LoaderCircle size={13} className="animate-spin" /> : <Sparkles size={13} />}
-                {suggesting ? tr('Pensando…') : tr('Sugerir com IA')}
-              </button>
             </div>
-            {(errors.name ?? suggestError) && (
-              <p className="mt-1 px-2 text-[12px] text-danger">{errors.name ?? suggestError}</p>
-            )}
+            {errors.name && <p className="mt-1 px-2 text-[12px] text-danger">{errors.name}</p>}
           </div>
           <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             maxLength={140}
-            placeholder={tr('Descrição: o que este bot faz (ex.: Revisa contratos e aponta cláusulas de risco)')}
+            placeholder={tr('Descrição: do que este bot cuida (ex.: Cuida dos contratos e dos pagamentos da empresa)')}
             aria-label={tr('Descrição do bot')}
             className="selectable w-full rounded-tile border border-transparent bg-transparent px-2 py-1 text-[14px] text-fg-2 outline-none placeholder:text-muted hover:border-line focus:border-muted/60"
           />
@@ -155,24 +125,61 @@ export function BotEditorView() {
 
       <Card className="mt-4 space-y-6 p-6">
         <Field
-          label={tr('Instruções')}
-          hint={tr('O que o bot deve fazer, como deve responder e o que evitar. Ele segue isso em todas as conversas.')}
-          error={errors.instructions}
+          label={tr('Especializações')}
+          hint={tr('O que o bot sabe fazer. As instruções de cada uma vão para ele em todas as conversas e rotinas.')}
+        >
+          {available.length ? (
+            <div className="flex flex-wrap gap-2">
+              {available.map((sp) => {
+                const on = specializationIds.includes(sp.id)
+                return (
+                  <button
+                    key={sp.id}
+                    type="button"
+                    onClick={() => toggle(sp.id)}
+                    title={sp.description}
+                    aria-pressed={on}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] transition-colors ${
+                      on ? 'border-fg/40 bg-hover text-fg' : 'border-line text-fg-2 hover:bg-hover'
+                    }`}
+                  >
+                    {on ? <Check size={13} /> : <GraduationCap size={13} className="text-muted" />}
+                    {sp.name}
+                  </button>
+                )
+              })}
+              <button
+                type="button"
+                onClick={() => app.editSpecialization(undefined, projectId)}
+                className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[13px] text-muted hover:bg-hover hover:text-fg"
+              >
+                <Plus size={13} />{tr(' Nova especialização')}</button>
+            </div>
+          ) : (
+            <p className="text-[13px] text-muted">
+              {tr('Você ainda não tem especializações. ')}
+              <button type="button" onClick={() => app.editSpecialization(undefined, projectId)} className="text-fg underline-offset-2 hover:underline">
+                {tr('Criar uma especialização')}
+              </button>
+            </p>
+          )}
+        </Field>
+
+        <Field
+          label={tr('Personalidade e orientações (opcional)')}
+          hint={tr('Tom, prioridades e o que evitar. Vale em tudo o que o bot faz, junto com as especializações.')}
         >
           <textarea
             value={instructions}
-            onChange={(e) => {
-              setInstructions(e.target.value)
-              setErrors((x) => ({ ...x, instructions: undefined }))
-            }}
-            rows={8}
+            onChange={(e) => setInstructions(e.target.value)}
+            rows={5}
             placeholder={tr(EXAMPLE)}
             className={`${inputClass} resize-y leading-relaxed`}
           />
         </Field>
 
         <div className="grid grid-cols-2 gap-4">
-          <Field label={tr('Projeto')} hint={tr('Bots soltos podem ser chamados em qualquer conversa; os de um projeto, só nele.')}>
+          <Field label={tr('Projeto')} hint={tr('Bots soltos podem ser chamados em qualquer conversa; os de um projeto, só nele. As rotinas usam a pasta do projeto.')}>
             <select value={projectId ?? ''} onChange={(e) => setProjectId(e.target.value || undefined)} className={inputClass}>
               <option value="">{tr('Nenhum (bot solto)')}</option>
               {app.projects.map((p) => (
@@ -183,7 +190,7 @@ export function BotEditorView() {
             </select>
           </Field>
 
-          <Field label={tr('Modelo')} hint={tr('Dá para trocar em cada conversa.')}>
+          <Field label={tr('Modelo')} hint={tr('Usado nas conversas e rotinas. Dá para trocar em cada conversa ou etapa.')}>
             <ModelSelect providerId={providerId} value={model}
               onChange={(providerId, model) => {
                 setProviderId(providerId)
@@ -198,7 +205,7 @@ export function BotEditorView() {
         <div className="flex items-center justify-between border-t border-line pt-5">
           {editing ? (
             confirmDelete ? (
-              <span className="flex items-center gap-2 text-[13px] text-fg-2">{tr('Excluir o bot e as conversas dele?')}<Button variant="ghost" onClick={() => setConfirmDelete(false)}>{tr('Não')}</Button>
+              <span className="flex items-center gap-2 text-[13px] text-fg-2">{tr('Excluir o bot com as rotinas e as conversas dele?')}<Button variant="ghost" onClick={() => setConfirmDelete(false)}>{tr('Não')}</Button>
                 <Button onClick={() => void app.removeBot(editing.id)} className="border-danger/40 text-danger">{tr('Excluir')}</Button>
               </span>
             ) : (

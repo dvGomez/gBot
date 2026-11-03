@@ -11,13 +11,14 @@ export interface BotActivity {
   mood: AvatarMood
   /** O que está fazendo (ou quando trabalhou pela última vez). */
   text: string
-  /** Onde clicar leva: o fluxo ou a conversa da atividade; senão, a página do bot. */
+  /** Onde clicar leva: a rotina ou a conversa da atividade; senão, a página do bot. */
   target: { kind: 'flow' | 'conversation' | 'bot'; id: string }
 }
 
 /**
- * O que cada bot está fazendo agora, a partir do que o app já sabe: execuções de fluxo ao vivo,
- * a conversa respondendo (inclusive bots consultados por outro) e pedidos de aprovação.
+ * O que cada bot está fazendo agora, a partir do que o app já sabe: execuções ao vivo das rotinas dele
+ * (inclusive esperando confirmação), a conversa respondendo (inclusive bots consultados por outro) e
+ * pedidos de aprovação.
  */
 export function useTeamActivity(runs: Record<string, FlowRun[]>): Map<string, BotActivity> {
   const app = useApp()
@@ -32,20 +33,23 @@ export function useTeamActivity(runs: Record<string, FlowRun[]>): Map<string, Bo
     }
     const byName = (name: string) => app.bots.find((b) => b.name.toLowerCase() === name.trim().toLowerCase())
 
-    // Fluxos rodando: caixinhas de bot em execução
+    // Rotinas rodando: toda etapa roda como o bot dono da rotina
     for (const list of Object.values(runs)) {
       const run = list[0]
       if (!run || !isLive(run)) continue
       const flow = app.flows.find((f) => f.id === run.flowId)
-      for (const s of run.steps) {
-        if (s.status !== 'running') continue
-        const botId = flow?.nodes.find((n) => n.id === s.nodeId)?.data.botId
-        if (!botId) continue
-        // A caixinha costuma ter o nome do próprio bot; aí basta o nome do fluxo.
-        const bot = app.getBot(botId)
-        const step = s.label && s.label !== bot?.name ? ` · ${s.label}` : ''
-        set({ botId, state: 'working', mood: 'thinking', text: tr('No fluxo "{0}"{1}', flow?.name, step), target: { kind: 'flow', id: run.flowId } })
+      if (!flow || !app.getBot(flow.botId)) continue
+      const target = { kind: 'flow' as const, id: run.flowId }
+      // Caixinha de confirmação parada esperando a sua escolha
+      const waiting = run.steps.find((s) => s.status === 'waiting')
+      if (waiting) {
+        set({ botId: flow.botId, state: 'waiting', mood: 'attention', text: tr('Esperando sua confirmação em "{0}"', flow.name), target })
+        continue
       }
+      const running = run.steps.find((s) => s.status === 'running')
+      if (!running) continue
+      const step = running.label ? ` · ${running.label}` : ''
+      set({ botId: flow.botId, state: 'working', mood: 'thinking', text: tr('Na rotina "{0}"{1}', flow.name, step), target })
     }
 
     // Conversa respondendo agora
@@ -89,7 +93,7 @@ export function useTeamActivity(runs: Record<string, FlowRun[]>): Map<string, Bo
       let last = 0
       for (const c of app.conversations) if (c.botId === bot.id) last = Math.max(last, c.updatedAt)
       for (const f of app.flows) {
-        if (!f.nodes.some((n) => n.data.botId === bot.id)) continue
+        if (f.botId !== bot.id) continue
         for (const r of runs[f.id] ?? []) last = Math.max(last, r.finishedAt ?? r.startedAt)
       }
       out.set(bot.id, {

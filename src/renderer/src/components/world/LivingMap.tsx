@@ -1,6 +1,6 @@
 import { t as tr, useLanguage } from '@/i18n'
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Bot as BotIcon, Workflow } from 'lucide-react'
+import { Bot as BotIcon } from 'lucide-react'
 import type { AvatarDef, AvatarMood, Flow, FlowRun } from '@shared/types'
 import { PixelAvatar } from '@/components/PixelAvatar'
 import { ProjectIcon } from '@/components/ProjectBadge'
@@ -8,22 +8,17 @@ import { Button } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { draggingItem, type ItemRef } from '@/lib/dnd'
 import { timeAgo } from '@/lib/format'
-import { describeSchedule, formatWhen, nextRun } from '@/lib/schedule'
+import { isLive } from '@/lib/useFlowRuns'
 import { useApp } from '@/state/app'
-import { BOT_R, FLOW_R, World, fitHeight, hash, zoneHalf, type BodySpec, type Link } from './world'
+import { BOT_R, World, fitHeight, hash, zoneHalf, type BodySpec } from './world'
 
 const botKey = (id: string) => `b:${id}`
-const flowKey = (id: string) => `f:${id}`
 const zoneKey = (id: string) => `p:${id}`
 
-/** Linha desenhada entre um fluxo e o primeiro bot dele, ou entre bots em sequência no fluxo. */
-interface MapEdge {
-  from: string
-  to: string
-  flowId: string
-}
+/** "1 bot", "3 bots": número com a palavra no singular ou plural, traduzida. */
+const count = (n: number, one: string, many: string) => `${n} ${tr(n === 1 ? one : many)}`
 
-/** Mensagem animada indo de um bot (ou fluxo) para outro. */
+/** Mensagem animada indo de um bot para outro. */
 interface Message {
   from: string
   to: string
@@ -35,40 +30,7 @@ interface Message {
 
 type Chatter = Record<string, 'talking' | 'happy'>
 
-/**
- * Liga cada bot do fluxo a quem vem antes dele: o bot anterior (passando por caixinhas de prompt)
- * ou o próprio fluxo, quando não há bot antes.
- */
-function flowEdges(flow: Flow, botExists: (id: string) => boolean): MapEdge[] {
-  const botOf = new Map<string, string>()
-  for (const n of flow.nodes) if (n.type === 'bot' && n.data.botId && botExists(n.data.botId)) botOf.set(n.id, botKey(n.data.botId))
-  const incoming = new Map<string, string[]>()
-  for (const e of flow.edges) incoming.set(e.target, [...(incoming.get(e.target) ?? []), e.source])
-
-  const out = new Map<string, MapEdge>()
-  const add = (from: string, to: string) => {
-    if (from !== to) out.set(`${from}>${to}`, { from, to, flowId: flow.id })
-  }
-  for (const [nodeId, to] of botOf) {
-    const seen = new Set<string>()
-    const stack = [...(incoming.get(nodeId) ?? [])]
-    let found = false
-    while (stack.length) {
-      const id = stack.pop()!
-      if (seen.has(id)) continue
-      seen.add(id)
-      const from = botOf.get(id)
-      if (from) {
-        add(from, to)
-        found = true
-      } else stack.push(...(incoming.get(id) ?? []))
-    }
-    if (!found) add(flowKey(flow.id), to)
-  }
-  return [...out.values()]
-}
-
-/** Execuções de fluxo acontecendo agora (atualizadas ao vivo). */
+/** Execuções de rotina acontecendo agora (atualizadas ao vivo). */
 function useRunningFlows(flows: Flow[]): Record<string, FlowRun> {
   const [running, setRunning] = useState<Record<string, FlowRun>>({})
   const ids = flows.map((f) => f.id).join()
@@ -78,9 +40,7 @@ function useRunningFlows(flows: Flow[]): Record<string, FlowRun> {
       void window.gbot.flows.runs(id).then((runs) => {
         const last = runs[0]
         // Execução "rodando" muito antiga sobrou de um app fechado no meio; ignora.
-        if (alive && last?.status === 'running' && Date.now() - last.startedAt < 60 * 60 * 1000) {
-          setRunning((r) => ({ ...r, [id]: last }))
-        }
+        if (alive && last && isLive(last)) setRunning((r) => ({ ...r, [id]: last }))
       })
     }
     const off = window.gbot.flows.onRunUpdate((run) =>
@@ -100,7 +60,6 @@ function useRunningFlows(flows: Flow[]): Record<string, FlowRun> {
 // ── Peças do mapa ───────────────────────────────────────────────────
 
 type Register = (id: string, el: HTMLElement | null) => void
-type Hover = (id?: string) => void
 type Grab = (id: string, e: React.PointerEvent) => void
 
 function NameTag({ name, dot }: { name: string; dot?: 'busy' | 'alert' }) {
@@ -145,11 +104,10 @@ const ZoneNode = memo(function ZoneNode({
   color,
   r,
   bots,
-  flows,
+  specializations,
   conversations,
   highlight,
   register,
-  onHover,
   onOpen
 }: {
   id: string
@@ -157,21 +115,23 @@ const ZoneNode = memo(function ZoneNode({
   color: string
   r: number
   bots: number
-  flows: number
+  specializations: number
   conversations: number
   /** Algo sendo arrastado está por cima da ilha. */
   highlight: boolean
   register: Register
-  onHover: Hover
   onOpen(): void
 }) {
   return (
     <div ref={(el) => register(id, el)} className="absolute top-0 left-0" style={{ width: r * 2, height: r * 2 }}>
       <button
         onClick={onOpen}
-        onMouseEnter={() => onHover(id)}
-        onMouseLeave={() => onHover()}
-        title={`${name} · ${bots} ${bots === 1 ? 'bot' : 'bots'} · ${flows} ${flows === 1 ? 'fluxo' : 'fluxos'} · ${conversations} ${conversations === 1 ? 'conversa' : 'conversas'}`}
+        title={[
+          name,
+          count(bots, 'bot', 'bots'),
+          count(specializations, 'especialização', 'especializações'),
+          count(conversations, 'conversa', 'conversas')
+        ].join(' · ')}
         className={cn('group absolute inset-0 rounded-[28px] transition-[filter,box-shadow] hover:brightness-150', highlight && 'brightness-150')}
         style={{
           background: `radial-gradient(ellipse at 50% 40%, ${color}2e, ${color}12 60%, ${color}08)`,
@@ -201,10 +161,11 @@ const ZoneNode = memo(function ZoneNode({
           <ProjectIcon project={{ color }} size={13} />
           <span className="truncate">{name}</span>
         </span>
-        {bots + flows === 0 && (
+        {bots === 0 && (
           <span className="absolute inset-x-4 top-1/2 text-center text-[11.5px] text-muted">
-            {conversations} {conversations === 1 ? 'conversa' : 'conversas'}
-            <br />{tr('arraste bots e fluxos para cá')}</span>
+            {count(conversations, 'conversa', 'conversas')}
+            {specializations > 0 && ` · ${count(specializations, 'especialização', 'especializações')}`}
+            <br />{tr('arraste bots para cá')}</span>
         )}
       </button>
     </div>
@@ -222,7 +183,6 @@ const BotNode = memo(function BotNode({
   status,
   seed,
   register,
-  onHover,
   onGrab,
   onOpen
 }: {
@@ -233,23 +193,17 @@ const BotNode = memo(function BotNode({
   mood: AvatarMood
   bubble?: 'chat' | 'work'
   dot?: 'busy' | 'alert'
-  /** Linha de contexto no cartão do hover (projeto, última conversa, fluxos). */
+  /** Linha de contexto no cartão do hover (rotina rodando, projeto, última conversa, rotinas ativas). */
   status: string
   seed: number
   register: Register
-  onHover: Hover
   onGrab: Grab
   onOpen(): void
 }) {
   const float = { animationDelay: `${-seed * 4}s`, animationDuration: `${2.6 + seed * 1.4}s` }
   return (
     <div ref={(el) => register(id, el)} className="absolute top-0 left-0 z-10 hover:z-40">
-      <div
-        className="group relative -translate-x-1/2 -translate-y-1/2"
-        onMouseEnter={() => onHover(id)}
-        onMouseLeave={() => onHover()}
-        onPointerDown={(e) => onGrab(id, e)}
-      >
+      <div className="group relative -translate-x-1/2 -translate-y-1/2" onPointerDown={(e) => onGrab(id, e)}>
         <NameTag name={name} dot={dot} />
         <button onClick={onOpen} aria-label={tr('Abrir {0}', name)} className="relative block cursor-grab p-1 transition-transform duration-200 hover:scale-115">
           <span className="gbot-float block" style={float}>
@@ -267,74 +221,12 @@ const BotNode = memo(function BotNode({
   )
 })
 
-const FlowNode = memo(function FlowNode({
-  id,
-  name,
-  enabled,
-  running,
-  schedule,
-  next,
-  steps,
-  register,
-  onHover,
-  onGrab,
-  onOpen
-}: {
-  id: string
-  name: string
-  enabled: boolean
-  running: boolean
-  schedule: string
-  next?: string
-  steps: number
-  register: Register
-  onHover: Hover
-  onGrab: Grab
-  onOpen(): void
-}) {
-  return (
-    <div ref={(el) => register(id, el)} className="absolute top-0 left-0 z-10 hover:z-40">
-      <div
-        className="group relative -translate-x-1/2 -translate-y-1/2"
-        onMouseEnter={() => onHover(id)}
-        onMouseLeave={() => onHover()}
-        onPointerDown={(e) => onGrab(id, e)}
-      >
-        <NameTag name={name} dot={running ? 'busy' : undefined} />
-        <button
-          onClick={onOpen}
-          aria-label={tr('Abrir fluxo {0}', name)}
-          className={cn(
-            'relative flex size-12 cursor-grab items-center justify-center rounded-tile border-[1.5px] bg-tile transition-transform duration-200 hover:scale-110',
-            running ? 'border-warning' : enabled ? 'border-success/60' : 'border-line'
-          )}
-        >
-          <Workflow size={20} strokeWidth={1.7} className={running ? 'text-warning' : enabled ? 'text-success' : 'text-muted'} />
-          {running && <span className="absolute inset-0 animate-ping rounded-tile border-2 border-warning opacity-40" />}
-          {enabled && !running && (
-            <span className="absolute -top-1 -right-1 size-2.5 rounded-full border-2 border-page bg-success" />
-          )}
-        </button>
-        <span className="pointer-events-none absolute top-full left-1/2 mt-1 -translate-x-1/2 text-[10.5px] whitespace-nowrap text-muted">
-          {running ? 'rodando…' : enabled ? (next ? tr('próx. {0}', next) : 'ativo') : 'pausado'}
-        </span>
-        <Tooltip title={name}>
-          <p className="text-fg-2">{schedule}</p>
-          <p className="mt-1.5">
-            {steps} {steps === 1 ? 'etapa' : 'etapas'} · {running ? tr('rodando agora') : enabled ? 'ativo' : 'pausado'}
-          </p>
-        </Tooltip>
-      </div>
-    </div>
-  )
-})
-
 // ── Mapa ────────────────────────────────────────────────────────────
 
 /**
- * Visão geral "viva" da home: projetos como ilhas com os bots dentro, bots soltos e fluxos
- * ligados aos bots que usam. Os bots trocam mensagens entre si (enfeite) e mostram o que
- * estão fazendo de verdade: respondendo uma conversa, rodando num fluxo ou esperando aprovação.
+ * Visão geral "viva" da home: projetos como ilhas com os bots dentro e os bots soltos em volta.
+ * Os bots trocam mensagens entre si (enfeite) e mostram o que estão fazendo de verdade:
+ * respondendo uma conversa, rodando uma rotina ou esperando aprovação/confirmação.
  */
 export function LivingMap() {
   useLanguage()
@@ -346,7 +238,6 @@ export function LivingMap() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const world = useRef(new World())
   const els = useRef(new Map<string, HTMLElement>())
-  const hovered = useRef<string>(undefined)
   const [width, setWidth] = useState(0)
   const [chatter, setChatter] = useState<Chatter>({})
   const running = useRunningFlows(app.flows)
@@ -359,47 +250,38 @@ export function LivingMap() {
     return () => ro.disconnect()
   }, [])
 
-  // O que existe no mapa e como se liga.
-  const { specs, links, edges } = useMemo(() => {
-    const botIds = new Set(app.bots.map((b) => b.id))
+  // O que existe no mapa: ilhas dos projetos e os bots (as rotinas vivem dentro do bot).
+  const specs = useMemo<BodySpec[]>(() => {
     const projectIds = new Set(app.projects.map((p) => p.id))
-    const edges = app.flows.flatMap((f) => flowEdges(f, (id) => botIds.has(id)))
-    const specs: BodySpec[] = [
+    return [
       ...app.projects.map((p) => ({
         id: zoneKey(p.id),
         kind: 'zone' as const,
-        r: zoneHalf(
-          app.bots.filter((b) => b.projectId === p.id).length + app.flows.filter((f) => f.projectId === p.id).length
-        )
+        r: zoneHalf(app.bots.filter((b) => b.projectId === p.id).length)
       })),
       ...app.bots.map((b) => ({
         id: botKey(b.id),
         kind: 'bot' as const,
         r: BOT_R,
         zone: b.projectId && projectIds.has(b.projectId) ? zoneKey(b.projectId) : undefined
-      })),
-      ...app.flows.map((f) => ({
-        id: flowKey(f.id),
-        kind: 'flow' as const,
-        r: FLOW_R,
-        zone: f.projectId && projectIds.has(f.projectId) ? zoneKey(f.projectId) : undefined
       }))
     ]
-    const links: Link[] = edges.map((e) => ({ a: e.from, b: e.to, length: e.from.startsWith('f:') ? 150 : 170 }))
-    return { specs, links, edges }
-  }, [app.bots, app.projects, app.flows])
+  }, [app.bots, app.projects])
 
   const height = fitHeight(specs, width)
 
-  // Quem está fazendo algo de verdade agora.
-  const realMood = useMemo(() => {
+  // Quem está fazendo algo de verdade agora (e em qual rotina, para o cartão do hover).
+  const { realMood, routineOf } = useMemo(() => {
     const m: Record<string, AvatarMood> = {}
+    const routineOf: Record<string, string> = {}
     for (const run of Object.values(running)) {
       const flow = app.flows.find((f) => f.id === run.flowId)
-      for (const s of run.steps) {
-        const botId = s.status === 'running' ? flow?.nodes.find((n) => n.id === s.nodeId)?.data.botId : undefined
-        if (botId) m[botKey(botId)] = 'thinking'
-      }
+      if (!flow) continue
+      const key = botKey(flow.botId)
+      // Confirmação pendente pede atenção; senão, a rotina está trabalhando.
+      if (run.steps.some((s) => s.status === 'waiting')) m[key] = 'attention'
+      else if (m[key] !== 'attention') m[key] = 'thinking'
+      routineOf[key] = flow.name
     }
     const conv = app.activeConversation
     if (app.busy && conv) {
@@ -410,22 +292,22 @@ export function LivingMap() {
       const bot = app.bots.find((b) => b.name === req.requester)
       if (bot) m[botKey(bot.id)] = 'attention'
     }
-    return m
+    return { realMood: m, routineOf }
   }, [running, app.flows, app.activeConversation, app.busy, app.mood, app.approvals, app.bots])
 
-  // Pares que "conversam" no mapa: sequências dos fluxos e bots do mesmo projeto.
+  // Pares que "conversam" no mapa: bots do mesmo projeto.
   const pairs = useMemo(() => {
-    const out: [string, string][] = edges.map((e) => [e.from, e.to])
+    const out: [string, string][] = []
     for (const p of app.projects) {
       const ids = app.bots.filter((b) => b.projectId === p.id).map((b) => botKey(b.id))
       for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) out.push([ids[i], ids[j]])
     }
     return out
-  }, [edges, app.projects, app.bots])
+  }, [app.projects, app.bots])
 
   // Tudo que o laço de animação lê fica em refs, para ele não precisar reiniciar.
-  const live = useRef({ edges, pairs, realMood, running, flows: app.flows, bots: app.bots })
-  live.current = { edges, pairs, realMood, running, flows: app.flows, bots: app.bots }
+  const live = useRef({ pairs, realMood, bots: app.bots })
+  live.current = { pairs, realMood, bots: app.bots }
 
   const place = useCallback((id: string, el: HTMLElement) => {
     const b = world.current.bodies.get(id)
@@ -444,11 +326,8 @@ export function LivingMap() {
     },
     [place]
   )
-  const onHover = useCallback<Hover>((id) => {
-    hovered.current = id
-  }, [])
 
-  // Arrastar para dentro ou fora das ilhas: bots e fluxos do próprio mapa (ponteiro) ou itens
+  // Arrastar para dentro ou fora das ilhas: bots do próprio mapa (ponteiro) ou itens
   // arrastados do menu e das listas (arrastar nativo). `target` é o que está sendo arrastado e a ilha embaixo.
   const [target, setTarget] = useState<{ item: ItemRef; zone?: string; onMap: boolean }>()
   const suppressClick = useRef(false)
@@ -465,9 +344,7 @@ export function LivingMap() {
     const body = world.current.bodies.get(key)
     if (!body) return
     const id = key.slice(2)
-    const a = appRef.current
-    const projectId = key[0] === 'b' ? a.getBot(id)?.projectId : a.flows.find((f) => f.id === id)?.projectId
-    const item: ItemRef = { kind: key[0] === 'b' ? 'bot' : 'flow', id, projectId }
+    const item: ItemRef = { kind: 'bot', id, projectId: appRef.current.getBot(id)?.projectId }
     const start = toLocal(e)
     const off = { x: start.x - body.x, y: start.y - body.y }
     let moved = false
@@ -479,7 +356,6 @@ export function LivingMap() {
         if (Math.hypot(p.x - start.x, p.y - start.y) < 5) return
         moved = true
         body.pinned = true
-        hovered.current = undefined
         document.body.style.cursor = 'grabbing'
       }
       body.x = p.x - off.x
@@ -533,21 +409,21 @@ export function LivingMap() {
 
   useLayoutEffect(() => {
     if (!width) return
-    world.current.sync(specs, links, width, height)
+    world.current.sync(specs, width, height)
     for (const [id, el] of els.current) place(id, el)
     const canvas = canvasRef.current!
     const dpr = window.devicePixelRatio || 1
     canvas.width = Math.round(width * dpr)
     canvas.height = Math.round(height * dpr)
-  }, [specs, links, width, height, place])
+  }, [specs, width, height, place])
 
-  // Laço de animação: física, linhas, mensagens e conversas de enfeite.
+  // Laço de animação: física, mensagens e conversas de enfeite.
   useEffect(() => {
     const canvas = canvasRef.current!
     const ctx = canvas.getContext('2d')!
     const css = getComputedStyle(document.documentElement)
     const color = (v: string) => css.getPropertyValue(v).trim()
-    const C = { fg: color('--fg'), success: color('--success'), warning: color('--warning') }
+    const C = { success: color('--success') }
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches
     const messages: Message[] = []
     let nextChat = performance.now() + 900
@@ -593,8 +469,8 @@ export function LivingMap() {
         pair = [botKey(bots[a].id), botKey(bots[b].id)]
       }
       if (!pair || busy(pair[0]) || busy(pair[1])) return
-      // Fluxo sempre manda; entre bots, qualquer um pode puxar assunto.
-      const [from, to] = !pair[0].startsWith('f:') && Math.random() < 0.5 ? [pair[1], pair[0]] : pair
+      // Qualquer um dos dois pode puxar assunto.
+      const [from, to] = Math.random() < 0.5 ? [pair[1], pair[0]] : pair
       const sender = bots.find((b) => botKey(b.id) === from)
       messages.push({ from, to, start: t + 500, dur: 1100, color: sender?.avatar.color ?? C.success })
       if (sender) setChatter((c) => ({ ...c, [from]: 'talking' }))
@@ -608,35 +484,6 @@ export function LivingMap() {
       const dpr = window.devicePixelRatio || 1
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       ctx.clearRect(0, 0, w.width, w.height)
-      const { edges, running, flows } = live.current
-      const hover = hovered.current
-
-      // Ligações dos fluxos, com pulsos andando quando o fluxo está ativo ou rodando.
-      for (const e of edges) {
-        const k = curve(e.from, e.to)
-        if (!k) continue
-        const flow = flows.find((f) => f.id === e.flowId)
-        const isRunning = !!running[e.flowId]
-        const lit = hover === e.from || hover === e.to || hover === flowKey(e.flowId)
-        const stroke = isRunning ? C.warning : flow?.enabled ? C.success : C.fg
-        ctx.globalAlpha = (isRunning ? 0.7 : flow?.enabled ? 0.4 : 0.16) + (lit ? 0.35 : 0)
-        ctx.strokeStyle = stroke
-        ctx.lineWidth = lit ? 2 : 1.2
-        ctx.setLineDash(isRunning ? [5, 5] : [3, 6])
-        ctx.lineDashOffset = still ? 0 : -t * (isRunning ? 0.05 : 0.015)
-        ctx.beginPath()
-        ctx.moveTo(k.s.x, k.s.y)
-        ctx.quadraticCurveTo(k.c.x, k.c.y, k.e.x, k.e.y)
-        ctx.stroke()
-        if (!still && (isRunning || flow?.enabled || lit)) {
-          const period = isRunning ? 1000 : 3200
-          const p = (t / period + hash(e.from + e.to)) % 1
-          const pt = at(k, p)
-          dot(pt.x, pt.y, 5, stroke, 0.18)
-          dot(pt.x, pt.y, 2.2, stroke, 0.9)
-        }
-      }
-      ctx.setLineDash([])
 
       // Mensagens entre bots: bolinha com rastro e um "ping" ao chegar.
       if (!still && t > nextChat) {
@@ -702,7 +549,6 @@ export function LivingMap() {
       fn = () => {
         if (suppressClick.current) return
         if (kind === 'b') appRef.current.openBot(id)
-        else if (kind === 'f') appRef.current.openFlow(id)
         else appRef.current.openProject(id)
       }
       openers.current.set(key, fn)
@@ -710,7 +556,7 @@ export function LivingMap() {
     return fn
   }
 
-  const empty = !app.bots.length && !app.projects.length && !app.flows.length
+  const empty = !app.bots.length && !app.projects.length
   const now = Date.now()
   const targetProject = app.getProject(target?.zone?.slice(2))
   const hint = !target
@@ -752,32 +598,10 @@ export function LivingMap() {
             color={p.color}
             r={specs.find((s) => s.id === id)!.r}
             bots={app.bots.filter((b) => b.projectId === p.id).length}
-            flows={app.flows.filter((f) => f.projectId === p.id).length}
+            specializations={app.specializations.filter((sp) => sp.projectId === p.id).length}
             highlight={target?.zone === id}
             conversations={app.conversations.filter((c) => c.projectId === p.id).length}
             register={register}
-            onHover={onHover}
-            onOpen={opener(id)}
-          />
-        )
-      })}
-
-      {app.flows.map((f) => {
-        const id = flowKey(f.id)
-        const next = f.enabled ? nextRun(f.nodes.find((n) => n.type === 'trigger')?.data.schedule) : undefined
-        return (
-          <FlowNode
-            key={id}
-            id={id}
-            name={f.name}
-            enabled={f.enabled}
-            running={!!running[f.id]}
-            schedule={describeSchedule(f.nodes.find((n) => n.type === 'trigger')?.data.schedule)}
-            next={next && formatWhen(next)}
-            steps={f.nodes.filter((n) => n.type !== 'trigger').length}
-            register={register}
-            onHover={onHover}
-            onGrab={onGrab}
             onOpen={opener(id)}
           />
         )
@@ -789,11 +613,13 @@ export function LivingMap() {
         const chat = chatter[id]
         const last = Math.max(0, ...app.conversations.filter((c) => c.botId === b.id).map((c) => c.updatedAt))
         const project = app.getProject(b.projectId)
-        const nFlows = app.flows.filter((f) => f.nodes.some((n) => n.data.botId === b.id)).length
+        const active = app.flows.filter((f) => f.botId === b.id && f.enabled).length
+        const routine = routineOf[id]
         const status = [
+          routine && tr('na rotina "{0}"', routine),
           project?.name,
           last ? tr('conversou {0}', timeAgo(last, now)) : tr('sem conversas ainda'),
-          nFlows ? `${nFlows} ${nFlows === 1 ? 'fluxo' : 'fluxos'}` : undefined
+          active ? (active === 1 ? tr('1 rotina ativa') : tr('{0} rotinas ativas', active)) : undefined
         ]
           .filter(Boolean)
           .join(' · ')
@@ -810,7 +636,6 @@ export function LivingMap() {
             status={status}
             seed={hash(b.id)}
             register={register}
-            onHover={onHover}
             onGrab={onGrab}
             onOpen={opener(id)}
           />
@@ -823,7 +648,7 @@ export function LivingMap() {
             <PixelAvatar avatarId="brasa" size={64} />
           </span>
           <p className="text-[15px] font-medium">{tr('Ainda não tem ninguém por aqui')}</p>
-          <p className="max-w-sm text-[13px] text-muted">{tr('Crie bots, junte-os em projetos e monte fluxos — eles aparecem aqui, conversando entre si.')}</p>
+          <p className="max-w-sm text-[13px] text-muted">{tr('Crie bots, junte-os em projetos e dê rotinas a eles — eles aparecem aqui, conversando entre si.')}</p>
           <Button variant="primary" className="mt-1" onClick={() => app.editBot()}>
             <BotIcon size={15} />{tr('Criar o primeiro bot')}</Button>
         </div>

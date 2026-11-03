@@ -5,7 +5,7 @@ import type { Flow, FlowRun } from '@shared/types'
 const STALE_MS = 60 * 60 * 1000
 export const isLive = (run: FlowRun) => run.status === 'running' && Date.now() - run.startedAt < STALE_MS
 
-/** Execuções recentes de cada fluxo (as mais novas primeiro), atualizadas ao vivo. */
+/** Execuções recentes de cada rotina (as mais novas primeiro), atualizadas ao vivo. */
 export function useFlowRuns(flows: Flow[], perFlow = 10): Record<string, FlowRun[]> {
   const [runs, setRuns] = useState<Record<string, FlowRun[]>>({})
   const ids = flows.map((f) => f.id).join()

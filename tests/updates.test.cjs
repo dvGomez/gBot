@@ -10,6 +10,10 @@ const jiti = createJiti(__filename, { alias: Object.fromEntries([
 const { startUpdates, checkUpdates, dismissUpdate, downloadUpdate, installUpdate, updateState } = jiti('../src/main/updates.ts')
 
 test('updates respect download preference, active tasks and explicit installation', async (t) => {
+  // No macOS, sem assinatura Developer ID a atualização vira manual; o fluxo testado aqui é o de instalação automática.
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+  Object.defineProperty(process, 'platform', { value: 'linux' })
+  t.after(() => Object.defineProperty(process, 'platform', platform))
   t.after(() => app.emit('before-quit'))
   startUpdates(() => {}, () => state.chatBusy)
   assert.equal(autoUpdater.autoInstallOnAppQuit, false)

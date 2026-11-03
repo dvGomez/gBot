@@ -1,13 +1,13 @@
 import { z } from 'zod'
 import type { AutomationPlan, Flow, FlowSchedule } from '@shared/types'
 import { listFlows } from '../../flows/store'
-import { listBots, listProjects } from '../../store'
+import { listBots, listProjects, listSpecializations } from '../../store'
 
 /**
- * Arquiteto do gBot: monta com o usuário o que criar ou mudar (bots, fluxos, projeto) e propõe com `propose_plan`, que
- * aparece no chat num cartão. Na página inicial é uma conversa própria, que testa de verdade antes de propor; nas
- * outras conversas, o assistente consulta o que existe com `gbot_overview` e propõe do mesmo jeito. Só propõe: quem
- * cria ou altera é a interface, depois que o usuário aceita.
+ * Arquiteto do gBot: monta com o usuário o que criar ou mudar (especializações, bots com rotinas, projeto) e propõe com
+ * `propose_plan`, que aparece no chat num cartão. Na página inicial é uma conversa própria, que testa de verdade antes de
+ * propor; nas outras conversas, o assistente consulta o que existe com `gbot_overview` e propõe do mesmo jeito. Só
+ * propõe: quem cria ou altera é a interface, depois que o usuário aceita.
  */
 
 const MODELS = ['default', 'haiku', 'sonnet', 'opus'] as const
@@ -18,8 +18,7 @@ const scheduleSchema = z.union([
 ])
 
 const stepSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('bot'), label: z.string().nullish(), bot: z.string(), message: z.string().default('') }),
-  z.object({ type: z.literal('prompt'), label: z.string().nullish(), message: z.string().default('') }),
+  z.object({ type: z.literal('task'), label: z.string().nullish(), specialization: z.string().nullish(), message: z.string().default('') }),
   z.object({ type: z.literal('decision'), label: z.string().nullish(), message: z.string().default(''), options: z.array(z.string()).min(2) }),
   z.object({ type: z.literal('confirm'), label: z.string().nullish(), message: z.string().default(''), options: z.array(z.string()).min(1).max(5) })
 ])
@@ -39,6 +38,19 @@ export const planSchema = z.object({
       z.object({ name: z.string(), description: z.string().default(''), instructions: z.string().default('') })
     ])
     .nullish(),
+  specializations: z
+    .array(
+      z.object({
+        ref: z.string(),
+        existingId: z.string().nullish(),
+        edit: z.boolean().nullish(),
+        name: z.string(),
+        description: z.string().default(''),
+        instructions: z.string().default(''),
+        why: z.string().default('')
+      })
+    )
+    .default([]),
   bots: z
     .array(
       z.object({
@@ -48,19 +60,20 @@ export const planSchema = z.object({
         name: z.string(),
         description: z.string().default(''),
         instructions: z.string().default(''),
+        specializations: z.array(z.string()).default([]),
         model: z.string().nullish(),
-        why: z.string().default('')
-      })
-    )
-    .default([]),
-  flows: z
-    .array(
-      z.object({
-        existingId: z.string().nullish(),
-        name: z.string(),
         why: z.string().default(''),
-        schedule: scheduleSchema.nullish(),
-        steps: z.array(stepSchema).min(1)
+        routines: z
+          .array(
+            z.object({
+              existingId: z.string().nullish(),
+              name: z.string(),
+              why: z.string().default(''),
+              schedule: scheduleSchema.nullish(),
+              steps: z.array(stepSchema).min(1)
+            })
+          )
+          .default([])
       })
     )
     .default([]),
@@ -75,8 +88,8 @@ function describeSchedule(s?: FlowSchedule): string {
   return `dias ${s.days.join(',')} às ${s.times.join(', ')}`
 }
 
-/** Etapas do fluxo na ordem em que rodam a partir do gatilho (e se ele tem ramos, que a edição transforma em linha). */
-function flowSteps(flow: Flow, botName: (id?: string) => string | undefined) {
+/** Etapas da rotina na ordem em que rodam a partir do gatilho (e se ela tem ramos, que a edição transforma em linha). */
+function routineSteps(flow: Flow, specName: (id?: string) => string | undefined) {
   const trigger = flow.nodes.find((n) => n.type === 'trigger')
   const order: Flow['nodes'] = []
   const seen = new Set<string>()
@@ -94,11 +107,13 @@ function flowSteps(flow: Flow, botName: (id?: string) => string | undefined) {
     }
   }
   return {
-    ramificado: branched,
+    ramificada: branched,
     etapas: order.map((n) => ({
       tipo: n.type,
       nome: n.data.label,
-      ...(n.type === 'bot' ? { bot: botName(n.data.botId) ?? '?', botId: n.data.botId } : {}),
+      ...(n.type === 'task' && n.data.specializationId
+        ? { especializacao: specName(n.data.specializationId) ?? '?', especializacaoId: n.data.specializationId }
+        : {}),
       mensagem: n.data.message ? clip(n.data.message, 1200) : undefined,
       opcoes: n.data.options?.map((o) => o.label)
     }))
@@ -107,25 +122,35 @@ function flowSteps(flow: Flow, botName: (id?: string) => string | undefined) {
 
 /** O que já existe no gBot, com o detalhe necessário para editar. */
 function existing() {
-  const bots = listBots()
-  const name = (id?: string) => bots.find((b) => b.id === id)?.name
+  const specs = listSpecializations()
+  const specName = (id?: string) => specs.find((sp) => sp.id === id)?.name
+  const flows = listFlows()
   return {
     projetos: listProjects().map((p) => ({ id: p.id, nome: p.name, descricao: p.description, instrucoes: clip(p.instructions, 1500) })),
-    bots: bots.map((b) => ({
+    especializacoes: specs.map((sp) => ({
+      id: sp.id,
+      nome: sp.name,
+      descricao: sp.description,
+      projeto: sp.projectId,
+      instrucoes: clip(sp.instructions, 2500)
+    })),
+    bots: listBots().map((b) => ({
       id: b.id,
       nome: b.name,
       descricao: b.description,
       modelo: b.model ?? 'default',
       projeto: b.projectId,
-      instrucoes: clip(b.instructions, 2500)
-    })),
-    fluxos: listFlows().map((f) => ({
-      id: f.id,
-      nome: f.name,
-      ligado: f.enabled,
-      projeto: f.projectId,
-      agenda: describeSchedule(f.nodes.find((n) => n.type === 'trigger')?.data.schedule),
-      ...flowSteps(f, name)
+      instrucoes: clip(b.instructions, 1500),
+      especializacoes: b.specializationIds.map((id) => ({ id, nome: specName(id) })),
+      rotinas: flows
+        .filter((f) => f.botId === b.id)
+        .map((f) => ({
+          id: f.id,
+          nome: f.name,
+          ligada: f.enabled,
+          agenda: describeSchedule(f.nodes.find((n) => n.type === 'trigger')?.data.schedule),
+          ...routineSteps(f, specName)
+        }))
     }))
   }
 }
@@ -134,24 +159,34 @@ const EXAMPLE = {
   title: 'Orçamentos do WhatsApp',
   summary: 'Uma frase dizendo o que o conjunto faz pelo usuário e o que foi testado.',
   project: { name: 'Orçamentos', description: '...', instructions: 'Instruções comuns a tudo do projeto.' },
+  specializations: [
+    {
+      ref: 's1',
+      name: 'Atendimento no WhatsApp Web',
+      description: 'Lê o WhatsApp Web e encontra pedidos de orçamento pendentes',
+      instructions: 'Instruções completas, com o caminho que funcionou nos testes...',
+      why: 'Por que esta especialização entra no plano.'
+    }
+  ],
   bots: [
     {
       ref: 'b1',
-      name: 'Atendente WhatsApp',
-      description: 'Lê o WhatsApp Web e encontra pedidos de orçamento pendentes',
-      instructions: 'Instruções completas do bot, com o caminho que funcionou nos testes...',
+      name: 'Lia',
+      description: 'Cuida dos pedidos de orçamento que chegam pelo WhatsApp',
+      instructions: 'Personalidade e orientações gerais (opcional): tom, prioridades, o que nunca fazer.',
+      specializations: ['s1'],
       model: 'sonnet',
-      why: 'Por que este bot entra no plano.'
-    }
-  ],
-  flows: [
-    {
-      name: 'Orçamentos pendentes',
-      why: 'O que este fluxo resolve.',
-      schedule: { mode: 'interval', everyMinutes: 60 },
-      steps: [
-        { type: 'bot', label: 'Buscar pedidos', bot: 'b1', message: 'Tarefa para o bot...' },
-        { type: 'decision', label: 'Tem pedido?', message: 'Critério...', options: ['Há pedidos pendentes', 'Nenhum pedido pendente'] }
+      why: 'Por que este bot entra no plano.',
+      routines: [
+        {
+          name: 'Orçamentos pendentes',
+          why: 'O que esta rotina resolve.',
+          schedule: { mode: 'interval', everyMinutes: 60 },
+          steps: [
+            { type: 'task', label: 'Buscar pedidos', specialization: 's1', message: 'Tarefa desta etapa...' },
+            { type: 'decision', label: 'Tem pedido?', message: 'Critério...', options: ['Há pedidos pendentes', 'Nenhum pedido pendente'] }
+          ]
+        }
       ]
     }
   ],
@@ -162,29 +197,31 @@ const EXAMPLE = {
 function planGuide(): string[] {
   return [
     'Recursos do gBot:',
-    '- Bot: assistente especializado com nome, descrição de uma frase (começando com verbo) e instruções (o prompt dele). Cada bot:',
-    '  • tem memória própria de lições (aprende procedimentos quando erra) e pode receber arquivos de referência;',
+    '- Especialização: um conhecimento ou procedimento reutilizável (ex.: "Consultar pull requests", "Revisar contratos").',
+    '  Tem nome, descrição de uma frase (começando com verbo) e instruções (o passo a passo, cuidados e formato da resposta).',
+    '  Pode receber arquivos de referência e aprende lições quando um bot erra ao usá-la. Não roda sozinha: quem usa é um bot.',
+    '  Prefira especializações focadas (um assunto cada), para vários bots poderem reaproveitar.',
+    '- Bot: um membro vivo do time, com nome, avatar, personalidade (instruções opcionais) e as especializações que usa. Cada bot:',
+    '  • faz uma tarefa por vez e tem memória própria de lições;',
     '  • controla o navegador do gBot (Edge/Chrome com perfil próprio, onde o usuário entra uma vez nas contas dele: sites,',
     '    e-mail, sistemas, redes sociais, planilhas online...) e navega, lê, clica, digita e anexa arquivos;',
     '  • cria e edita arquivos na pasta de trabalho e roda comandos (com aprovação do usuário);',
-    '  • consulta outros bots quando precisa da especialidade deles;',
-    '  • usa um modelo: haiku (rápido e econômico), sonnet (equilíbrio, bom para a maioria), opus (o mais capaz, gasta mais limite).',
-    '  Prefira bots focados (uma especialidade cada). Não invente integrações por API: sistemas externos são acessados pelo',
-    '  navegador, por arquivos ou por comandos.',
-    '- Fluxo: automação que roda sozinha por um gatilho:',
-    '  • agenda por horários (dias da semana 0=domingo a 6=sábado e horários "HH:MM") ou por intervalo (a cada N minutos, no',
-    '    mínimo 5); sem agenda, só roda quando o usuário mandar;',
-    '  • etapas em sequência; o resultado de cada etapa vai junto para a próxima:',
-    '    - "bot": manda uma tarefa para um bot;',
-    '    - "prompt": instrução direta ao modelo, sem persona (bom para resumir, formatar ou transformar texto);',
-    '    - "decision": o modelo lê o resultado anterior e escolhe uma das opções. A PRIMEIRA opção segue para as próximas etapas;',
-    '      as outras encerram o fluxo (ex.: ["Há pedidos pendentes", "Nenhum pedido pendente"]).',
-    '    - "confirm": pausa o fluxo e manda uma notificação ao usuário com um botão por opção (até 5), mostrando o resultado',
-    '      anterior e os arquivos gerados. A PRIMEIRA opção segue; as outras encerram (ex.: ["Enviar", "Não enviar"]). Use',
-    '      antes de ações sensíveis ou irreversíveis (enviar mensagem a cliente, publicar, pagar) quando o usuário quiser revisar.',
-    '  Fluxos novos são criados desligados: o usuário liga depois de preparar o que precisar.',
-    '- Projeto: agrupa bots e fluxos de um mesmo assunto, com instruções comuns. Sugira um projeto novo quando o pedido for um',
-    '  assunto próprio com mais de um item; use um existente se combinar; senão, nenhum (null).',
+    '  • conversa com o usuário e consulta outros bots quando precisa;',
+    '  • usa um modelo: haiku (rápido e econômico), sonnet (equilíbrio, bom para a maioria), opus (o mais capaz, gasta mais limite);',
+    '  • tem rotinas: automações que rodam sozinhas por um gatilho:',
+    '    - agenda por horários (dias da semana 0=domingo a 6=sábado e horários "HH:MM") ou por intervalo (a cada N minutos, no',
+    '      mínimo 5); sem agenda, só roda quando o usuário mandar;',
+    '    - etapas em sequência; o resultado de cada etapa vai junto para a próxima:',
+    '      · "task": o bot faz uma tarefa, opcionalmente com uma das especializações (o "ref" dela em "specialization");',
+    '      · "decision": o modelo lê o resultado anterior e escolhe uma das opções. A PRIMEIRA opção segue para as próximas',
+    '        etapas; as outras encerram a rotina (ex.: ["Há pedidos pendentes", "Nenhum pedido pendente"]);',
+    '      · "confirm": pausa a rotina e manda uma notificação ao usuário com um botão por opção (até 5), mostrando o resultado',
+    '        anterior e os arquivos gerados. A PRIMEIRA opção segue; as outras encerram (ex.: ["Enviar", "Não enviar"]). Use',
+    '        antes de ações sensíveis ou irreversíveis (enviar mensagem a cliente, publicar, pagar) quando o usuário quiser revisar.',
+    '    Rotinas novas são criadas desligadas: o usuário liga depois de preparar o que precisar.',
+    '  Não invente integrações por API: sistemas externos são acessados pelo navegador, por arquivos ou por comandos.',
+    '- Projeto: agrupa bots e especializações de um mesmo assunto, com instruções comuns. Sugira um projeto novo quando o',
+    '  pedido for um assunto próprio com mais de um item; use um existente se combinar; senão, nenhum (null).',
     '',
     'O que já existe no gBot do usuário:',
     '<existente>',
@@ -193,21 +230,26 @@ function planGuide(): string[] {
     '',
     'Editar em vez de criar: quando o usuário pedir para mudar algo que já existe (renomear, trocar a agenda, ajustar instruções,',
     'adicionar ou tirar etapas, trocar o modelo), EDITE o item existente. Nunca crie um novo parecido no lugar.',
-    '- Bot: "existingId" + "edit": true + os campos como devem ficar (nome, descrição, instruções COMPLETAS, modelo).',
+    '- Especialização: "existingId" + "edit": true + os campos como devem ficar (nome, descrição, instruções COMPLETAS).',
+    '  Especialização existente só reaproveitada (sem mudar) entra com "existingId", o mesmo nome e sem "edit".',
+    '- Bot: "existingId" + "edit": true + os campos como devem ficar (nome, descrição, instruções, modelo). Sem "edit", o bot',
+    '  existente só ganha as especializações e as rotinas do plano. As especializações listadas são somadas às que ele já tem.',
+    '- Rotina: dentro do bot dono, "existingId" + nome, agenda e TODAS as etapas como devem ficar. A mesma rotina é refeita com',
+    '  essas etapas e continua ligada ou desligada como estava. Rotina com "ramificada": true vira uma sequência ao editar:',
+    '  avise o usuário.',
     '- Projeto: "existingId" + "edit": true + os campos que mudam (nome, descrição, instruções completas).',
-    '- Fluxo: "existingId" + nome, agenda e TODAS as etapas como devem ficar. O mesmo fluxo é refeito com essas etapas e',
-    '  continua ligado ou desligado como estava. Fluxo com "ramificado": true vira uma sequência ao editar: avise o usuário.',
-    '- Bot existente só usado por um fluxo (sem mudar) entra com "existingId", o mesmo nome e sem "edit".',
     'Crie item novo só quando o usuário pedir algo novo.',
     '',
     'O plano segue este exemplo (criação):',
     JSON.stringify(EXAMPLE),
     'Regras do plano:',
-    '- Use o idioma preferido pelo usuário, direto e claro. Inclua só o que será criado ou alterado (e os bots que os fluxos usam).',
-    '- "bots" lista todos os bots que os fluxos do plano usam. Cada etapa "bot" aponta para o "ref" de um bot da lista.',
-    '- Bot novo também pode entrar sem fluxo, quando o pedido for um assistente para conversar.',
+    '- Use o idioma preferido pelo usuário, direto e claro. Inclua só o que será criado ou alterado (e as especializações que',
+    '  os bots e as etapas do plano usam).',
+    '- "specializations" lista todas as especializações usadas no plano. Os bots e as etapas "task" apontam para o "ref" delas.',
+    '- Bot novo ganha um nome de pessoa ou apelido simpático (não um cargo). Bot novo também pode entrar sem rotina, quando o',
+    '  pedido for um assistente para conversar.',
     '- "setup": passos curtos que o usuário ainda precisa fazer antes de ligar.',
-    '- Seja enxuto: o mínimo de bots e etapas que resolve bem.'
+    '- Seja enxuto: o mínimo de especializações, bots e etapas que resolve bem.'
   ]
 }
 
@@ -219,7 +261,8 @@ export function architectPrompt(): string[] {
   return [
     'Você é o arquiteto do gBot, um app de desktop para montar uma equipe de assistentes de IA que trabalha sozinha, usando a',
     'assinatura do usuário. Nesta conversa o usuário conta o que quer automatizar, fazer ou mudar, e você monta com ele o que',
-    'criar ou alterar no gBot: bots, fluxos e projeto. Use só os recursos abaixo e reaproveite o que já existe sempre que servir.',
+    'criar ou alterar no gBot: especializações, bots (com rotinas) e projeto. Use só os recursos abaixo e reaproveite o que já',
+    'existe sempre que servir.',
     '',
     ...planGuide(),
     '',
@@ -235,7 +278,7 @@ export function architectPrompt(): string[] {
     '4. Se precisar que o usuário faça algo (entrar numa conta no navegador do gBot, escanear um QR code, liberar um acesso),',
     '   explique e espere com `ask_user` (ex.: opção "Já fiz"), depois confira.',
     '5. Conte em poucas linhas o que viu em cada teste e ajuste o plano ao que encontrou.',
-    '6. Quando tiver segurança, chame `propose_plan` com o plano. Nas instruções dos bots, escreva o caminho que funcionou nos',
+    '6. Quando tiver segurança, chame `propose_plan` com o plano. Nas instruções das especializações, escreva o caminho que funcionou nos',
     '   testes (onde entrar, o que procurar, onde clicar, cuidados e formato da resposta). No "summary", diga o que foi testado.',
     '7. O plano aparece para o usuário num cartão com o botão para aplicar: não crie nem altere nada você mesmo. Se ele pedir',
     '   ajustes, ajuste e chame `propose_plan` de novo.'
@@ -254,29 +297,33 @@ export function overviewText(): string {
 
 /** Linha do prompt das conversas sobre criar ou alterar itens do gBot. */
 export const GBOT_EDIT_HINT =
-  'Para criar ou alterar bots, fluxos ou projetos do gBot, chame `gbot_overview` (mostra o que existe e como montar) e ' +
+  'Para criar ou alterar bots, rotinas, especializações ou projetos do gBot, chame `gbot_overview` (mostra o que existe e como montar) e ' +
   'depois `propose_plan`; o usuário confirma num cartão. Pedido para mudar algo que já existe é edição, não item novo.'
 
-/** Confere o plano recebido de `propose_plan`: ids desconhecidos viram itens novos, etapas com bot inexistente saem. */
+/**
+ * Confere o plano recebido de `propose_plan`: ids desconhecidos viram itens novos, referências a especializações que não
+ * estão no plano saem.
+ */
 export function sanitizePlan(raw: unknown): AutomationPlan {
   const parsed = planSchema.parse(raw)
-  const botIds = new Set(listBots().map((b) => b.id))
+  const specIds = new Set(listSpecializations().map((sp) => sp.id))
+  const bots = listBots()
+  const botIds = new Set(bots.map((b) => b.id))
   const projectIds = new Set(listProjects().map((p) => p.id))
-  const flowIds = new Set(listFlows().map((f) => f.id))
-  const bots = parsed.bots.map((b) => {
-    const existingId = b.existingId && botIds.has(b.existingId) ? b.existingId : undefined
+  const flows = listFlows()
+  const specializations = parsed.specializations.map((sp) => {
+    const existingId = sp.existingId && specIds.has(sp.existingId) ? sp.existingId : undefined
     return {
-      ref: b.ref,
+      ref: sp.ref,
       existingId,
-      edit: existingId && b.edit ? true : undefined,
-      name: b.name.slice(0, 40),
-      description: b.description.slice(0, 140),
-      instructions: b.instructions,
-      model: b.model && (MODELS as readonly string[]).includes(b.model) && b.model !== 'default' ? b.model : undefined,
-      why: b.why
+      edit: existingId && sp.edit ? true : undefined,
+      name: sp.name.slice(0, 60),
+      description: sp.description.slice(0, 140),
+      instructions: sp.instructions,
+      why: sp.why
     }
   })
-  const refs = new Set(bots.map((b) => b.ref))
+  const refs = new Set(specializations.map((sp) => sp.ref))
   let project: AutomationPlan['project']
   if (parsed.project && 'existingId' in parsed.project) {
     const p = parsed.project
@@ -296,18 +343,35 @@ export function sanitizePlan(raw: unknown): AutomationPlan {
     title: parsed.title,
     summary: parsed.summary,
     project,
-    bots,
-    flows: parsed.flows
-      .map((f) => ({
-        existingId: f.existingId && flowIds.has(f.existingId) ? f.existingId : undefined,
-        name: f.name,
-        why: f.why,
-        schedule: f.schedule ?? undefined,
-        steps: f.steps
-          .filter((s) => s.type !== 'bot' || refs.has(s.bot))
-          .map((s) => ({ ...s, label: s.label ?? undefined }))
-      }))
-      .filter((f) => f.steps.length),
+    specializations,
+    bots: parsed.bots.map((b) => {
+      const existingId = b.existingId && botIds.has(b.existingId) ? b.existingId : undefined
+      return {
+        ref: b.ref,
+        existingId,
+        edit: existingId && b.edit ? true : undefined,
+        name: b.name.slice(0, 40),
+        description: b.description.slice(0, 140),
+        instructions: b.instructions,
+        specializations: b.specializations.filter((r) => refs.has(r)),
+        model: b.model && (MODELS as readonly string[]).includes(b.model) && b.model !== 'default' ? b.model : undefined,
+        why: b.why,
+        routines: b.routines
+          .map((r) => ({
+            // Rotina existente só vale se for do próprio bot.
+            existingId: r.existingId && existingId && flows.some((f) => f.id === r.existingId && f.botId === existingId) ? r.existingId : undefined,
+            name: r.name,
+            why: r.why,
+            schedule: r.schedule ?? undefined,
+            steps: r.steps.map((s) =>
+              s.type === 'task'
+                ? { type: 'task' as const, label: s.label ?? undefined, message: s.message, specialization: s.specialization && refs.has(s.specialization) ? s.specialization : undefined }
+                : { ...s, label: s.label ?? undefined }
+            )
+          }))
+          .filter((r) => r.steps.length)
+      }
+    }),
     setup: parsed.setup
   }
 }

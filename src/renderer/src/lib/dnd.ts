@@ -2,7 +2,7 @@ import { useState, type DragEvent } from 'react'
 
 /** Coisa que dá para arrastar para dentro ou para fora de um projeto. */
 export interface ItemRef {
-  kind: 'conversation' | 'bot' | 'flow'
+  kind: 'conversation' | 'bot' | 'specialization'
   id: string
   /** Projeto onde está agora (ausente = solto). */
   projectId?: string

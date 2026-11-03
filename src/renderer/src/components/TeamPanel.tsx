@@ -121,7 +121,7 @@ export function TeamPanel({ activity }: { activity: Map<string, BotActivity> }) 
           ))}
         </div>
       ) : (
-        <p className="mt-2 text-[13px] text-muted">{tr('Todo mundo descansando. Eles acordam quando uma conversa ou fluxo precisar deles.')}</p>
+        <p className="mt-2 text-[13px] text-muted">{tr('Todo mundo descansando. Eles acordam quando uma conversa ou rotina precisar deles.')}</p>
       )}
 
       {asleep.length > 0 && (

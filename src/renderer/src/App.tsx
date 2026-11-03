@@ -4,6 +4,7 @@ import { ConfirmationModal, PendingConfirmationsBar } from '@/components/Confirm
 import { Sidebar } from '@/components/Sidebar'
 import { UpdateNotice } from '@/components/UpdateNotice'
 import { BotEditorView } from '@/views/BotEditorView'
+import { SpecializationEditorView } from '@/views/SpecializationEditorView'
 import { BotView } from '@/views/BotView'
 import { ChatView } from '@/views/ChatView'
 import { HomeView } from '@/views/HomeView'
@@ -18,7 +19,7 @@ import { UsageView } from '@/views/UsageView'
 import { useApp } from '@/state/app'
 
 /**
- * Aviso no topo quando um pedido de aprovação não está na tela. Pedidos de fluxos (sem conversa para abrir)
+ * Aviso no topo quando um pedido de aprovação não está na tela. Pedidos de rotinas (sem conversa para abrir)
  * aparecem já com os botões, para responder dali mesmo.
  */
 function PendingApprovalsBar() {
@@ -69,6 +70,9 @@ export function App() {
           {view === 'chat' && <ChatView />}
           {view === 'bot' && <BotView />}
           {view === 'bot-editor' && <BotEditorView key={app.selectedBot?.id ?? `new-${app.botDraftProjectId ?? ''}`} />}
+          {view === 'specialization-editor' && (
+            <SpecializationEditorView key={app.selectedSpecialization?.id ?? `new-${app.specializationDraftProjectId ?? ''}`} />
+          )}
           {view === 'project' && <ProjectView />}
           {view === 'flow-editor' && <FlowEditorView />}
           {view === 'project-editor' && <ProjectEditorView key={app.selectedProject?.id ?? 'new'} />}

@@ -1,11 +1,9 @@
 import { spawn } from 'node:child_process'
 import type { ProviderAccount, SendMessageRequest } from '@shared/types'
 import type { ChatProvider, ProviderAccounts } from '../types'
-import type { MemoryOwner } from '@shared/types'
-import { memoryPrompt } from '../../memory'
 import { languageInstructions } from '../../localization'
 import { attachmentsAccess, withAttachments } from '../../attachments'
-import { botFilesAccess, botFilesPrompt } from '../../botFiles'
+import { botPromptLines, memoryLines, memoryOf, specializationAccess, specializationsInUse, withSpecializations } from '../persona'
 import { PERMISSIONS_HINT, sendToBot, TOOLS_HINT } from './bots'
 import { withOutputFiles } from './outputs'
 import { reflectIfNeeded } from './reflect'
@@ -36,45 +34,33 @@ interface AuthStatus {
   subscriptionType?: string
 }
 
-/** Memória da mensagem: a pedida (ex.: fluxo) ou a do bot da conversa. Conversa normal não tem memória. */
-const memoryOf = (req: SendMessageRequest): MemoryOwner | undefined =>
-  req.memory ?? (req.bot ? { kind: 'bot', id: req.bot.id } : undefined)
-
 function systemPrompt(req: SendMessageRequest, work: WorkContext): string {
   if (req.architect) {
     return [...architectPrompt(), '', ...work.promptLines, PERMISSIONS_HINT, TOOLS_HINT, languageInstructions()].join('\n')
   }
   const { bot } = req
   const lines = ['Você está conversando com o usuário pelo gBot, um aplicativo de chat para desktop.']
-  if (bot) {
-    lines.push(
-      `Nesta conversa você é o bot "${bot.name}"${bot.description ? `: ${bot.description}` : ''}.`,
-      'Siga estas instruções definidas pelo usuário para este bot:',
-      '<instrucoes_do_bot>',
-      bot.instructions.trim(),
-      '</instrucoes_do_bot>',
-      ...botFilesPrompt(bot.id)
-    )
-  }
+  if (bot) lines.push(...botPromptLines(bot))
   lines.push(
     'Responda no idioma do usuário, de forma direta e amigável. Use Markdown quando ajudar a leitura.',
     ...work.promptLines,
     PERMISSIONS_HINT,
     TOOLS_HINT,
     GBOT_EDIT_HINT,
-    ...memoryPrompt(memoryOf(req))
+    ...memoryLines(req)
   )
   return [...lines, languageInstructions()].join('\n')
 }
 
 /**
- * Sugere nome e descrição para um bot a partir das instruções, com uma chamada curta ao Claude Code
+ * Sugere nome e descrição para uma especialização a partir das instruções, com uma chamada curta ao Claude Code
  * (modelo rápido, sem ferramentas e sem salvar sessão).
  */
-export async function suggestBotIdentity(instructions: string): Promise<{ name: string; description: string }> {
+export async function suggestSpecializationIdentity(instructions: string): Promise<{ name: string; description: string }> {
   const prompt = [
     'Sugira um nome curto e simpático (1 ou 2 palavras, no idioma preferido do usuário) e uma descrição de uma frase',
-    '(até 90 caracteres, começando com verbo, ex.: "Revisa contratos e aponta riscos") para um bot de chat com estas instruções:',
+    '(até 90 caracteres, começando com verbo, ex.: "Revisa contratos e aponta riscos") para uma especialização (um',
+    'conhecimento que assistentes de IA usam) com estas instruções:',
     '<instrucoes>',
     instructions.trim(),
     '</instrucoes>',
@@ -152,7 +138,7 @@ export const claudeCodeProvider: ChatProvider = {
   },
 
   async send(req, emit, signal) {
-    const text = withAttachments(req.text, req.attachments)
+    const text = withSpecializations(req, withAttachments(req.text, req.attachments))
     if (req.targetBotId) {
       await sendToBot(req.conversationId, req.projectId, req.targetBotId, text, emit, signal, req.origin)
       return
@@ -175,10 +161,11 @@ export const claudeCodeProvider: ChatProvider = {
     entry.ctx.signal = signal
     entry.ctx.architect = req.architect
     entry.ctx.memory = memoryOf(req)
+    entry.ctx.specializationIds = specializationsInUse(req)
     entry.ctx.memorySource = req.origin ?? { kind: 'conversation', id: req.conversationId }
     const work = workContext(req.projectId)
-    // Pastas extras que a sessão pode ler: arquivos de referência do bot e anexos da conversa.
-    const files = req.bot ? botFilesAccess(req.bot.id) : { addDirs: [], allowedTools: [] }
+    // Pastas extras que a sessão pode ler: arquivos de referência das especializações e anexos da conversa.
+    const files = specializationAccess(req)
     const attached = attachmentsAccess(req.conversationId)
     const session = await getSession({
       key: req.conversationId,
@@ -197,6 +184,16 @@ export const claudeCodeProvider: ChatProvider = {
         : { kind: 'conversation', conversationId: req.conversationId, botId: req.bot?.id }
     await session.send(text, withOutputFiles(work.cwd, emit, fileContext(tag)), signal, tag)
     if (!signal.aborted) reflectIfNeeded(session, entry.ctx.memory)
+  }
+}
+
+/** A conta tem login válido de verdade (o Claude Code confirma), não só o perfil salvo. */
+async function hasCredentials(accountId: string): Promise<boolean> {
+  try {
+    return !!(JSON.parse(await runClaude(['auth', 'status', '--json'], { accountId })) as AuthStatus).loggedIn
+  } catch {
+    // sem login: `auth status` pode sair com erro
+    return false
   }
 }
 
@@ -241,7 +238,8 @@ async function addAccount(progress: (text: string, url?: string) => void): Promi
     const other = profileInfo(accountDir(a.id))
     return other?.accountUuid === info.accountUuid && other.organizationUuid === info.organizationUuid
   })
-  if (same && claudeAccounts.list().find((a) => a.id === same.id)?.loggedIn) {
+  // O perfil antigo pode existir sem credencial válida (ex.: a credencial saiu do Keychain): aí o login novo o substitui.
+  if (same && (await hasCredentials(same.id))) {
     discardProfile(id)
     throw new Error('Essa conta já está conectada.')
   }

@@ -5,6 +5,7 @@ import type {
   AppSettings,
   ApprovalDecision,
   Bot,
+  Specialization,
   ChatEvent,
   Conversation,
   FilesFilter,
@@ -18,7 +19,7 @@ import type {
 import { saveAttachments } from './attachments'
 import { checkUpdates, dismissUpdate, downloadUpdate, installUpdate, openUpdateRelease, updateState } from './updates'
 import { listTouchedFiles, pruneFileIndex, recordFiles } from './fileIndex'
-import { addBotFiles, botFilesDir, listBotFiles, removeBotFile, setBotFileNote } from './botFiles'
+import { addSpecializationFiles, listSpecializationFiles, removeSpecializationFile, setSpecializationFileNote, specializationFilesDir } from './specializationFiles'
 import { cancelBotTask, listBotTasks, runAsBot, waitNotice } from './botQueue'
 import { isFlowRunning, recoverInterruptedFlows, runFlow, stopFlow } from './flows/runner'
 import { listAllLessons, listLessons, removeLesson, saveLesson } from './memory'
@@ -31,7 +32,7 @@ import { respondQuestions } from './questions'
 import { listBrowsers } from './browser/browsers'
 import { browserController } from './browser/controller'
 import { getSettings, updateSettings } from './settings'
-import { suggestBotIdentity } from './providers/claude-code'
+import { suggestSpecializationIdentity } from './providers/claude-code'
 import { getProvider, listAccounts, listProviders, providerAccounts, refreshAccountLimits } from './providers/registry'
 import * as store from './store'
 
@@ -60,13 +61,14 @@ export function registerIpc() {
 
   ipcMain.handle('flows:list', () => flows.listFlows())
   ipcMain.handle('flows:save', (_e, flow: Flow) => {
-    // Fluxo rodando não muda (nem pelo editor, nem por um plano do chat): pare ou espere terminar.
-    if (isFlowRunning(flow.id)) throw new Error('Este fluxo está rodando: pare a execução ou espere terminar para editar.')
+    // Rotina rodando não muda (nem pelo editor, nem por um plano do chat): pare ou espere terminar.
+    if (isFlowRunning(flow.id)) throw new Error('Esta rotina está rodando: pare a execução ou espere terminar para editar.')
+    if (!store.getBot(flow.botId)) throw new Error('O bot desta rotina não existe mais.')
     flows.saveFlow(flow)
   })
   ipcMain.handle('flows:stop', (_e, id: string) => stopFlow(id))
   ipcMain.handle('flows:remove', (_e, id: string) => {
-    if (isFlowRunning(id)) throw new Error('Pare o fluxo antes de excluir.')
+    if (isFlowRunning(id)) throw new Error('Pare a rotina antes de excluir.')
     flows.removeFlow(id)
   })
   ipcMain.handle('flows:runs', (_e, flowId: string) => flows.listRuns(flowId))
@@ -76,7 +78,7 @@ export function registerIpc() {
   ipcMain.handle('usage:records', (_e, since: number) => usageRecords(since))
   ipcMain.handle('flows:run', (_e, id: string) => {
     const flow = flows.getFlow(id)
-    if (!flow) throw new Error('Fluxo não encontrado.')
+    if (!flow) throw new Error('Rotina não encontrada.')
     return runFlow(flow, 'manual')
   })
 
@@ -93,7 +95,6 @@ export function registerIpc() {
   ipcMain.handle('projects:save', (_e, project: Project) => store.saveProject(project))
   ipcMain.handle('projects:remove', (_e, id: string) => {
     store.removeProject(id)
-    flows.detachFlows(id)
   })
   ipcMain.handle('projects:pickFolder', async (e, current?: string) => {
     const win = BrowserWindow.fromWebContents(e.sender)
@@ -107,13 +108,25 @@ export function registerIpc() {
     return result.canceled ? undefined : result.filePaths[0]
   })
 
+  ipcMain.handle('specializations:list', () => store.listSpecializations())
+  ipcMain.handle('specializations:save', (_e, sp: Specialization) => store.saveSpecialization(sp))
+  ipcMain.handle('specializations:remove', (_e, id: string) => {
+    if (flows.listFlows().some((f) => isFlowRunning(f.id) && f.nodes.some((n) => n.data.specializationId === id))) {
+      throw new Error('Uma rotina que usa esta especialização está rodando: pare a rotina antes de excluir.')
+    }
+    store.removeSpecialization(id)
+  })
+  ipcMain.handle('specializations:suggest', (_e, instructions: string) => suggestSpecializationIdentity(instructions))
+  ipcMain.handle('specializations:files', (_e, id: string) => listSpecializationFiles(id))
+
   ipcMain.handle('bots:list', () => store.listBots())
   ipcMain.handle('bots:save', (_e, bot: Bot) => store.saveBot(bot))
-  ipcMain.handle('bots:remove', (_e, id: string) => store.removeBot(id))
-  ipcMain.handle('bots:suggest', (_e, instructions: string) => suggestBotIdentity(instructions))
+  ipcMain.handle('bots:remove', (_e, id: string) => {
+    if (flows.listFlows().some((f) => f.botId === id && isFlowRunning(f.id))) throw new Error('Pare as rotinas do bot antes de excluir.')
+    store.removeBot(id)
+  })
   ipcMain.handle('bots:tasks', () => listBotTasks())
   ipcMain.handle('bots:cancel-task', (_e, id: string) => cancelBotTask(id))
-  ipcMain.handle('bots:files', (_e, botId: string) => listBotFiles(botId))
   // Arquivos gerados nas respostas. Executáveis e scripts nunca são abertos direto: só mostrados na pasta.
   ipcMain.handle('files:open', async (_e, path: string) => {
     if (!existsSync(path) || !statSync(path).isFile()) throw new Error('O arquivo não existe mais.')
@@ -142,23 +155,25 @@ export function registerIpc() {
     if (result.canceled) return []
     return attach(conversationId, result.filePaths.map((path) => ({ name: basename(path), path })))
   })
-  ipcMain.handle('bots:add-files', async (e, botId: string, paths?: string[]) => {
+  ipcMain.handle('specializations:add-files', async (e, id: string, paths?: string[]) => {
     if (!paths) {
       const win = BrowserWindow.fromWebContents(e.sender)
       const options: Electron.OpenDialogOptions = {
-        title: 'Arquivos de referência do bot',
+        title: 'Arquivos de referência da especialização',
         buttonLabel: 'Adicionar',
         properties: ['openFile', 'multiSelections']
       }
       const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
-      if (result.canceled) return listBotFiles(botId)
+      if (result.canceled) return listSpecializationFiles(id)
       paths = result.filePaths
     }
-    return addBotFiles(botId, paths)
+    return addSpecializationFiles(id, paths)
   })
-  ipcMain.handle('bots:remove-file', (_e, botId: string, name: string) => removeBotFile(botId, name))
-  ipcMain.handle('bots:file-note', (_e, botId: string, name: string, note: string) => setBotFileNote(botId, name, note))
-  ipcMain.handle('bots:reveal-file', (_e, botId: string, name: string) => shell.showItemInFolder(join(botFilesDir(botId), basename(name))))
+  ipcMain.handle('specializations:remove-file', (_e, id: string, name: string) => removeSpecializationFile(id, name))
+  ipcMain.handle('specializations:file-note', (_e, id: string, name: string, note: string) => setSpecializationFileNote(id, name, note))
+  ipcMain.handle('specializations:reveal-file', (_e, id: string, name: string) =>
+    shell.showItemInFolder(join(specializationFilesDir(id), basename(name)))
+  )
 
   ipcMain.handle('conversations:list', () => store.listConversations())
   ipcMain.handle('conversations:get', (_e, id: string) => store.getConversation(id))

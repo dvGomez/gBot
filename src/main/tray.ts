@@ -3,7 +3,7 @@ import { activeFlowCount } from './flows/scheduler'
 import { uiText } from './localization'
 
 /**
- * Ícone na barra de menu: com a janela fechada, o gBot continua rodando (os fluxos agendados disparam)
+ * Ícone na barra de menu: com a janela fechada, o gBot continua rodando (as rotinas agendadas disparam)
  * e dá para reabrir ou sair por aqui.
  */
 
@@ -50,14 +50,14 @@ export function createTray(openWindow: () => void) {
       Menu.buildFromTemplate([
         { label: uiText('Abrir gBot'), click: openWindow },
         { type: 'separator' },
-        { label: n ? `${n} ${uiText(n === 1 ? 'fluxo ativo' : 'fluxos ativos')}` : uiText('Nenhum fluxo ativo'), enabled: false },
+        { label: n ? `${n} ${uiText(n === 1 ? 'rotina ativa' : 'rotinas ativas')}` : uiText('Nenhuma rotina ativa'), enabled: false },
         { type: 'separator' },
         { label: uiText('Sair do gBot'), role: 'quit' }
       ])
     )
   }
   refresh()
-  // Atualiza a contagem de fluxos quando o menu vai abrir (e periodicamente, por garantia).
+  // Atualiza a contagem de rotinas quando o menu vai abrir (e periodicamente, por garantia).
   tray.on('mouse-enter', refresh)
   setInterval(refresh, 60_000).unref()
   app.on('before-quit', () => tray?.destroy())

@@ -1,6 +1,7 @@
 const state = {
   runs: new Map(),
   bots: new Map(),
+  specializations: new Map(),
   send: async () => {},
   decision: async () => ({ text: '1', usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 } }),
   killed: []
@@ -11,7 +12,8 @@ module.exports = {
   Notification: { isSupported: () => false },
   nativeImage: {},
   getProvider: () => ({ send: (...args) => state.send(...args) }),
-  getBot: (id) => state.bots.get(id) ?? ({ id, name: 'Bot de teste', instructions: '' }),
+  getBot: (id) => state.bots.get(id) ?? ({ id, name: 'Bot de teste', description: '', instructions: '', specializationIds: [] }),
+  getSpecialization: (id) => state.specializations.get(id),
   saveRun: (run) => state.runs.set(run.id, structuredClone(run)),
   listFlows: () => [...new Set([...state.runs.values()].map((run) => run.flowId))].map((id) => ({ id })),
   listRuns: (flowId) => [...state.runs.values()].filter((run) => run.flowId === flowId),

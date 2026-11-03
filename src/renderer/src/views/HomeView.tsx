@@ -28,7 +28,7 @@ import { isLive, useFlowRuns } from '@/lib/useFlowRuns'
 import { useTeamActivity } from '@/lib/useTeamActivity'
 import { useApp } from '@/state/app'
 
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
+const plural = (n: number, one: string, many: string) => `${n} ${tr(n === 1 ? one : many)}`
 
 function Section({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
   useLanguage()
@@ -98,7 +98,7 @@ const StatusIcon = ({ status }: { status: FlowRun['status'] }) =>
     <X size={17} strokeWidth={2.5} className="text-danger" />
   )
 
-/** Próximo disparo de um fluxo ativo (horários fixos ou intervalo a partir da última execução). */
+/** Próximo disparo de uma rotina ativa (horários fixos ou intervalo a partir da última execução). */
 function nextFor(flow: Flow, runs: FlowRun[] | undefined): Date | undefined {
   const schedule = flow.nodes.find((n) => n.type === 'trigger')?.data.schedule
   if (!schedule) return undefined
@@ -112,7 +112,13 @@ export function HomeView() {
   const app = useApp()
   const runs = useFlowRuns(app.flows)
   const team = useTeamActivity(runs)
-  const flowName = (id: string) => app.flows.find((f) => f.id === id)?.name ?? tr('Fluxo')
+  /** Rotina com o bot dono na frente: "Ana · Relatório de vendas". */
+  const routineName = (id: string, fallback = tr('Rotina')) => {
+    const flow = app.flows.find((f) => f.id === id)
+    const bot = app.getBot(flow?.botId)
+    const name = flow?.name ?? fallback
+    return bot ? `${bot.name} · ${name}` : name
+  }
 
   // ── Agora ──
   const liveRuns = Object.values(runs)
@@ -142,8 +148,8 @@ export function HomeView() {
           <Row
             key={`run-${r.id}`}
             icon={<StatusIcon status={r.status === 'running' ? 'error' : r.status} />}
-            title={flowName(r.flowId)}
-            detail={`${r.status === 'done' ? tr('Fluxo concluído') : r.status === 'stopped' ? tr('Fluxo parado') : tr('Fluxo com erro')} · ${r.trigger === 'manual' ? 'manual' : 'agendado'} · ${timeAgo(r.finishedAt ?? r.startedAt)}`}
+            title={routineName(r.flowId)}
+            detail={`${r.status === 'done' ? tr('Rotina concluída') : r.status === 'stopped' ? tr('Rotina parada') : tr('Rotina com erro')} · ${tr(r.trigger === 'manual' ? 'manual' : 'agendado')} · ${timeAgo(r.finishedAt ?? r.startedAt)}`}
             onClick={() => app.openFlow(r.flowId)}
           />
         )
@@ -178,8 +184,8 @@ export function HomeView() {
           <h1 className="mt-1 text-[24px] leading-tight font-medium tracking-[-0.02em]">{greeting()}</h1>
           <p className="mt-1 text-[14px] text-muted">
             {plural(app.bots.length, 'bot', 'bots')} · {plural(app.projects.length, 'projeto', 'projetos')} ·{' '}
-            {plural(app.flows.length, 'fluxo', 'fluxos')}
-            {upcoming.length > 0 && <span className="text-success"> · {plural(upcoming.length, 'ativo', 'ativos')}</span>}
+            {plural(app.flows.length, 'rotina', 'rotinas')}
+            {upcoming.length > 0 && <span className="text-success"> · {plural(upcoming.length, 'ativa', 'ativas')}</span>}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -189,8 +195,6 @@ export function HomeView() {
             <BotIcon size={15} />{tr('Novo bot')}</Button>
           <Button onClick={() => app.editProject()}>
             <FolderPlus size={15} />{tr('Novo projeto')}</Button>
-          <Button onClick={() => void app.newFlow()}>
-            <Workflow size={15} />{tr('Novo fluxo')}</Button>
         </div>
       </div>
 
@@ -224,7 +228,7 @@ export function HomeView() {
                     key={c.id}
                     icon={<Hand size={18} className="text-warning" />}
                     title={c.title}
-                    detail={tr('Fluxo {0}{1} · {2}', c.flowName, c.files.length ? ` · ${c.files.length === 1 ? tr('1 arquivo') : tr('{0} arquivos', c.files.length)}` : '', timeAgo(c.createdAt))}
+                    detail={`${routineName(c.flowId, c.flowName)}${c.files.length ? ` · ${c.files.length === 1 ? tr('1 arquivo') : tr('{0} arquivos', c.files.length)}` : ''} · ${timeAgo(c.createdAt)}`}
                     right={<span className="text-[12px] text-warning">{tr('Sua confirmação')}</span>}
                     onClick={() => app.openConfirmation(c.id)}
                   />
@@ -246,7 +250,7 @@ export function HomeView() {
                     <Row
                       key={r.id}
                       icon={<LoaderCircle size={18} className="animate-spin text-warning" />}
-                      title={flowName(r.flowId)}
+                      title={routineName(r.flowId)}
                       detail={tr('{0} · {1}/{2} caixinhas · {3}', current.length ? tr('Rodando: {0}', current.join(', ')) : tr('Começando'), done, r.steps.length, timeAgo(r.startedAt))}
                       onClick={() => app.openFlow(r.flowId)}
                     />
@@ -257,7 +261,7 @@ export function HomeView() {
                     icon={<AgentAvatar avatar={answeringBot?.avatar} size={24} mood={app.mood} />}
                     title={conv.title}
                     detail={`${answeringBot ? tr('{0} respondendo', answeringBot.name) : tr('Respondendo')} · ${
-                      app.mood === 'talking' ? 'escrevendo' : 'pensando'
+                      app.mood === 'talking' ? tr('escrevendo') : tr('pensando')
                     }`}
                     onClick={() => app.openConversation(conv.id)}
                   />
@@ -270,7 +274,7 @@ export function HomeView() {
             {items.length ? (
               items.map((i) => i.node)
             ) : (
-              <p className="py-3 text-[14px] text-muted">{tr('Nada por aqui ainda. Comece uma conversa ou crie um fluxo.')}</p>
+              <p className="py-3 text-[14px] text-muted">{tr('Nada por aqui ainda. Comece uma conversa ou crie um bot.')}</p>
             )}
           </Section>
         </div>
@@ -283,7 +287,7 @@ export function HomeView() {
                 <Row
                   key={flow.id}
                   icon={at ? <DateBadge date={at} /> : <Workflow size={18} className="text-muted" />}
-                  title={flow.name}
+                  title={routineName(flow.id)}
                   detail={`${at ? formatWhen(at) : tr('Aguardando a primeira execução')} · ${describeSchedule(
                     flow.nodes.find((n) => n.type === 'trigger')?.data.schedule
                   )}`}
@@ -291,19 +295,19 @@ export function HomeView() {
                 />
               ))
             ) : (
-              <p className="py-3 text-[13px] text-muted">{tr('Nenhum fluxo ativo. Ligue um fluxo para ele rodar sozinho no horário.')}</p>
+              <p className="py-3 text-[13px] text-muted">{tr('Nenhuma rotina ativa. Ligue uma rotina para ela rodar sozinha no horário.')}</p>
             )}
           </Section>
 
           {app.flows.some((f) => !f.enabled) && (
-            <Section title={tr('Fluxos desligados')}>
+            <Section title={tr('Rotinas desligadas')}>
               {app.flows
                 .filter((f) => !f.enabled)
                 .map((f) => (
                   <Row
                     key={f.id}
                     icon={<Workflow size={18} className="text-muted" />}
-                    title={f.name}
+                    title={routineName(f.id)}
                     detail={describeSchedule(f.nodes.find((n) => n.type === 'trigger')?.data.schedule)}
                     onClick={() => app.openFlow(f.id)}
                   />
@@ -311,7 +315,7 @@ export function HomeView() {
             </Section>
           )}
           <p className="flex items-center gap-1.5 px-1 text-[12px] text-muted">
-            <Clock size={12} />{tr(' Fluxos agendados rodam enquanto o gBot estiver aberto (inclusive na barra de menu).')}</p>
+            <Clock size={12} />{tr(' Rotinas agendadas rodam enquanto o gBot estiver aberto (inclusive na barra de menu).')}</p>
         </div>
       </div>
     </div>

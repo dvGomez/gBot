@@ -1,6 +1,6 @@
 import { t as tr, useLanguage } from '@/i18n'
 import type { ComponentType, ReactNode } from 'react'
-import { Bot as BotIcon, Brain, ChartColumn, FolderPlus, House, MessageSquarePlus, Pencil, Plug, Plus, Settings, Trash2, Workflow } from 'lucide-react'
+import { Bot as BotIcon, Brain, ChartColumn, FolderPlus, GraduationCap, House, MessageSquarePlus, Pencil, Plug, Plus, Settings, Trash2 } from 'lucide-react'
 import type { Project } from '@shared/types'
 import { cn } from '@/lib/cn'
 import { draggable, useDrop, type ItemRef } from '@/lib/dnd'
@@ -84,7 +84,7 @@ function NavItem({
   )
 }
 
-/** Projeto no menu: abre o projeto e aceita conversas, bots e fluxos soltos em cima dele. */
+/** Projeto no menu: abre o projeto e aceita conversas, bots e especializações soltos em cima dele. */
 function ProjectItem({ project, active }: { project: Project; active: boolean }) {
   useLanguage()
   const app = useApp()
@@ -114,7 +114,9 @@ export function Sidebar() {
   // No menu ficam só os itens soltos; o que está em projeto aparece na página do projeto.
   const plainConversations = app.conversations.filter((c) => !c.projectId).slice(0, 8)
   const looseBots = app.bots.filter((b) => !b.projectId)
-  const looseFlows = app.flows.filter((f) => !f.projectId)
+  const looseSpecializations = app.specializations.filter((sp) => !sp.projectId)
+  // Bots que estão rodando uma rotina agora ou ligados: ganham a bolinha verde.
+  const activeBots = new Set(app.flows.filter((f) => f.enabled).map((f) => f.botId))
 
   const conversationMenu = (id: string): MenuAction[] => [
     {
@@ -131,7 +133,7 @@ export function Sidebar() {
       label: tr('Excluir bot'),
       icon: Trash2,
       danger: true,
-      confirm: tr('Excluir este bot e as conversas dele? Não dá para desfazer.'),
+      confirm: tr('Excluir este bot com as rotinas e as conversas dele? Não dá para desfazer.'),
       onSelect: () => void app.removeBot(id)
     }
   ]
@@ -170,7 +172,7 @@ export function Sidebar() {
               active={
                 ((app.view === 'project' || app.view === 'project-editor') && app.selectedProject?.id === p.id) ||
                 (app.view === 'chat' && app.activeProject?.id === p.id) ||
-                (app.view === 'flow-editor' && app.selectedFlow?.projectId === p.id)
+                (app.view === 'flow-editor' && app.getBot(app.selectedFlow?.botId)?.projectId === p.id)
               }
             />
           ))}
@@ -186,12 +188,18 @@ export function Sidebar() {
           {looseBots.map((b) => (
             <NavItem
               key={b.id}
-              leading={<PixelAvatar avatar={b.avatar} size={17} animated={false} className="shrink-0" />}
+              leading={
+                <span className="relative shrink-0">
+                  <PixelAvatar avatar={b.avatar} size={17} animated={false} />
+                  {activeBots.has(b.id) && <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full border border-sidebar bg-success" />}
+                </span>
+              }
               label={b.name}
               drag={{ kind: 'bot', id: b.id }}
               active={
                 ((app.view === 'bot' || app.view === 'bot-editor') && app.selectedBot?.id === b.id) ||
-                (app.view === 'chat' && app.activeBot?.id === b.id)
+                (app.view === 'chat' && app.activeBot?.id === b.id) ||
+                (app.view === 'flow-editor' && app.selectedFlow?.botId === b.id)
               }
               onClick={() => app.openBot(b.id)}
               menu={botMenu(b.id)}
@@ -205,32 +213,32 @@ export function Sidebar() {
           />
         </Section>
 
-        <Section title={tr('Fluxos')} dropKind="flow">
-          {looseFlows.map((f) => (
+        <Section title={tr('Especializações')} dropKind="specialization">
+          {looseSpecializations.map((sp) => (
             <NavItem
-              key={f.id}
-              leading={
-                <span className="relative shrink-0">
-                  <Workflow size={17} strokeWidth={1.6} />
-                  {f.enabled && <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full border border-sidebar bg-success" />}
-                </span>
-              }
-              label={f.name}
-              drag={{ kind: 'flow', id: f.id }}
-              active={app.view === 'flow-editor' && app.selectedFlow?.id === f.id}
-              onClick={() => app.openFlow(f.id)}
+              key={sp.id}
+              icon={GraduationCap}
+              label={sp.name}
+              drag={{ kind: 'specialization', id: sp.id }}
+              active={app.view === 'specialization-editor' && app.selectedSpecialization?.id === sp.id}
+              onClick={() => app.editSpecialization(sp.id)}
               menu={[
                 {
-                  label: tr('Excluir fluxo'),
+                  label: tr('Excluir especialização'),
                   icon: Trash2,
                   danger: true,
-                  confirm: tr('Excluir este fluxo e o histórico dele? Não dá para desfazer.'),
-                  onSelect: () => void app.removeFlow(f.id)
+                  confirm: tr('Excluir esta especialização? Os bots que a usam deixam de usá-la.'),
+                  onSelect: () => void app.removeSpecialization(sp.id)
                 }
               ]}
             />
           ))}
-          <NavItem icon={Plus} label={tr('Novo fluxo')} onClick={() => void app.newFlow()} />
+          <NavItem
+            icon={Plus}
+            label={tr('Nova especialização')}
+            active={app.view === 'specialization-editor' && !app.selectedSpecialization}
+            onClick={() => app.editSpecialization()}
+          />
         </Section>
 
         <Section title={tr('Sistema')}>

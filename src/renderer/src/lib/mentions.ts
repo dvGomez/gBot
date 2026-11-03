@@ -1,4 +1,4 @@
-import type { Bot } from '@shared/types'
+import type { Bot, Specialization } from '@shared/types'
 
 /** Compara nomes sem acento e sem diferenciar maiúsculas. */
 export const normalize = (s: string) =>
@@ -37,10 +37,40 @@ export function findMention(text: string, bots: Bot[]): Bot | undefined {
   return best?.bot
 }
 
-/** Trecho sendo digitado depois de um `@`, para o autocompletar (ou undefined se não houver). */
-export function mentionQuery(text: string, caret: number): { start: number; query: string } | undefined {
+/**
+ * Especializações chamadas com `/Nome` no texto, na ordem em que aparecem (nomes podem ter espaços; vence o mais longo).
+ * O `/` precisa estar no começo ou depois de um espaço, e o nome terminar em espaço, pontuação ou fim do texto.
+ */
+export function findSlashes(text: string, specializations: Specialization[]): Specialization[] {
+  const norm = normalize(text)
+  const found: { sp: Specialization; index: number }[] = []
+  const taken: [number, number][] = []
+  for (const sp of [...specializations].sort((a, b) => b.name.length - a.name.length)) {
+    const needle = `/${normalize(sp.name)}`
+    let from = 0
+    let i: number
+    while ((i = norm.indexOf(needle, from)) >= 0) {
+      const end = i + needle.length
+      const before = norm[i - 1]
+      const after = norm[end]
+      const free = !taken.some(([a, b]) => i < b && end > a)
+      if ((before === undefined || /\s/.test(before)) && (after === undefined || /[\s.,;:!?)]/.test(after)) && free) {
+        found.push({ sp, index: i })
+        taken.push([i, end])
+        break
+      }
+      from = i + 1
+    }
+  }
+  return found.sort((a, b) => a.index - b.index).map((f) => f.sp)
+}
+
+/**
+ * Trecho sendo digitado depois de um `@` (ou do caractere `trigger`), para o autocompletar (ou undefined se não houver).
+ */
+export function mentionQuery(text: string, caret: number, trigger = '@'): { start: number; query: string } | undefined {
   const before = text.slice(0, caret)
-  const at = before.lastIndexOf('@')
+  const at = before.lastIndexOf(trigger)
   if (at < 0) return undefined
   if (at > 0 && !/\s/.test(before[at - 1])) return undefined
   const query = before.slice(at + 1)

@@ -16,16 +16,16 @@ import {
   type XYPosition
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { ArrowLeft, Bot as BotIcon, Hand, LoaderCircle, PanelRight, Play, Square, Sparkles, Split, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Hand, ListTodo, LoaderCircle, PanelRight, Play, Square, Split, Trash2, X } from 'lucide-react'
 import type { Flow, FlowEdge, FlowNode, FlowNodeData, FlowNodeType, FlowRun } from '@shared/types'
 import { NodePanel } from '@/components/flow/NodePanel'
 import { RunHistory } from '@/components/flow/RunHistory'
 import { MemoryPanel } from '@/components/MemoryPanel'
 import { nodeTypes, type CanvasNode } from '@/components/flow/nodes'
 import { LimitsButton } from '@/components/LimitsButton'
-import { BotPickerModal } from '@/components/flow/BotPickerModal'
 import { FilesPanel, useTouchedFiles } from '@/components/FilesPanel'
 import { ItemMenu } from '@/components/ItemMenu'
+import { PixelAvatar } from '@/components/PixelAvatar'
 import { Button, Chip, Toggle } from '@/components/ui'
 import { uid } from '@/lib/format'
 import { useApp } from '@/state/app'
@@ -43,15 +43,11 @@ const fromEdge = (e: Edge): FlowEdge => ({
   ...(e.sourceHandle ? { sourceHandle: e.sourceHandle } : {})
 })
 
-type AddableType = 'bot' | 'prompt' | 'decision' | 'confirm'
-const ADDABLE: { type: AddableType; label: string; icon: typeof BotIcon }[] = localized([{
-  type: 'bot',
-  label: 'Bot',
-  icon: BotIcon
-}, {
-  type: 'prompt',
-  label: 'Prompt',
-  icon: Sparkles
+type AddableType = 'task' | 'decision' | 'confirm'
+const ADDABLE: { type: AddableType; label: string; icon: typeof ListTodo }[] = localized([{
+  type: 'task',
+  label: tr('Tarefa'),
+  icon: ListTodo
 }, {
   type: 'decision',
   label: tr('Decisão'),
@@ -77,7 +73,7 @@ interface DropMenu {
   from: ConnectFrom
 }
 
-/** Caixinhas copiadas com Cmd/Ctrl+C; valem entre fluxos enquanto o app estiver aberto. */
+/** Caixinhas copiadas com Cmd/Ctrl+C; valem entre rotinas enquanto o app estiver aberto. */
 let clipboard: { nodes: CanvasNode[]; edges: Edge[] } | undefined
 
 function Editor({ flow }: { flow: Flow }) {
@@ -90,7 +86,7 @@ function Editor({ flow }: { flow: Flow }) {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(flow.edges.map(toEdge))
   const [selectedId, setSelectedId] = useState<string>()
   const [tab, setTab] = useState<'node' | 'runs' | 'files' | 'memory'>('node')
-  // Arquivos que as execuções do fluxo mexeram (caixinhas e bots consultados nelas).
+  // Arquivos que as execuções da rotina mexeram (caixinhas e bots consultados nelas).
   const files = useTouchedFiles({ flowId: flow.id })
   // O painel lateral só abre ao clicar numa caixinha (ou pelo botão); clicar no canvas fecha.
   const [panelOpen, setPanelOpen] = useState(false)
@@ -102,7 +98,7 @@ function Editor({ flow }: { flow: Flow }) {
   const [stopping, setStopping] = useState(false)
   const [runError, setRunError] = useState<string>()
 
-  // Histórico + atualizações ao vivo das execuções deste fluxo
+  // Histórico + atualizações ao vivo das execuções desta rotina
   useEffect(() => {
     let updated = false
     void window.gbot.flows.runs(flow.id).then((history) => {
@@ -121,6 +117,7 @@ function Editor({ flow }: { flow: Flow }) {
   }, [flow.id])
 
   const live = runs[0]?.status === 'running' ? runs[0] : undefined
+  const bot = app.getBot(flow.botId)
   const locked = loadingRuns || starting || stopping || !!live
 
   // Cor de status em cada caixinha durante a execução
@@ -144,7 +141,7 @@ function Editor({ flow }: { flow: Flow }) {
     const t = setTimeout(() => {
       void app.saveFlow({
         ...flow,
-        name: name.trim() || tr('Fluxo sem nome'),
+        name: name.trim() || tr('Rotina sem nome'),
         enabled,
         nodes: nodes.map(fromCanvas),
         edges: edges.map(fromEdge),
@@ -178,25 +175,15 @@ function Editor({ flow }: { flow: Flow }) {
   }
 
   type AddOptions = { position?: XYPosition; from?: ConnectFrom }
-  /** Caixinha de bot esperando a escolha do bot (com a posição e a ligação que ela vai ter). */
-  const [pickingBot, setPickingBot] = useState<AddOptions>()
+  const requestNode = (type: AddableType, opts?: AddOptions) => addNode(type, opts)
 
-  /** Bot pede antes qual bot é; os outros tipos entram direto. */
-  const requestNode = (type: AddableType, opts?: AddOptions) => {
-    if (locked) return
-    if (type === 'bot') setPickingBot(opts ?? {})
-    else addNode(type, opts)
-  }
-
-  const addNode = (type: AddableType, opts?: AddOptions, botId?: string) => {
+  const addNode = (type: AddableType, opts?: AddOptions) => {
     if (locked) return
     const id = uid()
     const data: FlowNodeData =
-      type === 'bot'
-        ? { botId, message: '' }
-        : type === 'prompt'
-          ? { providerId: 'claude-code', model: app.preferredModel('claude-code'), message: '' }
-          : type === 'confirm'
+      type === 'task'
+        ? { message: '' }
+        : type === 'confirm'
             ? {
                 message: '',
                 options: [
@@ -374,7 +361,7 @@ function Editor({ flow }: { flow: Flow }) {
       // Garante que a versão atual (mesmo antes do salvamento automático) é a que roda.
       await app.saveFlow({
         ...flow,
-        name: name.trim() || tr('Fluxo sem nome'),
+        name: name.trim() || tr('Rotina sem nome'),
         enabled,
         nodes: nodes.map(fromCanvas),
         edges: edges.map(fromEdge),
@@ -405,21 +392,32 @@ function Editor({ flow }: { flow: Flow }) {
     <div className="flex h-full flex-col">
       <div className="flex min-w-0 items-center gap-3 px-6 pb-4">
         <button
-          onClick={() => (flow.projectId && app.getProject(flow.projectId) ? app.openProject(flow.projectId) : app.setView('home'))}
+          onClick={() => (bot ? app.openBot(bot.id) : app.setView('home'))}
           className="rounded-full p-1.5 text-muted hover:bg-hover hover:text-fg"
           aria-label={tr('Voltar')}
         >
           <ArrowLeft size={16} />
         </button>
+        {bot && (
+          <button
+            onClick={() => app.openBot(bot.id)}
+            title={tr('Rotina de {0}', bot.name)}
+            className="flex max-w-[200px] min-w-0 shrink items-center gap-2 rounded-full py-1 pr-3 pl-1.5 text-[13px] text-fg-2 hover:bg-hover"
+          >
+            <PixelAvatar avatar={bot.avatar} size={22} animated={!!live} mood={live ? 'thinking' : 'idle'} />
+            <span className="truncate">{bot.name}</span>
+            <span className="text-muted">/</span>
+          </button>
+        )}
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          aria-label={tr('Nome do fluxo')}
+          aria-label={tr('Nome da rotina')}
           disabled={locked}
           className="selectable min-w-0 flex-1 rounded-nav border border-transparent bg-transparent px-2 py-1 text-[20px] font-medium tracking-[-0.02em] outline-none hover:border-line focus:border-muted/60"
         />
         <div className="flex items-center gap-2 text-[13px] text-fg-2">
-          <fieldset disabled={locked}><Toggle label={tr('Fluxo ativo')} checked={enabled} onChange={setEnabled} /></fieldset>
+          <fieldset disabled={locked}><Toggle label={tr('Rotina ligada')} checked={enabled} onChange={setEnabled} /></fieldset>
           {enabled ? tr('Ativo') : tr('Desligado')}
         </div>
         <LimitsButton />
@@ -444,10 +442,10 @@ function Editor({ flow }: { flow: Flow }) {
           <ItemMenu
             actions={[
               {
-                label: tr('Excluir fluxo'),
+                label: tr('Excluir rotina'),
                 icon: Trash2,
                 danger: true,
-                confirm: tr('Excluir este fluxo e o histórico dele? Não dá para desfazer.'),
+                confirm: tr('Excluir esta rotina e o histórico dela? Não dá para desfazer.'),
                 onSelect: () => void app.removeFlow(flow.id)
               }
             ]}
@@ -455,7 +453,7 @@ function Editor({ flow }: { flow: Flow }) {
         )}
       </div>
       {runError && <p className="px-6 pb-2 text-[13px] text-danger">{runError}</p>}
-      {live && <p className="px-6 pb-2 text-[13px] text-warning">{tr('Fluxo em execução · edição bloqueada até terminar ou parar.')}</p>}
+      {live && <p className="px-6 pb-2 text-[13px] text-warning">{tr('Rotina em execução · edição bloqueada até terminar ou parar.')}</p>}
 
       <div
         className={`grid min-h-0 flex-1 border-t border-line ${
@@ -546,8 +544,9 @@ function Editor({ flow }: { flow: Flow }) {
         </div>
 
         {panelOpen && (
-          <aside className="flex min-h-0 flex-col border-l border-line bg-sidebar">
-            <div className="flex items-center gap-2 px-5 pt-4 pb-3">
+          <aside className="flex min-h-0 min-w-0 flex-col border-l border-line bg-sidebar">
+            {/* Abas quebram linha quando o painel é estreito, em vez de empurrar a janela para o lado. */}
+            <div className="flex flex-wrap items-center gap-2 px-5 pt-4 pb-3 [&>button]:whitespace-nowrap">
               <Chip active={tab === 'node'} onClick={() => setTab('node')}>{tr('Caixinha')}</Chip>
               <Chip active={tab === 'runs'} onClick={() => setTab('runs')}>{tr('Execuções')}{runs.length ? ` (${runs.length})` : ''}
               </Chip>
@@ -565,13 +564,13 @@ function Editor({ flow }: { flow: Flow }) {
             <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6">
               {tab === 'memory' ? (
                 <>
-                  <fieldset disabled={locked}><MemoryPanel owner={{ kind: 'flow', id: flow.id }} compact /></fieldset>
-                  <p className="mt-4 text-[12px] text-muted">{tr('Caixinhas de prompt usam e preenchem esta memória. Caixinhas de bot usam a memória do próprio bot.')}</p>
+                  <fieldset disabled={locked}><MemoryPanel owner={{ kind: 'bot', id: flow.botId }} compact /></fieldset>
+                  <p className="mt-4 text-[12px] text-muted">{tr('As etapas usam e preenchem a memória do bot. Lições sobre uma especialização ficam nela.')}</p>
                 </>
               ) : tab === 'runs' ? (
                 <RunHistory runs={runs} />
               ) : tab === 'files' ? (
-                <FilesPanel files={files} empty={tr('Nenhum arquivo mexido pelas execuções deste fluxo ainda.')} />
+                <FilesPanel files={files} empty={tr('Nenhum arquivo mexido pelas execuções desta rotina ainda.')} />
               ) : selected ? (
                 <fieldset disabled={locked} className="min-w-0">
                   <NodePanel
@@ -583,22 +582,12 @@ function Editor({ flow }: { flow: Flow }) {
                   />
                 </fieldset>
               ) : (
-                <p className="text-[13px] text-muted">{tr('Clique numa caixinha para configurar, ou adicione um Bot, Prompt, Decisão ou Confirmação.')}</p>
+                <p className="text-[13px] text-muted">{tr('Clique numa caixinha para configurar, ou adicione uma Tarefa, Decisão ou Confirmação.')}</p>
               )}
             </div>
           </aside>
         )}
       </div>
-      {pickingBot && !locked && (
-        <BotPickerModal
-          projectId={flow.projectId}
-          onClose={() => setPickingBot(undefined)}
-          onPick={(bot) => {
-            addNode('bot', pickingBot, bot.id)
-            setPickingBot(undefined)
-          }}
-        />
-      )}
     </div>
   )
 }

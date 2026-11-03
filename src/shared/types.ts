@@ -142,7 +142,7 @@ export interface ChatMessage {
   /** Avatares sorteados para os bots novos do plano (para a prévia e a criação baterem). */
   planAvatars?: Record<string, AvatarDef>
   /** O que foi criado a partir do plano, depois de "Criar tudo". */
-  planApplied?: { projectId?: string; botIds: string[]; flowIds: string[] }
+  planApplied?: { projectId?: string; specializationIds: string[]; botIds: string[]; flowIds: string[] }
 }
 
 /** Arquivo gerado numa resposta ou anexado pelo usuário (mostrado como anexo no chat). */
@@ -172,18 +172,40 @@ export interface Project {
   updatedAt: number
 }
 
-/** Agente especializado: nome, avatar e instruções próprias. */
+/**
+ * Especialização: um conhecimento ou procedimento (instruções, arquivos de referência e lições aprendidas) que os bots
+ * usam. Não tem vida própria: quem trabalha, conversa e roda rotinas é o bot.
+ */
+export interface Specialization {
+  id: string
+  name: string
+  /** Uma frase sobre o que a especialização faz (mostrada nas listas e no prompt dos bots que a usam). */
+  description: string
+  /** Instruções da especialização (vão para o prompt de quem a usa). */
+  instructions: string
+  /** Projeto da especialização; ausente = disponível em qualquer lugar. */
+  projectId?: string
+  createdAt: number
+  updatedAt: number
+}
+
+/**
+ * Bot: membro vivo do time. Tem nome, avatar e personalidade, usa especializações, roda rotinas agendadas e conversa.
+ * Faz uma tarefa por vez (rotinas, conversas e consultas de outros bots entram na fila dele).
+ */
 export interface Bot {
   id: string
   name: string
   avatar: AvatarDef
   /** Uma frase sobre o que o bot faz (mostrada na lista e usada por outros bots para decidir a quem perguntar). */
   description: string
-  /** Instruções que especializam o bot (vão para o prompt de sistema). */
+  /** Personalidade e orientações gerais do bot (vão para o prompt de sistema). */
   instructions: string
-  /** Provider for this bot; legacy bots default to Claude Code. */
+  /** Especializações que o bot usa (as instruções delas vão no prompt dele). */
+  specializationIds: string[]
+  /** Provedor do bot; ausente = Claude Code. */
   providerId?: string
-  /** Modelo do bot (conversas com ele e consultas de outros bots). Ausente = padrão. */
+  /** Modelo do bot (conversas, rotinas e consultas de outros bots). Ausente = padrão. */
   model?: string
   /** Projeto do bot; ausente = bot solto, disponível em qualquer lugar. */
   projectId?: string
@@ -221,15 +243,15 @@ export interface SendMessageRequest {
   bot?: Pick<Bot, 'id' | 'name' | 'description' | 'instructions'>
   /** Bot chamado diretamente com @menção: a mensagem vai para ele, não para o assistente da conversa. */
   targetBotId?: string
+  /** Especializações chamadas com / nesta mensagem: as instruções delas vão junto só nesta mensagem. */
+  specializationIds?: string[]
   /** Internal delegation chain, preserving recursion guards across providers. */
   botChain?: string[]
   /** Projeto da conversa (pasta de trabalho, instruções e bots visíveis). */
   projectId?: string
   /** Modelo da conversa (ignorado em @menções: o bot mencionado usa o modelo dele). */
   model?: string
-  /** De quem é a memória usada e preenchida nesta mensagem (bot da conversa ou fluxo). */
-  memory?: MemoryOwner
-  /** Mensagem disparada por um fluxo (para a memória registrar a origem). */
+  /** Mensagem disparada por uma rotina (para a memória e o consumo registrarem a origem). */
   origin?: { kind: 'flow'; id: string }
   /** Arquivos que o usuário anexou nesta mensagem (já copiados para a pasta de anexos da conversa). */
   attachments?: ChatFile[]
@@ -257,7 +279,7 @@ export interface UsageRecord extends TokenUsage {
   at: number
   /**
    * `conversation`: resposta numa conversa · `mention`: bot chamado com @ · `consult`: bot consultado por outro ·
-   * `flow`: caixinha de fluxo · `reflection`: registro automático de lição · `suggest`: sugestão de nome do bot ·
+   * `flow`: caixinha de uma rotina · `reflection`: registro automático de lição · `suggest`: sugestão de nome do bot ·
    * `plan`: sugestão do que criar, na página inicial
    */
   kind: 'conversation' | 'mention' | 'consult' | 'flow' | 'reflection' | 'suggest' | 'plan'
@@ -272,7 +294,7 @@ export interface UsageSummary {
   today: TokenUsage
   /** Últimos 7 dias. */
   week: TokenUsage
-  /** O que mais gastou nos últimos 7 dias (fluxo, senão bot, senão conversa), do maior para o menor. */
+  /** O que mais gastou nos últimos 7 dias (rotina, senão bot, senão conversa), do maior para o menor. */
   top: { kind: 'flow' | 'bot' | 'conversation'; id: string; usage: TokenUsage }[]
 }
 
@@ -339,15 +361,17 @@ export interface ApprovalRequest {
 
 // ── Memória (procedimentos aprendidos) ──────────────────────────────
 
-/** Dono de uma memória: um bot ou um fluxo. */
+/**
+ * Dono de uma memória: uma especialização (o "como fazer X") ou um bot (como as rotinas e o trabalho dele funcionam).
+ */
 export interface MemoryOwner {
-  kind: 'bot' | 'flow'
+  kind: 'specialization' | 'bot'
   id: string
 }
 
 /**
  * Procedimento aprendido: curto e objetivo, porque vai inteiro no prompt de sistema do dono.
- * O próprio bot/fluxo registra (ferramenta save_lesson) quando descobre como fazer algo que falhou;
+ * O próprio bot registra (ferramenta save_lesson), na memória dele ou na de uma especialização que usa; quando descobre como fazer algo que falhou;
  * o usuário pode ver, editar, desligar e apagar.
  */
 export interface Lesson {
@@ -361,7 +385,7 @@ export interface Lesson {
   steps: string
   /** Por que foi registrado (o que deu errado antes). Não vai para o prompt. */
   why: string
-  /** De onde veio: conversa, execução de fluxo ou manual. */
+  /** De onde veio: conversa, execução de rotina ou manual. */
   source: { kind: 'conversation' | 'flow' | 'manual'; id?: string }
   enabled: boolean
   createdAt: number
@@ -378,7 +402,7 @@ export interface AutoMemoryNote {
   folder: string
 }
 
-// ── Fluxos (canvas de automações) ───────────────────────────────────
+// ── Rotinas dos bots (canvas de automações) ─────────────────────────
 
 /**
  * Agenda do gatilho:
@@ -389,8 +413,8 @@ export type FlowSchedule =
   | { mode: 'times'; days: number[]; times: string[] }
   | { mode: 'interval'; everyMinutes: number }
 
-/** Arquivo de referência de um bot: ele vê a lista no prompt e lê o conteúdo quando precisar. */
-export interface BotFile {
+/** Arquivo de referência de uma especialização: quem a usa vê a lista no prompt e lê o conteúdo quando precisar. */
+export interface SpecializationFile {
   name: string
   size: number
   addedAt: number
@@ -398,22 +422,25 @@ export interface BotFile {
   note?: string
 }
 
-/** Tarefa de um bot: ele faz uma por vez (fluxos, conversas e consultas de outros bots); as outras esperam na fila. */
+/** Tarefa de um bot: ele faz uma por vez (rotinas, conversas e consultas de outros bots); as outras esperam na fila. */
 export interface BotTask {
   id: string
   botId: string
-  /** Ex.: 'Fluxo "Resumo" · Escrever post' ou 'Conversa "Ideias"'. */
+  /** Ex.: 'Rotina "Resumo" · Escrever post' ou 'Conversa "Ideias"'. */
   label: string
   origin: 'flow' | 'chat' | 'consult'
-  /** Fluxo ou conversa de onde veio. */
+  /** Rotina ou conversa de onde veio. */
   originId?: string
   status: 'running' | 'waiting'
   queuedAt: number
   startedAt?: number
 }
 
-/** `confirm`: pausa o fluxo e pede ao usuário para escolher uma das opções (notificação do sistema + pendências). */
-export type FlowNodeType = 'trigger' | 'bot' | 'prompt' | 'decision' | 'confirm'
+/**
+ * `task`: o bot da rotina faz uma tarefa (opcionalmente com uma especialização) · `decision`: o modelo escolhe um caminho ·
+ * `confirm`: pausa a rotina e pede ao usuário para escolher uma das opções (notificação do sistema + pendências).
+ */
+export type FlowNodeType = 'trigger' | 'task' | 'decision' | 'confirm'
 
 /** Uma saída da caixinha de decisão: "quando acontecer X" → segue pela ligação desta opção. */
 export interface FlowDecisionOption {
@@ -426,11 +453,11 @@ export interface FlowNodeData {
   label?: string
   // gatilho
   schedule?: FlowSchedule
-  // bot
-  botId?: string
-  // bot e prompt: texto enviado (o resultado das caixinhas anteriores vai junto; {{anterior}} posiciona)
+  // tarefa: especialização usada nesta etapa (ausente = o bot faz com o que já sabe)
+  specializationId?: string
+  // tarefa: texto enviado (o resultado das caixinhas anteriores vai junto; {{anterior}} posiciona)
   message?: string
-  // prompt e decisão
+  // tarefa e decisão: modelo próprio da caixinha (ausente = o do bot; na decisão, um rápido)
   providerId?: string
   model?: string
   // decisão e confirmação: as opções (cada uma com sua bolinha de saída). Na decisão, `message` vira o critério
@@ -453,20 +480,24 @@ export interface FlowEdge {
   sourceHandle?: string
 }
 
+/**
+ * Rotina de um bot: um gatilho (agenda) e um canvas de caixinhas. O bot executa as tarefas; a pasta e as instruções
+ * vêm do projeto dele.
+ */
 export interface Flow {
   id: string
+  /** Bot dono da rotina. */
+  botId: string
   name: string
-  /** Só fluxos ativos disparam pelo gatilho (o "Rodar agora" funciona sempre). */
+  /** Só rotinas ativas disparam pelo gatilho (o "Rodar agora" funciona sempre). */
   enabled: boolean
-  /** Projeto do fluxo; ausente = fluxo solto. Caixinhas de prompt usam a pasta e as instruções dele. */
-  projectId?: string
   nodes: FlowNode[]
   edges: FlowEdge[]
   createdAt: number
   updatedAt: number
 }
 
-/** `waiting`: caixinha de confirmação esperando a escolha do usuário · `stopped`: o usuário parou o fluxo. */
+/** `waiting`: caixinha de confirmação esperando a escolha do usuário · `stopped`: o usuário parou a rotina. */
 export type FlowStepStatus = 'pending' | 'running' | 'waiting' | 'done' | 'error' | 'skipped' | 'stopped'
 
 export interface FlowRunStep {
@@ -526,40 +557,57 @@ export interface QuestionRequest {
   questions: UserQuestion[]
 }
 
-/** Um bot do plano sugerido: novo, ou um que já existe (`existingId`) sendo reaproveitado. */
-export interface PlanBot {
-  /** Apelido usado pelas etapas dos fluxos do plano para apontar para este bot. */
+/** Uma especialização do plano: nova, ou uma que já existe (`existingId`) sendo reaproveitada. */
+export interface PlanSpecialization {
+  /** Apelido usado pelos bots e etapas do plano para apontar para esta especialização. */
   ref: string
   existingId?: string
-  /** Com `existingId`: o bot existente é atualizado com os campos do plano (sem isso, só é reaproveitado). */
+  /** Com `existingId`: a existente é atualizada com os campos do plano (sem isso, só é reaproveitada). */
   edit?: boolean
   name: string
   description: string
   instructions: string
-  /** Alias do modelo (ex.: sonnet); ausente = padrão. */
-  model?: string
-  /** Por que este bot entra no plano. */
+  /** Por que esta especialização entra no plano. */
   why: string
 }
 
 /**
- * Etapa de um fluxo do plano. Na decisão e na confirmação, a primeira opção segue para as próximas etapas; as outras
+ * Etapa de uma rotina do plano. Na decisão e na confirmação, a primeira opção segue para as próximas etapas; as outras
  * encerram.
  */
 export type PlanStep =
-  | { type: 'bot'; label?: string; bot: string; message: string }
-  | { type: 'prompt'; label?: string; message: string }
+  | { type: 'task'; label?: string; specialization?: string; message: string }
   | { type: 'decision'; label?: string; message: string; options: string[] }
   | { type: 'confirm'; label?: string; message: string; options: string[] }
 
-export interface PlanFlow {
-  /** Fluxo existente que é refeito com estas etapas (mantém o id e se está ligado). */
+export interface PlanRoutine {
+  /** Rotina existente do bot que é refeita com estas etapas (mantém o id e se está ligada). */
   existingId?: string
   name: string
   why: string
   /** Ausente = só roda quando o usuário mandar. */
   schedule?: FlowSchedule
   steps: PlanStep[]
+}
+
+/** Um bot do plano: novo, ou um que já existe (`existingId`). */
+export interface PlanBot {
+  /** Apelido do bot no plano. */
+  ref: string
+  existingId?: string
+  /** Com `existingId`: o bot existente é atualizado com os campos do plano (sem isso, só ganha as rotinas). */
+  edit?: boolean
+  name: string
+  description: string
+  /** Personalidade e orientações gerais. */
+  instructions: string
+  /** Refs das especializações que o bot usa (somadas às que ele já tem). */
+  specializations: string[]
+  /** Alias do modelo (ex.: sonnet); ausente = padrão. */
+  model?: string
+  routines: PlanRoutine[]
+  /** Por que este bot entra no plano. */
+  why: string
 }
 
 /** O que o gBot sugere criar para atender um pedido do usuário (página inicial). */
@@ -570,13 +618,13 @@ export interface AutomationPlan {
   project?:
     | { existingId: string; edit?: boolean; name?: string; description?: string; instructions?: string }
     | { name: string; description: string; instructions: string }
+  specializations: PlanSpecialization[]
   bots: PlanBot[]
-  flows: PlanFlow[]
   /** O que o usuário precisa fazer antes de ligar (ex.: entrar no WhatsApp Web no navegador do gBot). */
   setup: string[]
 }
 
-/** Um arquivo que uma conversa, bot ou fluxo mexeu (painel de arquivos). */
+/** Um arquivo que uma conversa, bot ou rotina mexeu (painel de arquivos). */
 export interface TouchedFile {
   path: string
   name: string
@@ -584,7 +632,7 @@ export interface TouchedFile {
   action: 'created' | 'modified' | 'read' | 'attached'
   /** Última vez que foi mexido. */
   at: number
-  /** Onde foi mexido (para abrir a conversa ou o fluxo de origem). */
+  /** Onde foi mexido (para abrir a conversa ou a rotina de origem). */
   conversationId?: string
   flowId?: string
   size?: number
@@ -592,7 +640,7 @@ export interface TouchedFile {
   exists?: boolean
 }
 
-/** De quem são os arquivos pedidos: uma conversa (inclui bots chamados nela), um fluxo ou um bot. */
+/** De quem são os arquivos pedidos: uma conversa (inclui bots chamados nela), uma rotina ou um bot. */
 export interface FilesFilter {
   conversationId?: string
   flowId?: string
@@ -668,23 +716,30 @@ export interface GbotApi {
     /** Abre o seletor de pastas do sistema; undefined se o usuário cancelar. */
     pickFolder(current?: string): Promise<string | undefined>
   }
-  bots: {
-    list(): Promise<Bot[]>
-    save(bot: Bot): Promise<void>
+  specializations: {
+    list(): Promise<Specialization[]>
+    save(specialization: Specialization): Promise<void>
+    /** Remove a especialização (e tira dos bots que a usavam). */
     remove(id: string): Promise<void>
     /** Sugere nome e descrição a partir das instruções (usa o Claude Code se estiver conectado). */
     suggest(instructions: string): Promise<{ name: string; description: string }>
+    files(specializationId: string): Promise<SpecializationFile[]>
+    /** Copia os arquivos para a pasta da especialização; sem `files`, abre o seletor do sistema. */
+    addFiles(specializationId: string, files?: File[]): Promise<SpecializationFile[]>
+    removeFile(specializationId: string, name: string): Promise<void>
+    setFileNote(specializationId: string, name: string, note: string): Promise<void>
+    /** Mostra o arquivo no Finder/Explorer. */
+    revealFile(specializationId: string, name: string): Promise<void>
+  }
+  bots: {
+    list(): Promise<Bot[]>
+    save(bot: Bot): Promise<void>
+    /** Remove o bot com as rotinas, conversas e memória dele. */
+    remove(id: string): Promise<void>
     /** Tarefas rodando e na fila de todos os bots. */
     tasks(): Promise<BotTask[]>
     cancelTask(id: string): Promise<void>
     onTasks(cb: (tasks: BotTask[]) => void): () => void
-    files(botId: string): Promise<BotFile[]>
-    /** Copia os arquivos para a pasta do bot; sem `files`, abre o seletor do sistema. */
-    addFiles(botId: string, files?: File[]): Promise<BotFile[]>
-    removeFile(botId: string, name: string): Promise<void>
-    setFileNote(botId: string, name: string, note: string): Promise<void>
-    /** Mostra o arquivo no Finder/Explorer. */
-    revealFile(botId: string, name: string): Promise<void>
   }
   conversations: {
     list(): Promise<ConversationMeta[]>
@@ -742,7 +797,7 @@ export interface GbotApi {
   }
   memory: {
     list(owner: MemoryOwner): Promise<Lesson[]>
-    /** Lições de todos os bots e fluxos. */
+    /** Lições de todos os bots e especializações. */
     all(): Promise<Lesson[]>
     /** Notas antigas da memória automática do Claude Code. */
     autoNotes(): Promise<AutoMemoryNote[]>
@@ -761,11 +816,12 @@ export interface GbotApi {
     /** Avisa quando um gasto novo foi registrado. */
     onChanged(listener: () => void): () => void
   }
+  /** Rotinas dos bots. */
   flows: {
     list(): Promise<Flow[]>
     save(flow: Flow): Promise<void>
     remove(id: string): Promise<void>
-    /** Roda o fluxo agora (sem esperar o gatilho); resolve com o id da execução. */
+    /** Roda a rotina agora (sem esperar o gatilho); resolve com o id da execução. */
     run(id: string): Promise<string>
     /** Para a execução na hora (sessões, processos, decisões e confirmações pendentes). */
     stop(id: string): Promise<void>

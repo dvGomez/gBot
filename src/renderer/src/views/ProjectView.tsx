@@ -1,12 +1,10 @@
 import { t as tr, useLanguage } from '@/i18n'
-import { ArrowLeft, Bot as BotIcon, FolderOpen, MessageSquarePlus, Pencil, Plus, Workflow } from 'lucide-react'
+import { ArrowLeft, Bot as BotIcon, FolderOpen, GraduationCap, MessageSquarePlus, Pencil, Plus } from 'lucide-react'
 import { ConversationList } from '@/components/ConversationList'
 import { PixelAvatar } from '@/components/PixelAvatar'
 import { ProjectTile } from '@/components/ProjectBadge'
 import { Button, Card } from '@/components/ui'
-import { cn } from '@/lib/cn'
 import { draggable, useDrop } from '@/lib/dnd'
-import { describeSchedule } from '@/lib/schedule'
 import { useApp } from '@/state/app'
 
 function NewCard({ label, onClick }: { label: string; onClick(): void }) {
@@ -22,7 +20,7 @@ function NewCard({ label, onClick }: { label: string; onClick(): void }) {
   )
 }
 
-/** Página do projeto: bots, fluxos e conversas dele, pasta e instruções. Aceita itens arrastados de fora. */
+/** Página do projeto: bots, especializações e conversas dele, pasta e instruções. Aceita itens arrastados de fora. */
 export function ProjectView() {
   useLanguage()
   const app = useApp()
@@ -33,7 +31,7 @@ export function ProjectView() {
   )
   if (!project) return null
   const bots = app.bots.filter((b) => b.projectId === project.id)
-  const flows = app.flows.filter((f) => f.projectId === project.id)
+  const specializations = app.specializations.filter((sp) => sp.projectId === project.id)
   const conversations = app.conversations.filter((c) => c.projectId === project.id)
 
   const pickFolder = async () => {
@@ -67,8 +65,8 @@ export function ProjectView() {
             <Pencil size={14} />{tr(' Editar')}</Button>
           <Button onClick={() => app.editBot(undefined, project.id)}>
             <BotIcon size={14} />{tr(' Novo bot')}</Button>
-          <Button onClick={() => void app.newFlow(project.id)}>
-            <Workflow size={14} />{tr(' Novo fluxo')}</Button>
+          <Button onClick={() => app.editSpecialization(undefined, project.id)}>
+            <GraduationCap size={14} />{tr(' Nova especialização')}</Button>
           <Button variant="primary" onClick={() => app.newConversation(undefined, project.id)}>
             <MessageSquarePlus size={14} />{tr(' Nova conversa')}</Button>
         </div>
@@ -98,35 +96,31 @@ export function ProjectView() {
             <PixelAvatar avatar={b.avatar} size={44} seed={i} />
             <p className="mt-3 w-full truncate text-[15px] font-semibold">{b.name}</p>
             <p className="mt-0.5 line-clamp-2 text-[12px] text-muted">{b.description || tr('Sem descrição')}</p>
+            <p className="mt-2 text-[11px] text-muted">
+              {tr('{0} rotinas · {1} ligadas', app.flows.filter((f) => f.botId === b.id).length, app.flows.filter((f) => f.botId === b.id && f.enabled).length)}
+            </p>
           </button>
         ))}
         <NewCard label={tr('Criar bot no projeto')} onClick={() => app.editBot(undefined, project.id)} />
       </div>
 
-      <p className="mt-8 text-[13px] font-medium text-muted">{tr('Fluxos do projeto')}</p>
+      <p className="mt-8 text-[13px] font-medium text-muted">{tr('Especializações do projeto')}</p>
       <div className="mt-3 grid grid-cols-3 gap-3 xl:grid-cols-4">
-        {flows.map((f) => (
+        {specializations.map((sp) => (
           <button
-            key={f.id}
-            {...draggable({ kind: 'flow', id: f.id, projectId: f.projectId })}
-            onClick={() => app.openFlow(f.id)}
+            key={sp.id}
+            {...draggable({ kind: 'specialization', id: sp.id, projectId: sp.projectId })}
+            onClick={() => app.editSpecialization(sp.id)}
             className="flex flex-col items-start rounded-card border border-line bg-card p-5 text-left transition-colors hover:bg-hover"
           >
-            <span
-              className={cn(
-                'relative flex size-11 items-center justify-center rounded-tile border-[1.5px] bg-tile',
-                f.enabled ? 'border-success/60 text-success' : 'border-line text-muted'
-              )}
-            >
-              <Workflow size={19} strokeWidth={1.7} />
+            <span className="flex size-11 items-center justify-center rounded-tile border-[1.5px] border-line bg-tile text-fg-2">
+              <GraduationCap size={19} strokeWidth={1.7} />
             </span>
-            <p className="mt-3 w-full truncate text-[15px] font-semibold">{f.name}</p>
-            <p className="mt-0.5 line-clamp-2 text-[12px] text-muted">
-              {f.enabled ? tr('Ativo') : tr('Pausado')} · {describeSchedule(f.nodes.find((n) => n.type === 'trigger')?.data.schedule)}
-            </p>
+            <p className="mt-3 w-full truncate text-[15px] font-semibold">{sp.name}</p>
+            <p className="mt-0.5 line-clamp-2 text-[12px] text-muted">{sp.description || tr('Sem descrição')}</p>
           </button>
         ))}
-        <NewCard label={tr('Criar fluxo no projeto')} onClick={() => void app.newFlow(project.id)} />
+        <NewCard label={tr('Criar especialização no projeto')} onClick={() => app.editSpecialization(undefined, project.id)} />
       </div>
 
       <div className={`mt-8 grid gap-4 ${project.instructions ? 'grid-cols-[1fr_360px]' : 'grid-cols-1'}`}>

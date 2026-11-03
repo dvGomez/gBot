@@ -275,9 +275,9 @@ export function ChatView() {
                 </p>
                 <p className="mt-1 max-w-[460px] text-[14px] text-muted">
                   {bot
-                    ? bot.description || tr('Este bot segue as instruções que você definiu.')
-                    : app.visibleBots.length
-                      ? tr('Pergunte o que quiser. Para falar com um bot, mencione com @.')
+                    ? bot.description || tr('Este bot usa as especializações e a personalidade que você definiu.')
+                    : app.visibleBots.length || app.visibleSpecializations.length
+                      ? tr('Pergunte o que quiser. Mencione um bot com @ ou use uma especialização com /.')
                       : tr('Pergunte o que quiser.')}
                 </p>
               </div>

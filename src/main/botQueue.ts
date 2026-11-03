@@ -3,7 +3,7 @@ import { BrowserWindow } from 'electron'
 import type { BotTask } from '@shared/types'
 
 /**
- * Fila de trabalho de cada bot: um bot faz uma tarefa por vez, venha ela de um fluxo, de uma conversa ou de
+ * Fila de trabalho de cada bot: um bot faz uma tarefa por vez, venha ela de uma rotina, de uma conversa ou de
  * uma consulta de outro bot. As demais esperam na ordem de chegada (e aparecem na página do bot).
  */
 
