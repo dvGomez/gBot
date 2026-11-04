@@ -241,13 +241,20 @@ async function addAccount(progress: (text: string, url?: string) => void): Promi
     const other = profileInfo(accountDir(a.id))
     return other?.accountUuid === info.accountUuid && other.organizationUuid === info.organizationUuid
   })
-  // O perfil antigo pode existir sem credencial válida (ex.: a credencial saiu do Keychain): aí o login novo o substitui.
+  // Conta ativa sem login válido (ex.: a credencial saiu do Keychain): a conta que acabou de entrar passa a ser a ativa,
+  // senão o app continua na tela de login.
+  const activeOk = await hasCredentials(activeAccountId())
+  // O perfil antigo pode existir sem credencial válida: aí o login novo o substitui.
   if (same && (await hasCredentials(same.id))) {
     discardProfile(id)
-    throw new Error('Essa conta já está conectada.')
+    if (activeOk || activeAccountId() === same.id) throw new Error('Essa conta já está conectada.')
+    setActiveAccount(same.id)
+    void refreshLimits(true)
+    return info.email ? `Conta ${info.email} conectada.` : 'Conta conectada.'
   }
   const wasActive = !!same && activeAccountId() === same.id
   addAccountRecord(id)
+  if (!activeOk && !same) setActiveAccount(id)
   // Login de novo numa conta que tinha saído: a nova entrada fica no lugar dela, com o mesmo apelido.
   if (same) {
     if (same.name) renameAccount(id, same.name)

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { AutomationPlan, Flow, FlowSchedule } from '@shared/types'
 import { triggerName, triggersOf } from '@shared/flows'
 import { listFlows } from '../../flows/store'
+import { normalize } from '@shared/mentions'
 import { listBots, listProjects, listSpecializations } from '../../store'
 
 /**
@@ -78,7 +79,10 @@ export const planSchema = z.object({
       })
     )
     .default([]),
-  setup: z.array(z.string()).default([])
+  setup: z.array(z.string()).default([]),
+  tested: z.array(z.string()).default([]),
+  attention: z.array(z.string()).default([]),
+  suggestions: z.array(z.object({ title: z.string(), detail: z.string().default('') })).max(4).default([])
 })
 
 const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0, max)}…` : text)
@@ -160,7 +164,7 @@ function existing() {
 
 const EXAMPLE = {
   title: 'Orçamentos do WhatsApp',
-  summary: 'Uma frase dizendo o que o conjunto faz pelo usuário e o que foi testado.',
+  summary: 'Uma ou duas frases dizendo o que o conjunto faz pelo usuário.',
   project: { name: 'Orçamentos', description: '...', instructions: 'Instruções comuns a tudo do projeto.' },
   specializations: [
     {
@@ -187,13 +191,22 @@ const EXAMPLE = {
           schedule: { mode: 'interval', everyMinutes: 60 },
           steps: [
             { type: 'task', label: 'Buscar pedidos', specialization: 's1', message: 'Tarefa desta etapa...' },
-            { type: 'decision', label: 'Tem pedido?', message: 'Critério...', options: ['Há pedidos pendentes', 'Nenhum pedido pendente'] }
+            { type: 'decision', label: 'Tem pedido?', message: 'Critério...', options: ['Há pedidos pendentes', 'Nenhum pedido pendente'] },
+            { type: 'task', label: 'Preparar respostas', specialization: 's1', message: 'Escreva a resposta de cada pedido...' },
+            { type: 'confirm', label: 'Revisar respostas', message: 'Confira as respostas antes de enviar.', options: ['Enviar', 'Não enviar'] },
+            { type: 'task', label: 'Enviar respostas', specialization: 's1', message: 'Envie as respostas aprovadas...' }
           ]
         }
       ]
     }
   ],
-  setup: ['Abra o navegador do gBot e entre no WhatsApp Web.']
+  setup: ['Abra o navegador do gBot e entre no WhatsApp Web.'],
+  tested: ['Abri o WhatsApp Web no navegador do gBot: você está logado e os pedidos ficam na conversa "Orçamentos".'],
+  attention: [
+    'Se o WhatsApp Web desconectar, a rotina para na primeira etapa e avisa, em vez de responder no escuro.',
+    'Pedidos já respondidos ficam marcados com etiqueta, para não responder duas vezes.'
+  ],
+  suggestions: [{ title: 'Resumo semanal', detail: 'Uma rotina na sexta às 17:00 com quantos orçamentos chegaram e quantos foram respondidos.' }]
 }
 
 /** Recursos do gBot, o que já existe e as regras do plano (criar e editar). */
@@ -252,7 +265,46 @@ function planGuide(): string[] {
     '- Bot novo ganha um nome de pessoa ou apelido simpático (não um cargo). Bot novo também pode entrar sem rotina, quando o',
     '  pedido for um assistente para conversar.',
     '- "setup": passos curtos que o usuário ainda precisa fazer antes de ligar.',
-    '- Seja enxuto: o mínimo de especializações, bots e etapas que resolve bem.'
+    '- "tested": o que você testou de verdade e o que encontrou (vazio se não testou nada).',
+    '- "attention": pontos de atenção curtos e concretos: o que pode dar errado, limitações e como o plano lida com cada um.',
+    '- "suggestions": de 0 a 3 melhorias que o usuário não pediu, mas provavelmente quer (ex.: resumo semanal, aviso quando',
+    '  algo falhar, revisão antes de enviar). Elas NÃO entram no plano: o usuário marca no cartão e pede para incluir.',
+    '- Seja enxuto: o mínimo de especializações, bots e etapas que resolve bem. Enxuto não é ignorar os casos abaixo.',
+    '',
+    ...detailChecklist()
+  ]
+}
+
+/** Casos que toda rotina precisa tratar antes de virar plano. */
+function detailChecklist(): string[] {
+  return [
+    'Antes de propor, pense nos detalhes de cada rotina:',
+    '- Nada novo: o que ela faz quando não há o que fazer? Em geral, uma "decision" logo depois da busca encerra cedo.',
+    '- Falha de acesso: login expirado, site fora do ar, página diferente do esperado. As instruções dizem como perceber e',
+    '  avisar, nunca inventar resultado.',
+    '- Repetição: como não tratar duas vezes o mesmo item (comparar com a execução anterior, marcar o que já foi feito).',
+    '- Ações irreversíveis ou para fora (enviar, publicar, responder cliente, pagar, apagar): uma "confirm" antes, a menos',
+    '  que o usuário tenha pedido para ser automático.',
+    '- Agenda: dias úteis ou todos os dias, horário que faz sentido, e frequência compatível com o limite da assinatura',
+    '  (intervalos curtos gastam muito).',
+    '- Volume: o que fazer quando vierem muitos itens de uma vez (limite por execução, resumo).',
+    '- Entrega: onde o resultado fica e em que formato (resposta da execução, arquivo, mensagem).',
+    'O que importa vira etapa ("decision"/"confirm") ou instrução da especialização; o resto vai em "attention".',
+    'Antes de mostrar o plano, o gBot o revisa e pode devolver pontos para corrigir ou justificar em "attention".'
+  ]
+}
+
+/** Como conduzir a conversa até o plano: entender, oferecer caminhos quando houver mais de um, testar e propor. */
+function planningProcess(): string[] {
+  return [
+    'Como trabalhar (vale para qualquer tipo de pedido):',
+    '1. Entenda o pedido como um briefing: objetivo; de onde vêm os dados; o que entregar, onde e em que formato; quando roda;',
+    '   quem revisa ou aprova; o que conta como "deu certo"; exceções que o usuário já conhece. O que dá para inferir com bom',
+    '   senso, infira. O que falta e muda o resultado, pergunte numa única chamada de `ask_user` (até 4 perguntas, cada uma',
+    '   com opções curtas e a recomendada primeiro). Pedido simples e claro: pule direto para o plano.',
+    '2. Se houver mais de um caminho razoável (ex.: rotina diária com resumo × alerta só quando aparecer algo; um bot × dois',
+    '   bots que se consultam; revisar antes de enviar × enviar direto), ofereça 2 ou 3 abordagens com `ask_user`, cada',
+    '   opção com o prós e contras na descrição e a recomendada primeiro. Se só um caminho faz sentido, siga com ele.'
   ]
 }
 
@@ -269,21 +321,21 @@ export function architectPrompt(): string[] {
     '',
     ...planGuide(),
     '',
-    'Como trabalhar (vale para qualquer tipo de pedido):',
-    '1. Entenda o pedido. Se faltar algo que muda o resultado, pergunte com `ask_user` (opções curtas, a recomendada primeiro).',
-    '2. Não monte nada no achismo: antes de propor, teste de verdade as partes incertas com as mesmas ferramentas que os bots',
+    ...planningProcess(),
+    '3. Não monte nada no achismo: antes de propor, teste de verdade as partes incertas com as mesmas ferramentas que os bots',
     '   vão usar. Ex.: abrir o site ou sistema no navegador do gBot e ver se o usuário está logado e onde ficam os dados e os',
     '   botões; ler a pasta ou o arquivo que ele citou; rodar um comando de leitura; fazer uma vez o passo principal em modo de',
     '   teste. Teste só o necessário para ter certeza.',
-    '3. Antes de testar algo que abre contas do usuário, mexe em arquivos dele ou roda comandos, peça permissão com `ask_user`',
+    '4. Antes de testar algo que abre contas do usuário, mexe em arquivos dele ou roda comandos, peça permissão com `ask_user`',
     '   dizendo o que vai fazer (ex.: opções "Pode testar (Recomendado)" e "Não teste, só monte"). Nos testes, nunca faça nada',
     '   irreversível (enviar mensagem, publicar, comprar, pagar, apagar) sem o usuário mandar explicitamente.',
-    '4. Se precisar que o usuário faça algo (entrar numa conta no navegador do gBot, escanear um QR code, liberar um acesso),',
+    '5. Se precisar que o usuário faça algo (entrar numa conta no navegador do gBot, escanear um QR code, liberar um acesso),',
     '   explique e espere com `ask_user` (ex.: opção "Já fiz"), depois confira.',
-    '5. Conte em poucas linhas o que viu em cada teste e ajuste o plano ao que encontrou.',
-    '6. Quando tiver segurança, chame `propose_plan` com o plano. Nas instruções das especializações, escreva o caminho que funcionou nos',
-    '   testes (onde entrar, o que procurar, onde clicar, cuidados e formato da resposta). No "summary", diga o que foi testado.',
-    '7. O plano aparece para o usuário num cartão com o botão para aplicar: não crie nem altere nada você mesmo. Se ele pedir',
+    '6. Conte em poucas linhas o que viu em cada teste e ajuste o plano ao que encontrou.',
+    '7. Passe pelos detalhes de cada rotina (lista acima) e ajuste o plano.',
+    '8. Quando tiver segurança, chame `propose_plan` com o plano. Nas instruções das especializações, escreva o caminho que funcionou nos',
+    '   testes (onde entrar, o que procurar, onde clicar, cuidados e formato da resposta). Em "tested", o que foi testado.',
+    '9. O plano aparece para o usuário num cartão com o botão para aplicar: não crie nem altere nada você mesmo. Se ele pedir',
     '   ajustes, ajuste e chame `propose_plan` de novo.'
   ]
 }
@@ -292,6 +344,9 @@ export function architectPrompt(): string[] {
 export function overviewText(): string {
   return [
     ...planGuide(),
+    '',
+    ...planningProcess(),
+    '3. Passe pelos detalhes de cada rotina (lista acima). Pedido pequeno e claro (ex.: trocar um horário) vai direto ao plano.',
     '',
     'Para aplicar, chame `propose_plan` com o plano: ele aparece para o usuário num cartão com o botão para aplicar. Não crie nem',
     'altere nada você mesmo (nem por arquivos ou comandos).'
@@ -378,6 +433,94 @@ export function sanitizePlan(raw: unknown): AutomationPlan {
           .filter((r) => r.steps.length)
       }
     }),
-    setup: parsed.setup
+    setup: parsed.setup,
+    tested: parsed.tested,
+    attention: parsed.attention,
+    suggestions: parsed.suggestions.map((x) => ({ title: x.title.slice(0, 80), detail: x.detail }))
   }
+}
+
+/** Palavras que indicam uma ação irreversível ou para fora do computador do usuário. */
+const IRREVERSIBLE =
+  /(?<!\p{L})(envi[ae]r?|mand[ae]r?|mande|respond[ae]r|responda|publicar?|publique|postar?|poste|pagar|pague|comprar|compre|apagar?|apague|exclu[ia]r?|exclua|deletar?|delete|transferir|transfira|send|reply|publish|pay|buy)(?!\p{L})/iu
+
+export interface PlanReview {
+  /** Problemas que impedem o plano de ser mostrado. */
+  errors: string[]
+  /** Pontos para o modelo corrigir ou justificar em "attention"; repetidos depois disso, não bloqueiam mais. */
+  warnings: string[]
+}
+
+/**
+ * Revisão automática do plano antes de mostrá-lo: referências quebradas e etapas vazias são erros; casos não tratados
+ * (ação irreversível numa rotina sem confirmação, rotina agendada sem decisão, intervalo curto, menção a bot que não existe, pontos
+ * de atenção vazios) são avisos que o modelo corrige ou justifica.
+ */
+export function reviewPlan(raw: unknown): PlanReview {
+  const plan = planSchema.parse(raw)
+  const errors: string[] = []
+  const warnings: string[] = []
+  const refs = new Set(plan.specializations.map((sp) => sp.ref))
+  const used = new Set<string>()
+  const botNames = [...listBots().map((b) => b.name), ...plan.bots.map((b) => b.name)].map(normalize)
+
+  for (const sp of plan.specializations) {
+    if ((!sp.existingId || sp.edit) && !sp.instructions.trim()) errors.push(`Especialização "${sp.name}" sem instruções.`)
+  }
+  for (const b of plan.bots) {
+    for (const ref of b.specializations) {
+      used.add(ref)
+      if (!refs.has(ref)) errors.push(`Bot "${b.name}" usa a especialização "${ref}", que não está em "specializations".`)
+    }
+    const names = new Set<string>()
+    for (const r of b.routines) {
+      if (names.has(normalize(r.name))) errors.push(`Bot "${b.name}" tem duas rotinas chamadas "${r.name}".`)
+      names.add(normalize(r.name))
+      r.steps.forEach((step, i) => {
+        const where = `Rotina "${r.name}", etapa ${i + 1}${step.label ? ` ("${step.label}")` : ''}`
+        if (step.type === 'task') {
+          if (step.specialization) {
+            used.add(step.specialization)
+            if (!refs.has(step.specialization)) errors.push(`${where}: a especialização "${step.specialization}" não está em "specializations".`)
+          }
+          if (!step.message.trim() && !step.specialization) errors.push(`${where}: tarefa sem mensagem e sem especialização.`)
+        } else if (new Set(step.options.map(normalize)).size < step.options.length) {
+          errors.push(`${where}: opções repetidas.`)
+        }
+        for (const m of unknownMentions(step.message, botNames)) {
+          warnings.push(`${where}: menciona ${m}, mas não há bot com esse nome (nem no gBot nem no plano).`)
+        }
+      })
+      // Ação irreversível numa rotina sem nenhuma confirmação (com uma, o modelo já pensou em onde o usuário revisa).
+      const word = r.steps.map((s) => (s.type === 'task' ? s.message.match(IRREVERSIBLE)?.[0] : undefined)).find(Boolean)
+      if (word && !r.steps.some((s) => s.type === 'confirm')) {
+        warnings.push(`Rotina "${r.name}": parece fazer algo irreversível ou para fora ("${word}") e não tem nenhuma etapa "confirm".`)
+      }
+      if (r.schedule && r.steps.length > 1 && !r.steps.some((s) => s.type === 'decision')) {
+        warnings.push(`Rotina "${r.name}" roda sozinha e não tem "decision": quando não houver nada novo, ela faz todas as etapas mesmo assim.`)
+      }
+      if (r.schedule?.mode === 'interval' && r.schedule.everyMinutes < 30) {
+        warnings.push(`Rotina "${r.name}" roda a cada ${r.schedule.everyMinutes} min: gasta bastante limite da assinatura.`)
+      }
+    }
+  }
+  for (const sp of plan.specializations) {
+    if (!sp.existingId && !used.has(sp.ref)) warnings.push(`Especialização nova "${sp.name}" não é usada por nenhum bot nem etapa.`)
+  }
+  if (plan.bots.some((b) => b.routines.length) && !plan.attention.length) {
+    warnings.push('"attention" está vazio: liste o que pode dar errado nas rotinas (sem dados, falha de acesso, repetição) e como o plano lida com isso.')
+  }
+  return { errors, warnings }
+}
+
+/** Menções `@Nome` no texto que não batem com nenhum bot. */
+function unknownMentions(text: string, botNames: string[]): string[] {
+  const norm = normalize(text)
+  const unknown: string[] = []
+  for (const m of norm.matchAll(/(?<![\p{L}\p{N}._-])@[\p{L}\p{N}_-]+/gu)) {
+    const at = m.index!
+    const known = botNames.some((n) => norm.startsWith(`@${n}`, at) && !/[\p{L}\p{N}]/u.test(norm[at + n.length + 1] ?? ''))
+    if (!known) unknown.push(m[0])
+  }
+  return unknown
 }

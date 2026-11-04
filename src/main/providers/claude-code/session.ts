@@ -329,7 +329,8 @@ export class ClaudeSession {
           }
           const t = turn.tools.get(b.tool_use_id)
           if (!t) continue
-          if (b.is_error) this.lastTurnFailed = true
+          // Plano devolvido pela revisão não é falha da tarefa (não vira lição).
+          if (b.is_error && !turn.plans.has(b.tool_use_id)) this.lastTurnFailed = true
           const summary = b.is_error ? `Não concluiu: ${t.summary.charAt(0).toLowerCase()}${t.summary.slice(1)}` : t.summary
           // Para consultas a bots, guarda a resposta para mostrar no chat.
           const detail = t.botName ? blockText(b.content).slice(0, 20_000) : undefined

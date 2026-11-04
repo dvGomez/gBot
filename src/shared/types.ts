@@ -624,6 +624,18 @@ export interface AutomationPlan {
   bots: PlanBot[]
   /** O que o usuário precisa fazer antes de ligar (ex.: entrar no WhatsApp Web no navegador do gBot). */
   setup: string[]
+  /** O que o arquiteto testou de verdade antes de propor, com o que encontrou. */
+  tested?: string[]
+  /** Riscos, limitações e casos que o usuário precisa saber (o que pode dar errado e como o plano lida com isso). */
+  attention?: string[]
+  /** Melhorias opcionais fora do plano: o usuário escolhe no cartão e pede para incluir. */
+  suggestions?: PlanSuggestion[]
+}
+
+/** Uma melhoria que o usuário não pediu, mas provavelmente quer. Não entra no plano até ele pedir. */
+export interface PlanSuggestion {
+  title: string
+  detail: string
 }
 
 /** Um arquivo que uma conversa, bot ou rotina mexeu (painel de arquivos). */

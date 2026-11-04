@@ -1,7 +1,25 @@
 import { t as tr, useLanguage } from '@/i18n'
 import { useState, type ReactNode } from 'react'
-import { ArrowRight, ChevronDown, CircleCheck, Clock, FolderOpen, GitFork, GraduationCap, Hand, ListChecks, LoaderCircle, Play, Wand2 } from 'lucide-react'
-import type { AutomationPlan, AvatarDef, ChatMessage, PlanStep } from '@shared/types'
+import {
+  ArrowRight,
+  Check,
+  ChevronDown,
+  CircleCheck,
+  Clock,
+  FlaskConical,
+  FolderOpen,
+  GitFork,
+  GraduationCap,
+  Hand,
+  Lightbulb,
+  ListChecks,
+  LoaderCircle,
+  Play,
+  Send,
+  TriangleAlert,
+  Wand2
+} from 'lucide-react'
+import type { AutomationPlan, AvatarDef, ChatMessage, PlanStep, PlanSuggestion } from '@shared/types'
 import { PixelAvatar } from '@/components/PixelAvatar'
 import { PROJECT_COLORS, ProjectTile } from '@/components/ProjectBadge'
 import { Button } from '@/components/ui'
@@ -101,6 +119,19 @@ function PlanView({ plan, avatars }: { plan: AutomationPlan; avatars: Record<str
 
   return (
     <div className="grid gap-3">
+      {!!plan.attention?.length && (
+        <Section title={tr('Pontos de atenção')} className="border-warning/40">
+          <ul className="space-y-2">
+            {plan.attention.map((a, i) => (
+              <li key={i} className="flex gap-2.5 text-[13px] leading-snug text-fg-2">
+                <TriangleAlert size={14} className="mt-0.5 shrink-0 text-warning" />
+                {a}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
       {project && (
         <Section title={tr('Projeto')}>
           <div className="flex items-center gap-3">
@@ -227,7 +258,83 @@ function PlanView({ plan, avatars }: { plan: AutomationPlan; avatars: Record<str
           </ol>
         </Section>
       )}
+
+      {!!plan.tested?.length && (
+        <Section title={tr('O que foi testado')}>
+          <ul className="space-y-2">
+            {plan.tested.map((t, i) => (
+              <li key={i} className="flex gap-2.5 text-[13px] leading-snug text-fg-2">
+                <FlaskConical size={14} className="mt-0.5 shrink-0 text-muted" />
+                {t}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
     </div>
+  )
+}
+
+/**
+ * Melhorias opcionais que o arquiteto sugeriu e que ficaram fora do plano: o usuário marca as que quer e pede para
+ * incluir; o arquiteto refaz o plano (ou, depois de aplicado, propõe as mudanças).
+ */
+function Suggestions({ suggestions, applied }: { suggestions: PlanSuggestion[]; applied: boolean }) {
+  useLanguage()
+  const app = useApp()
+  const [picked, setPicked] = useState<number[]>([])
+  const [sent, setSent] = useState(false)
+  const toggle = (i: number) => setPicked((p) => (p.includes(i) ? p.filter((x) => x !== i) : [...p, i]))
+  const request = () => {
+    const chosen = [...picked].sort((a, b) => a - b).map((i) => suggestions[i])
+    const intro = applied ? tr('Quero também estas melhorias:') : tr('Inclua no plano estas sugestões:')
+    app.send([intro, ...chosen.map((x) => `- ${x.title}${x.detail ? `: ${x.detail}` : ''}`)].join('\n'))
+    setSent(true)
+  }
+  return (
+    <Section title={tr('Sugestões (fora do plano)')} className="mt-3">
+      <div className="space-y-1">
+        {suggestions.map((x, i) => {
+          const on = picked.includes(i)
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => toggle(i)}
+              disabled={sent}
+              aria-pressed={on}
+              className="flex w-full items-start gap-3 rounded-tile px-2 py-2 text-left hover:bg-hover disabled:hover:bg-transparent"
+            >
+              <span
+                className={cn(
+                  'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-[4px] border',
+                  on ? 'border-primary bg-primary text-on-primary' : 'border-line'
+                )}
+              >
+                {on && <Check size={11} strokeWidth={3} />}
+              </span>
+              <span className="min-w-0">
+                <span className="flex items-center gap-1.5 text-[13px] font-medium">
+                  <Lightbulb size={13} className="text-muted" />
+                  {x.title}
+                </span>
+                {x.detail && <span className="block text-[12px] leading-snug text-muted">{x.detail}</span>}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      {sent ? (
+        <p className="mt-2 px-2 text-[12px] text-muted">{tr('Pedido enviado na conversa.')}</p>
+      ) : (
+        picked.length > 0 && (
+          <Button className="mt-2 h-8" onClick={request} disabled={app.busy}>
+            <Send size={13} />
+            {applied ? tr(' Pedir as melhorias ({0})', picked.length) : tr(' Incluir no plano ({0})', picked.length)}
+          </Button>
+        )
+      )}
+    </Section>
   )
 }
 
@@ -328,6 +435,7 @@ export function PlanCard({ conversationId, msg }: { conversationId: string; msg:
       {error && <p className="mb-3 text-[13px] text-danger">{error}</p>}
 
       <PlanView plan={plan} avatars={msg.planAvatars ?? {}} />
+      {!!plan.suggestions?.length && <Suggestions suggestions={plan.suggestions} applied={!!applied} />}
     </div>
   )
 }

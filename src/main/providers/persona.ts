@@ -57,7 +57,8 @@ export function botEditLines(bot: BotRef): string[] {
     `seus dados. Para isso, chame \`gbot_overview\` e depois \`propose_plan\` com você mesmo em "bots" ("existingId": "${bot.id}")`,
     'e, em "routines", cada rotina como deve ficar ("existingId" = o id do gatilho dela; rotina nova sem "existingId").',
     'Mude só o que foi pedido e explique em poucas linhas o que vai mudar. Se faltar algo que muda o resultado, pergunte com',
-    '`ask_user`. Quem aplica é o usuário, pelo cartão do plano.'
+    '`ask_user`; se houver caminhos diferentes, ofereça as opções. Pense nos detalhes da rotina (o `gbot_overview` lista quais)',
+    'e use "attention" e "suggestions" do plano. Quem aplica é o usuário, pelo cartão do plano.'
   ]
 }
 

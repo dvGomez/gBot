@@ -115,5 +115,14 @@ export const enTeam: Record<string, string> = {
   // Chat flutuante da página do bot
   'Chat': 'Chat', 'Abrir em tela cheia': 'Open full screen', 'Fechar chat': 'Close chat',
   'Pergunte o que quiser, inclusive sobre o que as rotinas encontraram, ou peça mudanças no fluxo: {0} propõe e você aplica.':
-    'Ask anything, including what the routines found, or ask for changes to the flow: {0} proposes and you apply.'
+    'Ask anything, including what the routines found, or ask for changes to the flow: {0} proposes and you apply.',
+  // Cartão do plano: revisão e sugestões
+  'Pontos de atenção': 'Things to watch', 'O que foi testado': 'What was tested',
+  'Sugestões (fora do plano)': 'Suggestions (not in the plan)',
+  'Quero também estas melhorias:': 'I also want these improvements:',
+  'Inclua no plano estas sugestões:': 'Add these suggestions to the plan:',
+  'Pedido enviado na conversa.': 'Request sent in the chat.',
+  ' Pedir as melhorias ({0})': ' Request improvements ({0})', ' Incluir no plano ({0})': ' Add to plan ({0})',
+  // Cartão de perguntas
+  '{0} de {1}': '{0} of {1}', 'Próxima': 'Next', 'Sua resposta… (Shift+Enter quebra a linha)': 'Your answer… (Shift+Enter for a new line)'
 }

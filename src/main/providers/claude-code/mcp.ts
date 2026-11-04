@@ -11,7 +11,7 @@ import { listSpecializations } from '../../store'
 import { routineRunText, routineRunsText } from '../../flows/history'
 import { answersText, askUser } from '../../questions'
 import { registerApprovalTool } from './permissions'
-import { overviewText, planSchema, sanitizePlan } from './architect'
+import { overviewText, planSchema, reviewPlan, sanitizePlan } from './architect'
 import { ASK_BOT_TOOL, ASK_USER_TOOL, GBOT_OVERVIEW_TOOL, LIST_BOTS_TOOL, PROPOSE_PLAN_TOOL } from './tools'
 
 /**
@@ -38,6 +38,8 @@ export interface CallerContext {
   memorySource?: Lesson['source']
   /** Conversa com o arquiteto: ganha a ferramenta `propose_plan`. */
   architect?: boolean
+  /** Avisos da revisão de planos já devolvidos ao modelo nesta sessão: na segunda vez, não bloqueiam mais. */
+  planWarnings?: Set<string>
   signal?: AbortSignal
 }
 
@@ -175,9 +177,13 @@ function buildServer(ctx: CallerContext): McpServer {
     'ask_user',
     {
       description:
-        'Faz ao usuário de 1 a 4 perguntas com opções, mostradas como um cartão no chat, e devolve as respostas. Use quando ' +
-        'faltar uma informação ou decisão que muda o resultado (ex.: qual formato, para quem enviar, qual das abordagens). ' +
-        'Não use para o que dá para decidir com bom senso nem para pedir permissão (o gBot já pergunta isso sozinho).',
+        'Faz ao usuário de 1 a 4 perguntas num cartão interativo no chat (uma por vez, ele clica para responder) e devolve as ' +
+        'respostas. É o ÚNICO jeito de perguntar algo ao usuário: nunca pergunte por texto na resposta. Use quando faltar uma ' +
+        'informação ou decisão que muda o resultado (ex.: qual formato, para quem enviar, qual das abordagens, um dado que só ' +
+        'ele sabe). Dê opções prováveis sempre que der; o cartão sempre tem um campo para escrever outra resposta, e uma ' +
+        'pergunta pode vir sem opções quando a resposta é livre (ex.: colar o cabeçalho de uma planilha); não crie opção ' +
+        '"Outro". Não use para o que ' +
+        'dá para decidir com bom senso nem para pedir permissão de ferramentas (o gBot já pergunta isso sozinho).',
       inputSchema: {
         questions: z
           .array(
@@ -191,8 +197,8 @@ function buildServer(ctx: CallerContext): McpServer {
                     description: z.string().optional().describe('O que esta opção significa ou implica')
                   })
                 )
-                .min(2)
-                .max(4),
+                .max(4)
+                .describe('De 2 a 4 opções; vazio só quando a resposta é livre'),
               multiSelect: z.boolean().optional().describe('true quando dá para escolher mais de uma opção')
             })
           )
@@ -228,12 +234,31 @@ function buildServer(ctx: CallerContext): McpServer {
         description:
           'Mostra ao usuário o plano do que criar ou alterar no gBot (projeto, especializações, bots e rotinas), num cartão com o botão para ' +
           'aplicar. Para mudar algo que existe, use "existingId" (edição), nunca um item novo. Quem aplica é o usuário, pelo ' +
-          'cartão: não crie nem altere nada você mesmo.',
+          'cartão: não crie nem altere nada você mesmo. Antes de mostrar, o gBot revisa o plano e pode devolver pontos para ' +
+          'corrigir ou justificar em "attention".',
         inputSchema: planSchema.shape
       },
       async (input) => {
         try {
           sanitizePlan(input)
+          const review = reviewPlan(input)
+          if (review.errors.length) {
+            const text = ['O plano tem problemas e não foi mostrado. Corrija e chame `propose_plan` de novo:', ...review.errors.map((e) => `- ${e}`)]
+            return { content: [{ type: 'text', text: text.join('\n') }], isError: true }
+          }
+          // Cada aviso volta uma vez: o modelo corrige o plano ou explica em "attention" por que está certo assim.
+          const seen = (ctx.planWarnings ??= new Set())
+          const fresh = review.warnings.filter((w) => !seen.has(w))
+          if (fresh.length) {
+            fresh.forEach((w) => seen.add(w))
+            const text = [
+              'Revisão do gBot: o plano ainda não foi mostrado. Para cada ponto abaixo, ajuste o plano ou, se estiver certo assim',
+              '(ex.: o usuário pediu para ser automático), explique em "attention". Depois chame `propose_plan` de novo; estes',
+              'mesmos pontos não bloqueiam mais. Não comente esta revisão com o usuário, só o resultado.',
+              ...fresh.map((w) => `- ${w}`)
+            ]
+            return { content: [{ type: 'text', text: text.join('\n') }], isError: true }
+          }
           return { content: [{ type: 'text', text: 'Plano mostrado ao usuário com o botão para aplicar. Aguarde a decisão dele.' }] }
         } catch (e) {
           return { content: [{ type: 'text', text: `Plano inválido, corrija e chame de novo: ${(e as Error).message}` }], isError: true }

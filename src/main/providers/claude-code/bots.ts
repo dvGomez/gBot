@@ -37,8 +37,11 @@ export function findBot(ref: string, projectId?: string): Bot | undefined {
 }
 
 export const TOOLS_HINT = [
-  'Quando faltar uma informação ou decisão do usuário que muda o resultado, use `ask_user` para perguntar com opções',
-  '(um cartão no chat) em vez de perguntar por texto; não pergunte o que dá para decidir com bom senso.',
+  'Toda pergunta ao usuário vai pelo cartão de `ask_user`, nunca por texto na resposta: nem perguntas abertas (ex.: "cole o',
+  'cabeçalho da planilha") nem listas numeradas de perguntas. Junte o que precisa saber numa chamada (até 4 perguntas; uma',
+  'pergunta que depende da resposta de outra fica para uma chamada seguinte), com',
+  'opções prováveis sempre que der (o cartão já tem um campo para outra resposta; sem opções, a resposta é livre). Depois',
+  'de chamar `ask_user`, use as respostas: não repita as perguntas no texto. Não pergunte o que dá para decidir com bom senso.',
   'Ferramentas do gBot: `list_bots` mostra os outros bots do time do usuário (com as especializações de cada um) e `ask_bot`',
   'envia uma pergunta ou tarefa a um deles. Consulte um bot quando o pedido combinar com as especializações dele ou quando o',
   'usuário pedir; não consulte sem necessidade. Quando uma tarefa ou instrução mencionar outro bot com @Nome, fale com ele',
