@@ -20,7 +20,7 @@ import { AgentAvatar } from '@/components/AgentAvatar'
 import { CreateHero } from '@/components/home/CreateHero'
 import { approvalTitle } from '@/components/ApprovalCard'
 import { ProviderNotice } from '@/components/ProviderNotice'
-import { TeamPanel } from '@/components/TeamPanel'
+import { TeamSection } from '@/components/office/TeamOffice'
 import { UsageCard } from '@/components/UsageCard'
 import { Button, Card } from '@/components/ui'
 import { greeting, longDate, timeAgo } from '@/lib/format'
@@ -178,7 +178,7 @@ export function HomeView() {
     <div className="mx-auto w-full max-w-[1120px] px-[60px] pt-6 pb-12">
       <CreateHero />
 
-      <div className="mt-8 flex flex-wrap items-end justify-between gap-6">
+      <div className="mt-6 flex flex-wrap items-end justify-between gap-6">
         <div>
           <p className="text-[12px] font-medium tracking-[0.02em] text-muted">{longDate()}</p>
           <h1 className="mt-1 text-[24px] leading-tight font-medium tracking-[-0.02em]">{greeting()}</h1>
@@ -203,7 +203,11 @@ export function HomeView() {
       </div>
 
       <div className="mb-4">
-        <TeamPanel activity={team} />
+        <TeamSection
+          activity={team}
+          runs={runs}
+          upcoming={upcoming.map((u) => ({ botId: u.flow.botId, at: u.at?.getTime(), label: triggerName(u.trigger, tr('Gatilho')) }))}
+        />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">

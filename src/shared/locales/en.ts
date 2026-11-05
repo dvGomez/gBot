@@ -2,11 +2,13 @@
 import { enExtra } from './en-extra'
 import { enHome } from './en-home'
 import { enMemory } from './en-memory'
+import { enOffice } from './en-office'
 import { enTeam } from './en-team'
 export const en: Record<string, string> = {
   ...enExtra,
   ...enHome,
   ...enMemory,
+  ...enOffice,
   ...enTeam,
   'Ver pedido': 'View request', 'Atenção': 'Attention', 'Permitir nesta conversa': 'Allow in this conversation',
   'Permitir': 'Allow', 'Cancelar': 'Cancel', 'Negar': 'Deny', 'Sortear': 'Shuffle', 'Gerar novo': 'Generate new',

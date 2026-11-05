@@ -329,3 +329,130 @@ body {
   display: inline-block;
   animation: gbot-work 1.6s ease-in-out infinite;
 }
+
+/* Escritório da página inicial (balões e nomes por cima do SVG) */
+.gbot-office-bubble {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: 230px;
+  background: var(--sidebar);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 6px 10px;
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: var(--fg-2);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.35);
+  transition: opacity 0.2s;
+  cursor: pointer;
+  opacity: 0;
+}
+.gbot-office-bubble b {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+  font-weight: 500;
+}
+.gbot-office-bubble::after {
+  content: '';
+  position: absolute;
+  left: var(--ax, 50%);
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  background: var(--sidebar);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  transform: rotate(45deg);
+}
+.gbot-office-bubble.is-lifted::after {
+  display: none;
+}
+.gbot-office-bubble.is-talk {
+  border-left-width: 3px;
+}
+.gbot-office-bubble.is-wait,
+.gbot-office-bubble.is-wait::after {
+  border-color: rgb(227 160 43 / 0.65);
+}
+.gbot-office-bubble.is-done,
+.gbot-office-bubble.is-done::after {
+  border-color: rgb(47 174 107 / 0.6);
+}
+.gbot-office-bubble.is-error,
+.gbot-office-bubble.is-error::after {
+  border-color: rgb(229 85 77 / 0.6);
+}
+.gbot-office-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10.5px;
+}
+.gbot-office-sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gbot-office-bar {
+  width: 56px;
+  height: 3px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 9px;
+  background: var(--tile);
+}
+.gbot-office-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 9px;
+  background: var(--warning);
+}
+.gbot-office-action {
+  display: inline-block;
+  margin-top: 5px;
+  padding: 2px 9px;
+  border-radius: 99px;
+  background: var(--fg);
+  color: var(--page);
+  font-size: 10.5px;
+  font-weight: 500;
+}
+.gbot-office-name {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: rgb(28 28 28 / 0.85);
+  color: var(--fg-2);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.gbot-office-name > i {
+  width: 5px;
+  height: 5px;
+  border-radius: 99px;
+}
+.gbot-office-zzz {
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--muted);
+  font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
+}

@@ -1,4 +1,5 @@
 import { t as tr, useLanguage } from '@/i18n'
+import type { ReactNode } from 'react'
 import type { Bot } from '@shared/types'
 import { Card } from '@/components/ui'
 import { cn } from '@/lib/cn'
@@ -89,7 +90,7 @@ function Sleeper({ bot, activity, seed }: { bot: Bot; activity: BotActivity; see
 }
 
 /** Painel da equipe: quem está trabalhando em destaque, o resto dormindo numa grade compacta. */
-export function TeamPanel({ activity }: { activity: Map<string, BotActivity> }) {
+export function TeamPanel({ activity, aside }: { activity: Map<string, BotActivity>; aside?: ReactNode }) {
   useLanguage()
   const app = useApp()
   const awake = app.bots.filter((b) => activity.get(b.id)?.state !== 'sleeping')
@@ -107,11 +108,14 @@ export function TeamPanel({ activity }: { activity: Map<string, BotActivity> }) 
 
   return (
     <Card className="p-5">
-      <div className="flex items-baseline justify-between gap-4">
+      <div className="flex items-center justify-between gap-4">
         <p className="text-[13px] font-medium text-muted">{tr('Equipe')}</p>
-        <p className="text-[12px] text-muted">
-          {awake.length > 0 && <span className="text-success">{awake.length}{tr(' trabalhando · ')}</span>}
-          {asleep.length}{tr(' descansando')}</p>
+        <div className="flex items-center gap-3">
+          <p className="text-[12px] text-muted">
+            {awake.length > 0 && <span className="text-success">{awake.length}{tr(' trabalhando · ')}</span>}
+            {asleep.length}{tr(' descansando')}</p>
+          {aside}
+        </div>
       </div>
 
       {awake.length > 0 ? (
