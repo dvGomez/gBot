@@ -53,7 +53,13 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Package installers and update metadata
-        run: npx electron-builder ${{ matrix.target }} --publish never
+        shell: bash
+        # electron-builder treats an empty CSC_LINK as a certificate to import, so unset signing values that are empty.
+        run: |
+          for name in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            [ -n "${!name}" ] || unset "$name"
+          done
+          npx electron-builder ${{ matrix.target }} --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.name == 'macOS' && secrets.MAC_CSC_LINK != '' && 'true' || 'false' }}
           # Optional signing credentials. Without these, macOS uses the manual installer fallback.
