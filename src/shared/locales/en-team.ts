@@ -124,5 +124,8 @@ export const enTeam: Record<string, string> = {
   'Pedido enviado na conversa.': 'Request sent in the chat.',
   ' Pedir as melhorias ({0})': ' Request improvements ({0})', ' Incluir no plano ({0})': ' Add to plan ({0})',
   // Cartão de perguntas
-  '{0} de {1}': '{0} of {1}', 'Próxima': 'Next', 'Sua resposta… (Shift+Enter quebra a linha)': 'Your answer… (Shift+Enter for a new line)'
+  '{0} de {1}': '{0} of {1}',
+  // Tarefas do bot (linha no topo da página)
+  '{0} faz uma tarefa por vez': '{0} does one task at a time', 'começou {0}': 'started {0}', '{0} na fila': '{0} queued',
+  'chegou {0}': 'arrived {0}', 'Próxima': 'Next', 'Sua resposta… (Shift+Enter quebra a linha)': 'Your answer… (Shift+Enter for a new line)'
 }

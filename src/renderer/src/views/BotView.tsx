@@ -76,6 +76,7 @@ export function BotView() {
               {specializations.length ? tr('Escolher') : tr('Escolher especializações')}
             </button>
           </div>
+          <BotTasks botId={bot.id} botName={bot.name} />
         </div>
         <div className="flex shrink-0 gap-2">
           <LimitsButton className="self-center" />
@@ -102,10 +103,6 @@ export function BotView() {
             ]}
           />
         </div>
-      </div>
-
-      <div className="px-6 [&>*]:mt-0 [&>*]:mb-4">
-        <BotTasks botId={bot.id} botName={bot.name} />
       </div>
 
       <div className="relative min-h-0 flex-1 border-t border-line">
