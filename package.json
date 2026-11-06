@@ -1,7 +1,7 @@
 {
   "name": "gbot",
   "productName": "gBot",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "gBot: build an AI team that works while you sleep, on your own Claude subscription",
   "main": "./out/main/index.js",
   "author": "Lucas Carvalho",
