@@ -21,4 +21,7 @@ test('translated UI interpolates values once and preserves workflow tokens', () 
   assert.equal(translate('Abriu {0}', 'en', '{0}'), 'Opened {0}')
   assert(translate('O resultado das caixinhas anteriores vai junto automaticamente. Use {{anterior}} para escolher onde ele entra.', 'en').includes('{{anterior}}'))
   assert.equal(translate('User-created text with no catalog key', 'en'), 'User-created text with no catalog key')
+  // Rótulos de "Sempre permitir" montados no processo principal
+  assert.equal(translate('Sempre permitir este comando', 'en'), 'Always allow this command')
+  assert.equal(translate('Sempre permitir textutil', 'en'), 'Always allow textutil')
 })

@@ -42,7 +42,7 @@ export function ApprovalCard({ req }: { req: ApprovalRequest }) {
           onClick={() => app.respondApproval(req.id, 'always')}
           className="h-8 rounded-full border border-line px-3.5 text-[13px] font-medium text-fg-2 hover:bg-hover"
         >
-          {tool ? (req.alwaysLabel ?? tr('Sempre permitir')) : tr('Sempre em {0}', req.host)}
+          {tool ? (req.alwaysLabel ? tr(req.alwaysLabel) : tr('Sempre permitir')) : tr('Sempre em {0}', req.host)}
         </button>
         <button
           onClick={() => app.respondApproval(req.id, 'conversation')}

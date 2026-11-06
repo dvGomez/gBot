@@ -34,7 +34,7 @@ export const enExtra: Record<string, string> = {
   'Animado e falante': 'Lively and talkative', 'Confiante e decidido': 'Confident and decisive', 'Calmo e paciente': 'Calm and patient',
   'Ocioso': 'Idle', 'Pensando': 'Thinking', 'Falando': 'Talking', 'Feliz': 'Happy', 'Dormindo': 'Sleeping',
   'O assistente': 'The assistant', '{0} quer usar o navegador em {1}': '{0} wants to use the browser on {1}', '{0} quer rodar um comando': '{0} wants to run a command',
-  'Sempre permitir': 'Always allow', 'Sempre em {0}': 'Always on {0}', ' · {0} na fila': ' · {0} queued', 'Na fila · chegou {0}': 'Queued · added {0}',
+  'Sempre permitir': 'Always allow', 'Sempre permitir este comando': 'Always allow this command', 'Sempre permitir {0}': 'Always allow {0}', 'Sempre em {0}': 'Always on {0}', ' · {0} na fila': ' · {0} queued', 'Na fila · chegou {0}': 'Queued · added {0}',
   'Interromper esta tarefa': 'Stop this task', 'Tirar da fila': 'Remove from queue', 'Interromper': 'Stop', 'Tirar {0}': 'Remove {0}', 'Abrir {0}': 'Open {0}',
   'Dias da semana': 'Days of the week', 'Intervalo': 'Interval', 'Gatilho': 'Trigger', 'Provedor': 'Provider',
   'Cobrar fornecedores dos pedidos atrasados no sistema': 'Follow up with suppliers about overdue orders',

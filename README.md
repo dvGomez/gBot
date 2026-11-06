@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>Build an AI team that works while you sleep.</b><br>
-  Bots with personality, workflows that run on their own, a real browser and a memory that learns.<br>
+  Bots with personality, routines that run on their own, a live virtual office, a real browser and a memory that learns.<br>
   All on your own computer, with Claude Code and Codex connected to your own accounts.
 </p>
 
@@ -18,6 +18,8 @@
 </p>
 
 <p align="center">
+  <a href="#see-it-work">See it work</a> ·
+  <a href="#ideas-to-start-with">Ideas</a> ·
   <a href="#download">Download</a> ·
   <a href="#why-gbot">Why gBot</a> ·
   <a href="#whats-in-the-box">What's in the box</a> ·
@@ -30,9 +32,87 @@
 
 You already pay for an amazing AI. But it just sits in a browser tab waiting for you to type. **gBot** turns your
 AI subscriptions into a **team**: every bot with a name, a face and a specialty; jobs that run on their own
-schedule; a browser they drive for you; and a memory that makes each of them a little better every day.
+schedule; a browser they drive for you; a virtual office where you can watch them work; and a memory that makes each
+of them a little better every day.
 
 Connect **Claude Code** or **Codex (ChatGPT)** using your own login and your plan's limits. Subscription-based providers do not require an API key; availability and usage limits depend on your account.
+
+## See it work
+
+Everything below was recorded from **real runs** with Claude Opus 5.5 in gBot. Nothing is staged; only the waiting
+time is sped up.
+
+### 1. Describe it once. Get a working team.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-reduced-motion: reduce)" srcset="docs/marketing/demo/architect.png">
+    <img src="docs/marketing/demo/architect.gif" alt="The gBot architect asks two questions, opens Hacker News and The Verge to test them, proposes a plan and creates a bot, a specialization and a weekday routine" width="100%">
+  </picture>
+</p>
+
+Type what you want in plain words. The **architect** asks only what it can't figure out (one card at a time), tests
+the real sites in gBot's browser and shows you the whole plan (bots, specializations, routines and the things to watch
+out for) before anything is created.
+
+> *"Every weekday at 8 AM, read Hacker News and The Verge and send me a 5-bullet brief of the most important AI news,
+> with links."* → two quick questions → both sites opened and checked → **Nova**, an *AI News Brief* specialization
+> and a Mon–Fri 08:00 routine, created with one click.
+
+▶ [Watch it in full quality (MP4)](docs/marketing/demo/architect.mp4)
+
+### 2. Watch a routine run, step by step.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-reduced-motion: reduce)" srcset="docs/marketing/demo/workflow.png">
+    <img src="docs/marketing/demo/workflow.gif" alt="Quill's routine runs on the canvas: it asks Scout for research, writes a post, a decision box sends it back for edits and the run pauses for approval" width="100%">
+  </picture>
+</p>
+
+Every bot has **one canvas and as many triggers as you like**. Here **Quill** asks **@Scout** for today's most
+discussed AI stories, writes a LinkedIn post, a **decision** box checks it (and sends it back for edits when it misses
+the bar), and the run **pauses for your approval** with the file attached. Each step's result streams into the side
+panel while it runs.
+
+▶ [Watch it in full quality (MP4)](docs/marketing/demo/workflow.mp4)
+
+### 3. See your team at work.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-reduced-motion: reduce)" srcset="docs/marketing/demo/office.png">
+    <img src="docs/marketing/demo/office.gif" alt="The isometric virtual office: Quill walks to Scout's desk to ask a question, Nova finishes her brief and takes a coffee break, Quill waits in the meeting room for approval and celebrates" width="100%">
+  </picture>
+</p>
+
+The home screen is a **live office**. Every project is a room and every bot has a desk. Bots walk over to ask a
+colleague, wait for you in the meeting room when they need a decision, celebrate and grab a coffee when a routine is
+done, and nap on the couch when there's nothing to do. Click any bot to open what it's working on.
+
+It's all driven by what the app already knows (routines, consultations, approvals and the schedule): **no extra AI
+calls, zero tokens.**
+
+▶ [Watch it in full quality (MP4)](docs/marketing/demo/office.mp4)
+
+## Ideas to start with
+
+Paste any of these into **"What shall we automate today?"** and the architect builds the team for you:
+
+| For | Try asking… |
+|---|---|
+| **Research & news** | *"Every morning, summarize the top stories about my industry from three news sites, with links."* |
+| **Price watching** | *"Check this product on three stores every day and tell me when it drops below $399."* |
+| **Job hunting** | *"Look for new remote product designer jobs every afternoon and list only the ones that match my filters."* |
+| **Social media** | *"Every Monday, find what people are talking about in my niche and draft three LinkedIn posts for my approval."* |
+| **Small business** | *"Reply to quote requests using my price list, but let me approve every answer before it goes out."* |
+| **Reviews** | *"Read new Google reviews of my business every day and suggest a reply for each one."* |
+| **Sales** | *"Find 20 bakeries in Austin on Google Maps and put name, site and phone in a spreadsheet."* |
+| **Documents** | *"Read the invoices in this folder and log date, vendor and total in a spreadsheet."* |
+| **Contracts** | *"Review this contract and flag the clauses I should worry about."* |
+| **Travel** | *"Watch flights from New York to Lisbon in May and alert me when a round trip is under $600."* |
+| **Personal** | *"Plan my meals for the week and give me the shopping list."* |
+| **Developers** | *"Every morning, triage new issues in my GitHub repo and draft a reply for each one."* |
 
 ## Why gBot
 
@@ -41,9 +121,9 @@ Connect **Claude Code** or **Codex (ChatGPT)** using your own login and your pla
 ![Problem 1: every bot with its own routine, one building on the other's work](docs/marketing/problem-1-team.png)
 
 Research, write, prospect, review, send the newsletter… the list never ends. In gBot you build your **team**: every
-bot with a name, a face and **its own routine** in scheduled workflows. One scans the web before dawn, another
+bot with a name, a face, **specializations** and **its own routines**. One scans the web before dawn, another
 writes posts from what was found, another prospects in the afternoon, and a **decision** box in the middle picks
-what happens next. You wake up to finished work and just approve it.
+what happens next. You watch them in the virtual office, wake up to finished work and just approve it.
 
 ### 2. Stop copy-pasting between systems
 
@@ -65,21 +145,29 @@ every lesson. And when a bot needs help, it **calls another bot**, or you can ca
 
 ![Bots with a face, workflows, a real browser and a memory that learns](docs/marketing/features.png)
 
-- **Bots with personality:** name, pixel-art avatar (20 built in + a generator), their own instructions and model.
+- **Bots as team members:** name, pixel-art avatar (20 built in + a generator), their own instructions, model and
+  **specializations** (reusable know-how with reference files). Each bot does **one task at a time** from its own queue.
+- **Virtual office:** the home screen shows your team in an isometric office, one room per project. Bots work at their
+  desks, visit colleagues they consult, wait for you in the meeting room, take coffee breaks and rest on the couch,
+  all from app state with zero tokens. Switch to a plain list anytime.
 - **Chats:** with or without a bot, with one searchable provider/model tree picker. Your latest model choice becomes the default for future creations.
 - **Connected accounts:** add multiple Claude accounts, switch between them and inspect available usage limits. Connect Codex for supported chats and workflow steps. The home architect, bots and workflow steps use the same provider/model selector.
-- **Home architect:** describe what you want to automate; AI proposes bots and workflows while considering existing resources, then creates the accepted plan.
+- **Home architect:** describe what you want to automate; it asks clarifying questions in cards (one at a time),
+  tests real sites when useful, considers what you already have and shows a structured plan (bots, specializations,
+  routines, warnings and suggestions) to review before creating everything.
 - **Languages:** English and Brazilian Portuguese, following the operating system by default or your choice in Settings.
 - **Optional updates:** GitHub release notifications, configurable background downloads and explicit restart to install. Skip any version and keep using the app.
 - **Projects:** group bots and chats, with an optional working folder and instructions.
-- **Workflows:** a canvas with a time or interval trigger and bot, prompt and **decision** boxes. They keep running
-  with the window closed, from the tray/menu bar icon. Manual confirmation nodes pause for your decision; running workflows are locked against editing, and **Stop everything** cancels their work and processes.
+- **Routines:** each bot has one canvas with **as many triggers as you want** (times or intervals), **task**,
+  **decision** and **confirmation** boxes. A step can call another bot with `@Name`. They keep running with the window
+  closed, from the tray/menu bar icon. Confirmation boxes pause for your decision; running routines are locked against
+  editing, and **Stop everything** cancels their work and processes.
+- **Bot chat:** talk to a bot from its page in a floating chat, or `@mention` any bot in a conversation.
 - **gBot's browser:** your installed Edge, Chrome or Brave, with its own profile and logins that stay saved.
 - **A memory that learns:** short, token-cheap lessons per bot and per workflow, with a screen to view and edit them.
 - **File panel:** quickly access files used or generated in chats, bots and workflows from the side panel.
 - **Reference files:** drop contracts, manuals, price lists or screenshots on a bot's page; it reads them only when a
   request needs them.
-- **Team panel:** on the home screen, who is working, who is asleep and what's coming up next.
 
 ## Download
 
@@ -257,12 +345,13 @@ Each bot has a folder of reference files (`data/bot-files/<bot>/`), managed on t
 
 ### Workflows (automation canvas)
 
-A workflow is a canvas (React Flow) with a **trigger** and boxes connected by arrows:
+Each bot has **one** workflow: a canvas (React Flow) with one or more **triggers** and boxes connected by arrows. Every
+trigger is a routine with its own schedule and on/off switch, and only runs the boxes connected to it.
 
 - **Trigger:** at set times (weekdays + one or more times) or "repeat every N minutes/hours". Only **active**
-  workflows fire; "Run now" always works.
-- **Bot:** sends a message to a bot (using its model and instructions).
-- **Prompt:** a standalone prompt, with the AI (provider) and model picked in the box.
+  triggers fire; "Run" always works.
+- **Task:** the bot does a task (optionally with one of its specializations, and with its own model if set). Mention
+  another bot with `@Name` in the task to consult it.
 - **Manual confirmation:** pauses the run with configurable choices and supporting files; pending decisions remain accessible in the app and can trigger system notifications.
 - **Stop everything:** immediately cancels the run, queued work and spawned processes. Editing stays disabled while a run is active.
 - **Decision:** the chosen AI reads the previous result and picks one of the options; each option has its own
@@ -278,6 +367,18 @@ A workflow is a canvas (React Flow) with a **trigger** and boxes connected by ar
 - History of the last 50 runs per workflow, with each box's result (`data/flow-runs/<flow>.json`).
 - The scheduler runs in the main process every 20 s. Closing the window doesn't quit the app: it stays in the
   **menu bar icon** (Open gBot / active workflows / Quit). Times when the app was closed are not run afterwards.
+
+### Virtual office (home screen)
+
+The home screen draws the team as an isometric office (`src/renderer/src/components/office/`):
+
+- `layout.ts` builds the floor plan: one room per project (desks in rows of up to four), a corridor and the common
+  areas (lounge, meeting room, kitchen). Every spot has an exit to the corridor, so paths never cross furniture.
+- `behavior.ts` decides what each bot is doing **only from app state**: live routine runs, consultations in the bot
+  queue, approvals and confirmations, recently finished or failed runs and the schedule. No model is called.
+- `scene.ts` draws the SVG and animates the bots frame by frame outside React; `TeamOffice.tsx` feeds it and keeps the
+  Office/List choice.
+- Respects the system's "reduce motion" setting (bots move without walking, no confetti).
 
 ### gBot's browser
 
@@ -359,4 +460,5 @@ macOS automatic installation requires Developer ID signing; unsigned builds use 
 6. ✅ Workflows: canvas with time/interval triggers, bot, prompt and decision boxes, history and menu bar icon
 7. ✅ gBot's browser and lesson memory
 8. ✅ Approving permissions in the app (commands, files outside the working folder)
-9. Actions on the computer
+9. ✅ Living team: routines, specializations, structured architect plans and the virtual office
+10. Actions on the computer
